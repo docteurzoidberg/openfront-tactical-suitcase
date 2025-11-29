@@ -537,8 +537,12 @@
     if (!game || !viewData || !viewData.updates) {
       return;
     }
+    const ws = window.otsWsClient;
+    if (!ws) {
+      return;
+    }
     if (!initialPayloadSent) {
-      sendEvent("INFO", "of-initial-gameview-payload", {
+      ws.sendEvent("INFO", "of-initial-gameview-payload", {
         game,
         payload: viewData
       });
@@ -552,7 +556,7 @@
     const unitUpdates = (_c = viewData.updates[GAME_UPDATE_TYPE_UNIT]) != null ? _c : [];
     const myUnits = unitUpdates.filter((u) => u.ownerID === mySmallID);
     if (!myUnits.length) return;
-    sendEvent("INFO", "of-game-unit-updates", {
+    ws.sendEvent("INFO", "of-game-unit-updates", {
       count: myUnits.length,
       sample: myUnits.slice(0, 3).map((u) => ({
         id: u.id,
@@ -612,5 +616,6 @@
     ws.connect();
     game.init();
     window.otsShowHud = () => hud.ensure();
+    window.otsWsClient = ws;
   })();
 })();

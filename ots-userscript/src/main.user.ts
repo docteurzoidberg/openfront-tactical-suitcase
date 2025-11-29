@@ -548,8 +548,13 @@ function handleGameUpdate(event: CustomEvent<{ game: any; payload: any }>) {
 
   // On first update, send the full raw payload once so the
   // server/dashboard can inspect the structure.
+  const ws = (window as any).otsWsClient as WsClient | undefined
+  if (!ws) {
+    return
+  }
+
   if (!initialPayloadSent) {
-    sendEvent('INFO', 'of-initial-gameview-payload', {
+    ws.sendEvent('INFO', 'of-initial-gameview-payload', {
       game,
       payload: viewData
     })
@@ -568,7 +573,7 @@ function handleGameUpdate(event: CustomEvent<{ game: any; payload: any }>) {
 
   if (!myUnits.length) return
 
-  sendEvent('INFO', 'of-game-unit-updates', {
+  ws.sendEvent('INFO', 'of-game-unit-updates', {
     count: myUnits.length,
     sample: myUnits.slice(0, 3).map((u: any) => ({
       id: u.id,
@@ -631,5 +636,6 @@ function saveWsUrl(url: string) {
   hud.ensure()
   ws.connect()
   game.init()
-    ; (window as any).otsShowHud = () => hud.ensure()
+  ;(window as any).otsShowHud = () => hud.ensure()
+  ;(window as any).otsWsClient = ws
 })()
