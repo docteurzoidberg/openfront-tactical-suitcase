@@ -83,14 +83,9 @@
     }
   };
 
-  // src/main.user.ts
-  var DEFAULT_WS_URL = "ws://localhost:3000/ws-script";
-  var STORAGE_KEY_WS_URL = "ots-ws-url";
+  // src/hud/main-hud.ts
   var STORAGE_KEY_HUD_POS = "ots-hud-pos";
   var STORAGE_KEY_HUD_SIZE = "ots-hud-size";
-  function debugLog(...args) {
-    console.log("[OTS Userscript]", ...args);
-  }
   var Hud = class {
     constructor(getWsUrl, setWsUrl, onWsUrlChanged) {
       this.getWsUrl = getWsUrl;
@@ -116,8 +111,7 @@
       root.style.zIndex = "2147483647";
       root.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       root.style.color = "#e5e7eb";
-      root.innerHTML = `
-    <div id="ots-hud-inner" style="width: 380px; height: 260px; max-height: 60vh; background: rgba(15,23,42,0.96); border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.5); border: 1px solid rgba(148,163,184,0.5); display: flex; flex-direction: column; overflow: hidden; position: relative;">
+      root.innerHTML = `<div id="ots-hud-inner" style="width: 380px; height: 260px; max-height: 60vh; background: rgba(15,23,42,0.96); border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.5); border: 1px solid rgba(148,163,184,0.5); display: flex; flex-direction: column; overflow: hidden; position: relative;">
       <div id="ots-hud-header" style="cursor: move; padding: 6px 8px; display: flex; align-items: center; justify-content: space-between; gap: 6px; background: rgba(15,23,42,0.98); border-bottom: 1px solid rgba(30,64,175,0.7);">
         <div style="display:flex;align-items:center;gap:6px;min-width:0;">
           <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:999px;border:1px solid rgba(148,163,184,0.7);background:rgba(15,23,42,0.9);font-size:9px;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:#e5e7eb;white-space:nowrap;">
@@ -158,8 +152,7 @@
         <div style="position:absolute;right:1px;bottom:1px;width:10px;height:2px;background:rgba(148,163,184,0.9);transform:rotate(45deg);"></div>
         <div style="position:absolute;right:3px;bottom:3px;width:8px;height:2px;background:rgba(148,163,184,0.7);transform:rotate(45deg);"></div>
       </div>
-    </div>
-    `;
+    </div>`;
       document.body.appendChild(root);
       this.root = root;
       this.logList = root.querySelector("#ots-hud-log");
@@ -222,7 +215,7 @@
       });
       settingsResetBtn.addEventListener("click", () => {
         if (!this.settingsInput) return;
-        this.settingsInput.value = DEFAULT_WS_URL;
+        this.settingsInput.value = this.getWsUrl();
       });
       settingsSaveBtn.addEventListener("click", () => {
         if (!this.settingsInput) return;
@@ -330,6 +323,11 @@
     window.addEventListener("mouseup", () => {
       resizing = false;
     });
+  }
+
+  // src/websocket/client.ts
+  function debugLog(...args) {
+    console.log("[OTS Userscript]", ...args);
   }
   var WsClient = class {
     constructor(hud, getWsUrl) {
@@ -455,12 +453,8 @@
       }
     }
   };
-  var CONTROL_PANEL_SELECTOR = "control-panel";
-  var GAME_UPDATE_EVENT = "openfront:game-update";
-  var GAME_CHECK_INTERVAL = 100;
-  var GAME_UPDATE_TYPE_UNIT = 1;
-  var gameUpdateListenerAttached = false;
-  var initialPayloadSent = false;
+
+  // src/utils/dom.ts
   function waitForElement(selector, callback) {
     const existing = document.querySelector(selector);
     if (existing) {
@@ -479,7 +473,7 @@
       subtree: true
     });
   }
-  function waitForGameInstance(controlPanel, callback) {
+  function waitForGameInstance(controlPanel, callback, checkInterval = 100) {
     const existing = controlPanel.game;
     if (existing) {
       callback(existing);
@@ -491,16 +485,28 @@
         window.clearInterval(intervalId);
         callback(game);
       }
-    }, GAME_CHECK_INTERVAL);
+    }, checkInterval);
   }
+
+  // src/utils/logger.ts
+  function debugLog2(...args) {
+    console.log("[OTS Userscript]", ...args);
+  }
+
+  // src/game/openfront-bridge.ts
+  var CONTROL_PANEL_SELECTOR = "control-panel";
+  var GAME_UPDATE_EVENT = "openfront:game-update";
+  var GAME_UPDATE_TYPE_UNIT = 1;
+  var gameUpdateListenerAttached = false;
+  var initialPayloadSent = false;
   function hookGameUpdates(game) {
     if (!game) {
-      debugLog("[OTS] No GameView instance to hook.");
+      debugLog2("[OTS] No GameView instance to hook.");
       return;
     }
     const proto = Object.getPrototypeOf(game);
     if (!proto || typeof proto.update !== "function") {
-      debugLog("[OTS] GameView prototype missing update method; skipping hook.");
+      debugLog2("[OTS] GameView prototype missing update method; skipping hook.");
       return;
     }
     if (proto.__openfrontGameHooked) {
@@ -520,7 +526,7 @@
       value: true,
       configurable: true
     });
-    debugLog("[OTS] Hooked GameView.update().");
+    debugLog2("[OTS] Hooked GameView.update().");
     attachGameUpdateListener();
   }
   function attachGameUpdateListener() {
@@ -575,11 +581,11 @@
     }
     init() {
       waitForElement(CONTROL_PANEL_SELECTOR, (controlPanel) => {
-        debugLog("[OTS] control panel detected", controlPanel);
+        debugLog2("[OTS] control panel detected", controlPanel);
         waitForGameInstance(controlPanel, (game) => {
           ;
           window.openfrontControlPanelGame = game;
-          debugLog("[OTS] GameView ready", game);
+          debugLog2("[OTS] GameView ready", game);
           this.ws.sendEvent("INFO", "of-game-instance-detected", game);
           this.hud.setGameStatus(true);
           hookGameUpdates(game);
@@ -587,6 +593,10 @@
       });
     }
   };
+
+  // src/storage/config.ts
+  var DEFAULT_WS_URL = "ws://localhost:3000/ws-script";
+  var STORAGE_KEY_WS_URL = "ots-ws-url";
   function loadWsUrl() {
     const saved = GM_getValue(STORAGE_KEY_WS_URL, null);
     if (typeof saved === "string" && saved.trim()) {
@@ -597,6 +607,8 @@
   function saveWsUrl(url) {
     GM_setValue(STORAGE_KEY_WS_URL, url);
   }
+
+  // src/main.user.ts
   (function start() {
     let currentWsUrl = loadWsUrl();
     const hud = new Hud(
