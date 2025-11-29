@@ -9,13 +9,5 @@ export default defineNuxtConfig({
   },
   css: ['~/assets/css/main.css'],
   ssr: false,
-  modules: ['@nuxt/eslint', '@nuxt/ui', '@nuxt/fonts'],
-  fonts: {
-    families: [
-      { name: 'Inter', provider: 'google', weights: [400, 500, 600, 700] }
-    ],
-    defaults: {
-      sans: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-    }
-  }
+  modules: ['@nuxt/eslint', '@nuxt/ui', '@nuxt/fonts']
 })

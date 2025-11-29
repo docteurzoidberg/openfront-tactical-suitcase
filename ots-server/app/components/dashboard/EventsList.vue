@@ -4,7 +4,7 @@
       <h2 class="text-sm font-semibold text-slate-300">Recent Events</h2>
     </template>
 
-    <div class="space-y-2 max-h-[28rem] overflow-auto text-xs">
+    <div class="space-y-2 max-h-112 overflow-auto text-xs">
       <article
         v-for="event in events"
         :key="`${event.timestamp}-${event.message}`"
@@ -22,7 +22,15 @@
           </span>
         </header>
         <p class="text-slate-200">
-          <template v-if="event.message === 'ui-cmd-sent' && event.data && 'action' in event.data">
+          <template
+            v-if="
+              event.message === 'ui-cmd-sent' &&
+              event.data &&
+              typeof event.data === 'object' &&
+              !Array.isArray(event.data) &&
+              'action' in event.data
+            "
+          >
             Command sent:
             <span class="font-mono text-slate-100">
               {{ (event.data as any).action }}
@@ -41,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-import type { GameEvent, GameEventType } from '../../../ots-shared/src/game'
+import type { GameEvent, GameEventType } from '~/../../ots-shared/src/game'
 
 const props = defineProps<{
   events: GameEvent[]

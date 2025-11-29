@@ -636,6 +636,6 @@ function saveWsUrl(url: string) {
   hud.ensure()
   ws.connect()
   game.init()
-  ;(window as any).otsShowHud = () => hud.ensure()
-  ;(window as any).otsWsClient = ws
+    ; (window as any).otsShowHud = () => hud.ensure()
+    ; (window as any).otsWsClient = ws
 })()
