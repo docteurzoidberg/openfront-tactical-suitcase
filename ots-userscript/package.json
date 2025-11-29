@@ -1,0 +1,13 @@
+{
+  "name": "ots-userscript",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "clean": "rm -rf build"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "typescript": "^5.9.3"
+  }
+}
