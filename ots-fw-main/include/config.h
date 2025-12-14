@@ -1,28 +1,25 @@
-#pragma once
+#ifndef CONFIG_H
+#define CONFIG_H
 
-// Basic Wi-Fi and WebSocket configuration for the OTS firmware.
-// Adjust these values to match your local network and OTS server.
+#include <stdint.h>
 
-static const char *WIFI_SSID = "IOT";
-static const char *WIFI_PASSWORD = "totoaimeliot";
+// Wi-Fi Configuration
+#define WIFI_SSID "IOT"
+#define WIFI_PASSWORD "totoaimeliot"
 
-// Default OTS server WebSocket endpoint
-static const char *OTS_WS_HOST = "192.168.77.121"; // IP or hostname of ots-server
-static const uint16_t OTS_WS_PORT = 3000;          // Nuxt dev server port
-static const char *OTS_WS_PATH = "/ws";            // WebSocket path
+// WebSocket Server Configuration
+#define WS_SERVER_URL "ws://192.168.77.121:3000/ws"
 
-// I2C Configuration
-#define I2C_SDA 21  // ESP32-S3 I2C SDA pin
-#define I2C_SCL 22  // ESP32-S3 I2C SCL pin
-#define I2C_FREQ 100000  // 100kHz I2C bus speed
-
-// MCP23017 I2C addresses configuration
-// Add or remove addresses as needed for your hardware setup
-
+// MCP23017 I2C addresses
 static const uint8_t MCP23017_ADDRESSES[] = {0x20, 0x21};
-static const uint8_t MCP23017_COUNT = 2;
+#define MCP23017_COUNT 2
 
-// OTA (Over-The-Air) Update Configuration
-#define OTA_HOSTNAME "ots-fw-main"      // mDNS hostname for OTA discovery
-#define OTA_PASSWORD "ots2025"          // Password for OTA updates (CHANGE THIS!)
-#define OTA_PORT 3232                   // Default Arduino OTA port
+// Task priorities
+#define TASK_PRIORITY_BUTTON_MONITOR 5
+#define TASK_PRIORITY_LED_BLINK 4
+
+// Timing constants
+#define BUTTON_DEBOUNCE_MS 50
+#define LED_BLINK_INTERVAL_MS 500
+
+#endif // CONFIG_H
