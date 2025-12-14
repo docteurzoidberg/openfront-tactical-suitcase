@@ -88,6 +88,8 @@ GameEventType =
   | "NUKE_LAUNCHED"
   | "HYDRO_LAUNCHED"
   | "MIRV_LAUNCHED"
+  | "NUKE_EXPLODED"
+  | "NUKE_INTERCEPTED"
   | "ALERT_ATOM"
   | "ALERT_HYDRO"
   | "ALERT_MIRV"
@@ -413,6 +415,60 @@ Naval invasion detected.
 - Multiple alerts can be active simultaneously
 - All alerts auto-expire after their timeout
 - Output-only module (no commands sent to game)
+
+### Nuke Outcome Events
+
+#### `NUKE_EXPLODED`
+Emitted when a tracked nuclear weapon successfully reaches its target.
+
+**Flow**: Game → Userscript → Server → Dashboard (Info only)
+
+```json
+{
+  "type": "event",
+  "payload": {
+    "type": "NUKE_EXPLODED",
+    "timestamp": 1234567890,
+    "message": "Nuclear weapon exploded",
+    "data": {
+      "nukeType": "Atom Bomb",
+      "unitID": 12345,
+      "ownerID": "player-abc",
+      "ownerName": "PlayerName",
+      "targetTile": 54321,
+      "tick": 1000
+    }
+  }
+}
+```
+
+**Note**: This event is informational only and does not trigger hardware module actions.
+
+#### `NUKE_INTERCEPTED`
+Emitted when a tracked nuclear weapon is destroyed before reaching its target.
+
+**Flow**: Game → Userscript → Server → Dashboard (Info only)
+
+```json
+{
+  "type": "event",
+  "payload": {
+    "type": "NUKE_INTERCEPTED",
+    "timestamp": 1234567890,
+    "message": "Nuclear weapon intercepted",
+    "data": {
+      "nukeType": "Hydrogen Bomb",
+      "unitID": 12346,
+      "ownerID": "player-xyz",
+      "ownerName": "EnemyPlayer",
+      "targetTile": 54322,
+      "tick": 950
+    }
+  }
+}
+```
+
+**Note**: This event is informational only and does not trigger hardware module actions.
 
 ### Hardware Testing
 

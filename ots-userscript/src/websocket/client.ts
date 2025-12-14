@@ -19,7 +19,11 @@ export class WsClient {
   private reconnectDelay = 2000
   private heartbeatInterval: number | null = null
 
-  constructor(private hud: Hud, private getWsUrl: () => string) { }
+  constructor(
+    private hud: Hud,
+    private getWsUrl: () => string,
+    private onCommand?: (action: string, params?: unknown) => void
+  ) { }
 
   connect() {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
@@ -169,12 +173,11 @@ export class WsClient {
 
       if (action === 'ping') {
         this.sendInfo('pong-from-userscript')
-      }
-
-      if (action.startsWith('focus-player:')) {
-        const playerId = action.split(':')[1]
-        this.sendInfo('focus-player-received', { playerId })
-        // TODO: implement game specific focus logic
+      } else if (this.onCommand) {
+        // Forward command to the game bridge
+        this.onCommand(action, params)
+      } else {
+        debugLog('No command handler registered for:', action)
       }
     }
   }

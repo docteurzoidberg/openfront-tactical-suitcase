@@ -55,17 +55,21 @@ The `@match` rule in the header is currently set to `https://openfront.io/*`.
 Messages follow the shared types defined in `ots-shared/src/game.ts`:
 
 - Outgoing:
-  - `{ type: "state", payload: GameState }` - GameState includes `hwState` with hardware module states
-  - `{ type: "event", payload: GameEvent }` - GameEventType includes hardware events like `NUKE_LAUNCHED`, `HYDRO_ALERT`, etc.
+  - `{ type: "event", payload: GameEvent }` - GameEventType includes:
+    - Alert events: `ALERT_ATOM`, `ALERT_HYDRO`, `ALERT_MIRV`, `ALERT_LAND`, `ALERT_NAVAL`
+    - Launch events: `NUKE_LAUNCHED`, `HYDRO_LAUNCHED`, `MIRV_LAUNCHED`
+    - Outcome events: `NUKE_EXPLODED`, `NUKE_INTERCEPTED`
+    - Game lifecycle: `GAME_START`, `GAME_END`, `WIN`, `LOOSE`
+    - Info events: `INFO`, `HARDWARE_TEST`
 - Incoming:
   - `{ type: "cmd", payload: { action: string, params?: Record<string, unknown> } }`
 
 The userscript currently implements commands from the dashboard:
 
 - `ping` → replies with `INFO` event `pong-from-userscript`.
-- `send-nuke` → sends nuke in game, replies with `NUKE_LAUNCHED`/`HYDRO_LAUNCHED`/`MIRV_LAUNCHED` event including `{ nukeType }` in data.
+- `send-nuke` → attempts to send nuke in game, replies with `NUKE_LAUNCHED`/`HYDRO_LAUNCHED`/`MIRV_LAUNCHED` event if successful.
 
-**Hardware Module Integration**: The userscript translates hardware module commands (like `send-nuke`) into game actions, then sends back hardware-specific events that trigger LED indicators on physical modules or in the dashboard emulator.
+**Event-Driven Architecture**: The userscript uses polling trackers (NukeTracker, BoatTracker, LandAttackTracker) that detect game events every 100ms and emit protocol-compliant events. Alert events trigger LED indicators on hardware modules or in the dashboard emulator. Outcome events (exploded/intercepted) are logged for statistics and debugging.
 
 ## HUD UI
 
