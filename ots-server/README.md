@@ -1,6 +1,23 @@
-# Nuxt Minimal Starter
+# OTS Server
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+Dashboard and WebSocket server for the Openfront Tactical Suitcase project.
+
+## Overview
+
+This Nuxt 4 application provides:
+
+- **Single WebSocket endpoint** (`/ws`) for both userscript and UI communication
+- **Hardware module emulation** - Vue components that simulate physical hardware modules
+- **Event broadcast** - All messages are broadcast to all connected peers
+- **Development environment** for testing hardware modules without physical device
+
+## Architecture
+
+- `/ws` - Single WebSocket endpoint for all connections (UI and userscript)
+- `app/components/hardware/` - Hardware module emulators (mirrors `/ots-hardware/` specs)
+- `app/composables/useGameSocket.ts` - WebSocket client and hardware state management
+
+**Note**: This server does NOT track or store game state. It only relays events and commands between userscript and UI, and emulates hardware module behavior.
 
 ## Setup
 
@@ -37,6 +54,30 @@ yarn dev
 # bun
 bun run dev
 ```
+
+## Hardware Modules
+
+Currently implemented modules:
+
+### Nuke Control Panel
+- Three buttons: Atom, Hydro, MIRV
+- Sends `send-nuke` commands to userscript
+- Receives `nuke-sent` events and blinks LEDs for 4 seconds
+- Component: `app/components/hardware/NukeModule.vue`
+- Spec: `/ots-hardware/modules/nuke-module.md`
+
+## Protocol
+
+All WebSocket messages follow the protocol defined in `/protocol-context.md`.
+
+See `ots-shared/src/game.ts` for TypeScript type definitions.
+
+## Related Projects
+
+- `/ots-userscript` - Tampermonkey script that bridges the game
+- `/ots-fw-main` - ESP32-S3 firmware for physical hardware
+- `/ots-hardware` - Hardware module specifications
+- `/ots-shared` - Shared TypeScript types
 
 ## Production
 

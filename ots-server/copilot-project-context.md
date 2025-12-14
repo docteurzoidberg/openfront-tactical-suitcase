@@ -2,61 +2,71 @@
 
 ## Overview
 
-`ots-server` is a Nuxt-based dashboard that receives game state and events from the Tampermonkey userscript ("OTS Game Dashboard Bridge") over WebSocket. It exposes:
+`ots-server` is a Nuxt-based dashboard and WebSocket backend that:
 
-- `GET /ws-ui` – WebSocket endpoint for the dashboard UI
-- `GET /ws-script` – WebSocket endpoint for the userscript bridge
+1. **Receives events from the userscript** via WebSocket (`/ws-script`)
+2. **Displays hardware module UI** in the dashboard (emulator mode)
+3. **Forwards commands** between UI and userscript bidirectionally
+
+**Important**: This server does NOT track or store detailed game state (players, scores, etc.). The current `GameState` type focuses on hardware module states (`hwState`) which contains status for general, alert, and nuke modules. Legacy types like `PlayerInfo` and `TeamScore` exist in shared types for potential future use, but the server currently only relays hardware-focused state and events.
+
+It exposes:
+
+- `GET /ws` – Single WebSocket endpoint for both dashboard UI and userscript
 
 The dashboard shows:
 
-- Current game state (map/mode, score, players)
-- Recent events (KILL/DEATH/OBJECTIVE/INFO/etc.)
-- Connection status for both UI WebSocket and userscript
+- Hardware module emulators (currently: Nuke Control Panel)
+- Recent events from userscript/game
+- Connection status for UI WebSocket and userscript
+
+This server also acts as a **hardware emulator** during development: when real hardware isn't available, Vue components simulate physical modules (buttons, LEDs, displays) that would exist on the ESP32-S3 device.
 
 ## Key Files
 
 - `nuxt.config.ts` – Nuxt configuration for the server app
 - `app/pages/index.vue` – Main dashboard page
-  - Uses Nuxt UI components (`UCard`, `UInput`, `UButton`) and small dashboard components
+  - Uses Nuxt UI components (`UCard`, `UInput`, `UButton`)
   - Renders UI WS status and userscript status pills in the header
-  - Displays current `GameState` and a list of recent `GameEvent`s
-  - Provides a small command form to send `cmd` messages to the userscript
+  - Displays hardware module emulators (NukeModule)
+  - Shows recent events list
 - `app/assets/css/main.css` – Nuxt UI Tailwind entrypoint
-  - Imports the Tailwind theme & utilities as recommended by Nuxt UI docs
-- `components/dashboard/HeaderStatus.vue` – header block
+- `app/components/dashboard/HeaderStatus.vue` – header block
   - Shows "Game Dashboard" title and subtitle
   - Shows UI WS and USERSCRIPT status pills
   - Props: `status`, `userscriptStatus`, `userscriptBlink`
-- `components/dashboard/GameStateCard.vue` – current game card
-  - Always rendered; shows placeholders until a `GameState` exists
-  - Expects `state: GameState | null`
-- `components/dashboard/EventsList.vue` – recent events card
-  - Always rendered; shows empty-state text when there are no events
+- `app/components/dashboard/EventsList.vue` – recent events card
+  - Shows empty-state text when there are no events
   - Expects `events: GameEvent[]`
-- `composables/useGameSocket.ts`
-  - Wraps `@vueuse/core` `useWebSocket` for `/ws-ui`
-  - Parses incoming messages into `GameState` and `GameEvent`s
+- `app/components/hardware/NukeModule.vue` – Nuke Control Panel emulator
+  - Three buttons (Atom, Hydro, MIRV) with LED indicators
+  - Independent blink states for each button
+  - Emits `sendNuke` event when buttons are clicked
+  - Props: `connected`, `blinkingButtons`
+- `app/composables/useGameSocket.ts`
+  - Wraps `@vueuse/core` `useWebSocket` for `/ws`
+  - Parses incoming event messages
   - Tracks last userscript heartbeat time and status
-  - Tracks userscript WebSocket open/close via special `INFO` events (`userscript-ws-open` / `userscript-ws-close`)
-  - Exposes a monotonically increasing `userscriptHeartbeatId` used to blink the userscript status pill
-- `server/routes/ws-script.ts`
-  - WebSocket handler for userscript connections (`/ws-script`)
-  - Tracks the latest `GameState` and a set of active userscript peers
-  - Broadcasts incoming messages to the `"ui"` channel
-  - Emits `INFO` events (`userscript-ws-open` / `userscript-ws-close`) on userscript WS lifecycle
-- `server/routes/ws-ui.ts`
-  - WebSocket handler for dashboard UI connections (`/ws-ui`)
-  - Sends the latest `GameState` immediately on connect, if available
-  - If there are active userscript peers when a UI client connects, sends an initial `userscript-ws-open` `INFO` event so the dashboard knows the userscript is already online
-  - Forwards `cmd` messages from UI to the `"script"` channel
-- `../../ots-shared/src/game`
-  - Shared TypeScript types: `GameState`, `GameEvent`, `IncomingMessage`, `OutgoingMessage`, `GameEventType`
+  - Manages nuke button blink timers (4 seconds per button)
+  - Exposes `sendNukeCommand()` helper function
+  - Exposes `activeNukes` reactive state
+- `server/routes/ws.ts`
+  - Single WebSocket handler for all connections (`/ws`)
+  - Broadcasts all messages to all connected peers via `broadcast` channel
+  - UI and userscript both connect to same endpoint
+  - Events from userscript are broadcast to UI
+  - Commands from UI are broadcast to userscript
+- `../../ots-shared/src/game.ts`
+  - Shared TypeScript types (kept in sync with `/protocol-context.md`)
+  - Includes `NukeType`, `SendNukeCommand`, `NukeSentEventData` for hardware module
 
 ## WebSocket & Status Semantics
 
-### UI WebSocket (`/ws-ui`)
+### Single WebSocket Endpoint (`/ws`)
 
-- The dashboard connects to `/ws-ui` using `useWebSocket` with autoReconnect.
+- Both UI and userscript connect to the same `/ws` endpoint
+- All messages are broadcast to all connected peers via the `broadcast` channel
+- The dashboard connects using `useWebSocket` with autoReconnect
 - Connection status is exposed as `status` and used to color the "UI WS" pill:
   - `OPEN` → green
   - `CONNECTING` → amber
@@ -64,48 +74,76 @@ The dashboard shows:
 
 ### Userscript Status
 
-- The userscript sends:
-  - An `INFO` event `userscript-connected` when it connects
-  - Periodic/demo `INFO` events via its internal `demoHook()`
-- The `/ws-script` route now also emits `INFO` events on userscript WS lifecycle:
-  - `userscript-ws-open` when a userscript WebSocket peer connects
-  - `userscript-ws-close` when that peer disconnects
-- The server side composable updates:
-  - `lastUserscriptHeartbeat` on any incoming `INFO` event
-  - `userscriptWsOpen` based on `userscript-ws-open` / `userscript-ws-close`
-  - `userscriptStatus` computed from both WS state and heartbeat age:
-    - WS closed → `OFFLINE`
-    - WS open and last heartbeat `< 10s` → `ONLINE`
-    - WS open and last heartbeat `< 60s` → `STALE`
-    - no heartbeat yet → `UNKNOWN`
-  - `userscriptHeartbeatId` increments each time an `INFO` heartbeat is processed
-
-The index page watches `userscriptHeartbeatId` and toggles a `userscriptBlink` flag so the USERSCRIPT pill briefly animates (single ping) on each heartbeat.
+- The userscript sends periodic `INFO` events (heartbeats)
+- The composable updates `lastUserscriptHeartbeat` on any incoming `INFO` event
+- `userscriptStatus` is computed from heartbeat age:
+  - Last heartbeat `< 10s` → `ONLINE`
+  - Last heartbeat `< 60s` → `STALE`
+  - No heartbeat yet or older → `OFFLINE`
+  - `UNKNOWN` → no heartbeat received yet
+- `userscriptHeartbeatId` increments each time an `INFO` heartbeat is processed
+- The index page watches `userscriptHeartbeatId` to animate the USERSCRIPT pill on each heartbeat
 
 ## Messages & Types
 
-Messages follow the shared `IncomingMessage` / `OutgoingMessage` types:
+Messages follow the shared `IncomingMessage` / `OutgoingMessage` types defined in `/protocol-context.md`:
 
-- `type: 'state'` – carries a full `GameState`
 - `type: 'event'` – carries a `GameEvent` with:
-  - `type: GameEventType` (`KILL`/`DEATH`/`OBJECTIVE`/`INFO`/`ERROR`/...)
-  - `timestamp`, `message`, optional `data`
-- `type: 'cmd'` (from UI to userscript) – action commands, e.g. `ping`, `focus-player:123`
+  - `type: GameEventType` (`INFO`/`WIN`/`LOOSE`/`NUKE_LAUNCHED`/`HYDRO_LAUNCHED`/`MIRV_LAUNCHED`/`NUKE_ALERT`/`HYDRO_ALERT`/`MIRV_ALERT`/`LAND_ALERT`/`NAVAL_ALERT`)
+  - `timestamp`, optional `message`, optional `data`
+- `type: 'cmd'` (from UI to userscript) – action commands
+  - Example: `{ action: 'send-nuke', params: { nukeType: 'atom' } }`
 
-The UI sends commands through the `Send Command` form by emitting `cmd` messages. The userscript reacts to known actions like `ping` and `focus-player:*`.
+### Hardware Module Protocol
+
+The Nuke Control Panel uses these specific message patterns:
+
+**Outbound (UI → Userscript):**
+```typescript
+{
+  type: 'cmd',
+  payload: {
+    action: 'send-nuke',
+    params: { nukeType: 'atom' | 'hydro' | 'mirv' }
+  }
+}
+```
+
+**Inbound (Userscript → UI):**
+```typescript
+{
+  type: 'event',
+  payload: {
+    type: 'NUKE_LAUNCHED',  // or 'HYDRO_LAUNCHED', 'MIRV_LAUNCHED'
+    timestamp: number,
+    message: 'Nuke sent',
+    data: { nukeType: 'atom' | 'hydro' | 'mirv' }
+  }
+}
+```
+
+When the UI receives a nuke launched event (NUKE_LAUNCHED, HYDRO_LAUNCHED, or MIRV_LAUNCHED), it triggers a 4-second LED blink on the corresponding button. Multiple nukes can blink independently.
+
+**Alert Events**: The system also supports alert events (`NUKE_ALERT`, `HYDRO_ALERT`, `MIRV_ALERT`, `LAND_ALERT`, `NAVAL_ALERT`) which trigger corresponding alert LEDs on the alert module.
 
 ## UX Notes
 
 - The header shows two pills:
-  - `UI WS` – status of the dashboard’s connection to `/ws-ui`
+  - `UI WS` – status of the dashboard's connection to `/ws-ui`
   - `USERSCRIPT` – derived userscript status with a one-shot blink on each heartbeat
-- Events are displayed newest-first, capped to a reasonable number (e.g. 100).
-- Game state card shows timestamp, map, mode, team scores, and per-player info.
+- Events are displayed newest-first, capped to 100
+- Hardware modules are interactive and emulate physical device behavior
+- LED blink animations are managed via timers in the composable (4 seconds per nuke)
 
 ## Implementation Guidelines
 
-- Keep the shared types in `ots-shared` the single source of truth for message structure.
-- When evolving the protocol, update both:
-  - The userscript (sender/consumer)
-  - The server composable and any route handlers
-- Prefer small, composable pieces (composables, components) rather than packing all logic into `index.vue`.
+- **No game state tracking**: The server does NOT store or sync `GameState`. It only relays events.
+- **Hardware emulation**: Vue components in `app/components/hardware/` mirror physical modules defined in `/ots-hardware/`
+- Keep shared types in `ots-shared` as the single source of truth
+- Protocol definitions live in `/protocol-context.md` - update there first
+- When adding new hardware modules:
+  1. Define in `/ots-hardware/modules/<module-name>.md`
+  2. Add types to `ots-shared/src/game.ts`
+  3. Create Vue component in `app/components/hardware/`
+  4. Update composable for any module-specific state/timers
+- Prefer small, composable pieces rather than packing all logic into `index.vue`

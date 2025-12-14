@@ -1,10 +1,10 @@
 <template>
-  <UCard>
+  <UCard class="h-[calc(100vh-12rem)]">
     <template #header>
       <h2 class="text-sm font-semibold text-slate-300">Recent Events</h2>
     </template>
 
-    <div class="space-y-2 max-h-112 overflow-auto text-xs">
+    <div class="space-y-2 h-full overflow-y-auto text-xs pr-2">
       <article
         v-for="event in events"
         :key="`${event.timestamp}-${event.message}`"

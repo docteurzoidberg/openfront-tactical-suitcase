@@ -1,17 +1,46 @@
 import { computed, ref, watchEffect } from 'vue'
 import { useWebSocket } from '@vueuse/core'
-import type { GameEvent, GameState, IncomingMessage, OutgoingMessage } from '../../ots-shared/src/game'
+import type { GameEvent, IncomingMessage, OutgoingMessage, NukeType, NukeSentEventData } from '../../../ots-shared/src/game'
 
 const WS_URL =
   typeof window !== 'undefined'
-    ? (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws-ui'
+    ? (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws'
     : ''
 
-const latestState = ref<GameState | null>(null)
 const events = ref<GameEvent[]>([])
 const lastUserscriptHeartbeat = ref<number | null>(null)
 const lastUserscriptHeartbeatId = ref<number>(0)
-const userscriptWsOpen = ref(false)
+
+// Nuke blink state
+const activeNukes = ref<{ atom: boolean; hydro: boolean; mirv: boolean }>({
+  atom: false,
+  hydro: false,
+  mirv: false,
+})
+
+const blinkTimers = new Map<NukeType, NodeJS.Timeout>()
+
+// Power state
+const powerOn = ref<boolean>(true)
+
+// Alert state
+const activeAlerts = ref<{
+  warning: boolean
+  atom: boolean
+  hydro: boolean
+  mirv: boolean
+  land: boolean
+  naval: boolean
+}>({
+  warning: false,
+  atom: false,
+  hydro: false,
+  mirv: false,
+  land: false,
+  naval: false
+})
+
+const alertTimers = new Map<string, NodeJS.Timeout>()
 
 export function useGameSocket() {
   const { status, data, send, open, close } = useWebSocket(WS_URL, {
@@ -21,6 +50,10 @@ export function useGameSocket() {
       onFailed() {
         // noop for now
       }
+    },
+    onConnected() {
+      // Send handshake to identify as UI client
+      send(JSON.stringify({ type: 'handshake', clientType: 'ui' }))
     }
   })
 
@@ -30,22 +63,43 @@ export function useGameSocket() {
 
     try {
       const msg = JSON.parse(raw as string) as IncomingMessage
-      if (msg.type === 'state') {
-        latestState.value = msg.payload
-      } else if (msg.type === 'event') {
+      if (msg.type === 'event') {
         events.value = [msg.payload, ...events.value].slice(0, 100)
 
         if (msg.payload.type === 'INFO') {
           const message = msg.payload.message
 
-          if (message === 'userscript-ws-open') {
-            userscriptWsOpen.value = true
-          } else if (message === 'userscript-ws-close') {
-            userscriptWsOpen.value = false
+          if (message === 'Nuke sent') {
+            // Handle nuke-sent event
+            const data = msg.payload.data as NukeSentEventData | undefined
+            if (data?.nukeType) {
+              startNukeBlink(data.nukeType)
+            }
           }
 
-          lastUserscriptHeartbeat.value = Date.now()
-          lastUserscriptHeartbeatId.value++
+          // Handle userscript disconnect
+          if (message === 'userscript-disconnected') {
+            lastUserscriptHeartbeat.value = null
+            lastUserscriptHeartbeatId.value++
+          }
+          // Handle userscript connect or other INFO messages as heartbeat
+          else {
+            lastUserscriptHeartbeat.value = Date.now()
+            lastUserscriptHeartbeatId.value++
+          }
+        }
+
+        // Handle alert events
+        if (msg.payload.type === 'ALERT_ATOM') {
+          startAlert('atom')
+        } else if (msg.payload.type === 'ALERT_HYDRO') {
+          startAlert('hydro')
+        } else if (msg.payload.type === 'ALERT_MIRV') {
+          startAlert('mirv')
+        } else if (msg.payload.type === 'ALERT_LAND') {
+          startAlert('land')
+        } else if (msg.payload.type === 'ALERT_NAVAL') {
+          startAlert('naval')
         }
       }
     } catch {
@@ -53,11 +107,61 @@ export function useGameSocket() {
     }
   })
 
-  const connectionStatus = computed(() => status.value)
+  const startNukeBlink = (nukeType: NukeType) => {
+    // Clear existing timer if any
+    const existingTimer = blinkTimers.get(nukeType)
+    if (existingTimer) {
+      clearTimeout(existingTimer)
+    }
+
+    // Start blinking
+    activeNukes.value[nukeType as keyof typeof activeNukes.value] = true
+
+    // Stop blinking after 4 seconds
+    const timer = setTimeout(() => {
+      activeNukes.value[nukeType as keyof typeof activeNukes.value] = false
+      blinkTimers.delete(nukeType)
+    }, 4000)
+
+    blinkTimers.set(nukeType, timer)
+  }
+
+  const startAlert = (alertType: 'atom' | 'hydro' | 'mirv' | 'land' | 'naval') => {
+    // Clear existing timer if any
+    const existingTimer = alertTimers.get(alertType)
+    if (existingTimer) {
+      clearTimeout(existingTimer)
+    }
+
+    // Activate alert
+    activeAlerts.value[alertType] = true
+    updateWarningLED()
+
+    // Deactivate after duration (10 seconds for nukes, 15 for invasions)
+    const duration = (alertType === 'land' || alertType === 'naval') ? 15000 : 10000
+    const timer = setTimeout(() => {
+      activeAlerts.value[alertType] = false
+      alertTimers.delete(alertType)
+      updateWarningLED()
+    }, duration)
+
+    alertTimers.set(alertType, timer)
+  }
+
+  const updateWarningLED = () => {
+    // WARNING LED is active if ANY other alert is active
+    const anyAlertActive = activeAlerts.value.atom ||
+      activeAlerts.value.hydro ||
+      activeAlerts.value.mirv ||
+      activeAlerts.value.land ||
+      activeAlerts.value.naval
+    activeAlerts.value.warning = anyAlertActive
+  }
+
+  const uiStatus = computed(() => status.value)
 
   const userscriptStatus = computed(() => {
     if (!lastUserscriptHeartbeat.value) return 'UNKNOWN'
-    if (!userscriptWsOpen.value) return 'OFFLINE'
 
     const diff = Date.now() - lastUserscriptHeartbeat.value
     if (diff < 10_000) return 'ONLINE'
@@ -71,13 +175,31 @@ export function useGameSocket() {
     send(JSON.stringify(msg))
   }
 
+  const sendNukeCommand = (nukeType: NukeType) => {
+    sendMessage({
+      type: 'cmd',
+      payload: {
+        action: 'send-nuke',
+        params: { nukeType }
+      }
+    })
+  }
+
+  const togglePower = () => {
+    powerOn.value = !powerOn.value
+  }
+
   return {
-    status: connectionStatus,
+    uiStatus,
     userscriptStatus,
     userscriptHeartbeatId,
-    latestState,
     events,
+    activeNukes,
+    activeAlerts,
+    powerOn,
     send: sendMessage,
+    sendNukeCommand,
+    togglePower,
     open,
     close
   }
