@@ -17,6 +17,7 @@ export class WsClient {
   private socket: WebSocket | null = null
   private reconnectTimeout: number | null = null
   private reconnectDelay = 2000
+  private heartbeatInterval: number | null = null
 
   constructor(private hud: Hud, private getWsUrl: () => string) { }
 
@@ -40,13 +41,21 @@ export class WsClient {
       this.hud.setWsStatus('OPEN')
       this.hud.pushLog('info', 'WebSocket connected')
       this.reconnectDelay = 2000
+
+      // Send handshake to identify as userscript client
+      this.safeSend({ type: 'handshake', clientType: 'userscript' })
+
       this.sendInfo('userscript-connected', { url: window.location.href })
+
+      // Start periodic heartbeat (every 5 seconds)
+      this.startHeartbeat()
     })
 
     this.socket.addEventListener('close', (ev) => {
       debugLog('WebSocket closed', ev.code, ev.reason)
       this.hud.setWsStatus('DISCONNECTED')
       this.hud.pushLog('info', `WebSocket closed (${ev.code} ${ev.reason || ''})`)
+      this.stopHeartbeat()
       this.scheduleReconnect()
     })
 
@@ -65,6 +74,7 @@ export class WsClient {
 
   disconnect(code?: number, reason?: string) {
     if (!this.socket) return
+    this.stopHeartbeat()
     try {
       this.socket.close(code, reason)
     } catch {
@@ -121,6 +131,20 @@ export class WsClient {
 
   sendInfo(message: string, data?: unknown) {
     this.sendEvent('INFO', message, data)
+  }
+
+  private startHeartbeat() {
+    this.stopHeartbeat()
+    this.heartbeatInterval = window.setInterval(() => {
+      this.sendInfo('heartbeat')
+    }, 5000)
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatInterval !== null) {
+      window.clearInterval(this.heartbeatInterval)
+      this.heartbeatInterval = null
+    }
   }
 
   private handleServerMessage(raw: unknown) {

@@ -55,15 +55,17 @@ The `@match` rule in the header is currently set to `https://openfront.io/*`.
 Messages follow the shared types defined in `ots-shared/src/game.ts`:
 
 - Outgoing:
-  - `{ type: "state", payload: GameState }`
-  - `{ type: "event", payload: GameEvent }`
+  - `{ type: "state", payload: GameState }` - GameState includes `hwState` with hardware module states
+  - `{ type: "event", payload: GameEvent }` - GameEventType includes hardware events like `NUKE_LAUNCHED`, `HYDRO_ALERT`, etc.
 - Incoming:
   - `{ type: "cmd", payload: { action: string, params?: Record<string, unknown> } }`
 
-The userscript currently implements example commands from the dashboard:
+The userscript currently implements commands from the dashboard:
 
 - `ping` → replies with `INFO` event `pong-from-userscript`.
-- `focus-player:<id>` → replies with `INFO` event `focus-player-received` including `{ playerId }`.
+- `send-nuke` → sends nuke in game, replies with `NUKE_LAUNCHED`/`HYDRO_LAUNCHED`/`MIRV_LAUNCHED` event including `{ nukeType }` in data.
+
+**Hardware Module Integration**: The userscript translates hardware module commands (like `send-nuke`) into game actions, then sends back hardware-specific events that trigger LED indicators on physical modules or in the dashboard emulator.
 
 ## HUD UI
 

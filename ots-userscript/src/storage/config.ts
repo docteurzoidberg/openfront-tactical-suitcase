@@ -1,4 +1,4 @@
-const DEFAULT_WS_URL = 'ws://localhost:3000/ws-script'
+const DEFAULT_WS_URL = 'ws://localhost:3000/ws'
 const STORAGE_KEY_WS_URL = 'ots-ws-url'
 
 export function loadWsUrl(): string {
