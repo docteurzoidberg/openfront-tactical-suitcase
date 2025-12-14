@@ -1,118 +1,95 @@
-#pragma once
+#ifndef MODULE_IO_H
+#define MODULE_IO_H
 
+#include <stdint.h>
+#include <stdbool.h>
 #include "io_expander.h"
 
-// Hardware pin mapping for modules
-// Maps module LEDs and buttons to specific MCP23017 board+pin combinations
-
 // Pin mapping structure
-struct PinMap {
-  uint8_t board;  // MCP23017 board index (0-based)
-  uint8_t pin;    // Pin number on that board (0-15)
-};
+typedef struct {
+    uint8_t board;
+    uint8_t pin;
+} pin_map_t;
 
-// Main Power Module Pin Definitions
-namespace MainModule {
-  // LED outputs
-  constexpr PinMap LED_LINK = {0, 0};  // Board 0, Pin 0 - Link status indicator
-}
+// Main Power Module pins
+#define MAIN_LED_LINK_BOARD 0
+#define MAIN_LED_LINK_PIN   0
 
-// Nuke Module Pin Definitions
-namespace NukeModule {
-  // Button inputs
-  constexpr PinMap BTN_ATOM  = {0, 1};   // Board 0, Pin 1
-  constexpr PinMap BTN_HYDRO = {0, 2};   // Board 0, Pin 2
-  constexpr PinMap BTN_MIRV  = {0, 3};   // Board 0, Pin 3
-  
-  // LED outputs
-  constexpr PinMap LED_ATOM  = {0, 8};   // Board 0, Pin 8
-  constexpr PinMap LED_HYDRO = {0, 9};   // Board 0, Pin 9
-  constexpr PinMap LED_MIRV  = {0, 10};  // Board 0, Pin 10
-}
+// Nuke Module pins
+#define NUKE_BTN_ATOM_BOARD  0
+#define NUKE_BTN_ATOM_PIN    1
+#define NUKE_BTN_HYDRO_BOARD 0
+#define NUKE_BTN_HYDRO_PIN   2
+#define NUKE_BTN_MIRV_BOARD  0
+#define NUKE_BTN_MIRV_PIN    3
 
-// Alert Module Pin Definitions
-namespace AlertModule {
-  // LED outputs
-  constexpr PinMap LED_WARNING = {1, 0};  // Board 1, Pin 0
-  constexpr PinMap LED_ATOM    = {1, 1};  // Board 1, Pin 1
-  constexpr PinMap LED_HYDRO   = {1, 2};  // Board 1, Pin 2
-  constexpr PinMap LED_MIRV    = {1, 3};  // Board 1, Pin 3
-  constexpr PinMap LED_LAND    = {1, 4};  // Board 1, Pin 4
-  constexpr PinMap LED_NAVAL   = {1, 5};  // Board 1, Pin 5
-}
+#define NUKE_LED_ATOM_BOARD  0
+#define NUKE_LED_ATOM_PIN    8
+#define NUKE_LED_HYDRO_BOARD 0
+#define NUKE_LED_HYDRO_PIN   9
+#define NUKE_LED_MIRV_BOARD  0
+#define NUKE_LED_MIRV_PIN    10
 
-// Add more module namespaces here as needed
+// Alert Module pins
+#define ALERT_LED_WARNING_BOARD 1
+#define ALERT_LED_WARNING_PIN   0
+#define ALERT_LED_ATOM_BOARD    1
+#define ALERT_LED_ATOM_PIN      1
+#define ALERT_LED_HYDRO_BOARD   1
+#define ALERT_LED_HYDRO_PIN     2
+#define ALERT_LED_MIRV_BOARD    1
+#define ALERT_LED_MIRV_PIN      3
+#define ALERT_LED_LAND_BOARD    1
+#define ALERT_LED_LAND_PIN      4
+#define ALERT_LED_NAVAL_BOARD   1
+#define ALERT_LED_NAVAL_PIN     5
 
-// Module I/O helper class
-// High-level interface for reading inputs and controlling outputs
-// using hardware-agnostic pin mappings
+/**
+ * @brief Initialize all module I/O pins
+ * 
+ * @return ESP_OK on success
+ */
+esp_err_t module_io_init(void);
 
-class ModuleIO {
-public:
-  explicit ModuleIO(IOExpander &ioExp) : io(ioExp) {}
-  
-  // Initialize all module pins
-  bool begin();
-  
-  // Low-level pin operations
-  bool readInput(const PinMap &pin, bool &state);
-  bool writeOutput(const PinMap &pin, bool state);
-  
-  // LED control
-  bool setLED(const PinMap &pin, bool on);
-  bool toggleLED(const PinMap &pin);
-  
-  // Module-specific structures
-  struct MainLEDs {
-    bool link = false;
-  };
-  
-  struct NukeButtons {
-    bool atom = false;
-    bool hydro = false;
-    bool mirv = false;
-  };
-  
-  struct NukeLEDs {
-    bool atom = false;
-    bool hydro = false;
-    bool mirv = false;
-  };
-  
-  struct AlertLEDs {
-    bool warning = false;
-    bool atom = false;
-    bool hydro = false;
-    bool mirv = false;
-    bool land = false;
-    bool naval = false;
-  };
-  
-  // Module-specific batch operations
-  bool writeMainLEDs(const MainLEDs &leds);
-  NukeButtons readNukeButtons();
-  bool writeNukeLEDs(const NukeLEDs &leds);
-  bool writeAlertLEDs(const AlertLEDs &leds);
+/**
+ * @brief Read nuke button state
+ * 
+ * @param button 0=atom, 1=hydro, 2=mirv
+ * @param pressed Pointer to store button state (true if pressed)
+ * @return true on success
+ */
+bool module_io_read_nuke_button(uint8_t button, bool *pressed);
 
-private:
-  IOExpander &io;
-  bool ledStates[MAX_MCP_BOARDS][16] = {{false}};
-  
-  // Helper to track LED state
-  void updateLEDState(const PinMap &pin, bool state) {
-    if (pin.board < MAX_MCP_BOARDS && pin.pin < 16) {
-      ledStates[pin.board][pin.pin] = state;
-    }
-  }
-  
-  bool getLEDState(const PinMap &pin) const {
-    if (pin.board < MAX_MCP_BOARDS && pin.pin < 16) {
-      return ledStates[pin.board][pin.pin];
-    }
-    return false;
-  }
-  
-  // Pin configuration helpers
-  bool configurePinAsInput(const PinMap &pin);
-  bool configurePinAsOutput(const PinMap &pin);
-};
+/**
+ * @brief Set nuke LED state
+ * 
+ * @param led 0=atom, 1=hydro, 2=mirv
+ * @param state true=on, false=off
+ * @return true on success
+ */
+bool module_io_set_nuke_led(uint8_t led, bool state);
+
+/**
+ * @brief Set alert LED state
+ * 
+ * @param led 0=warning, 1=atom, 2=hydro, 3=mirv, 4=land, 5=naval
+ * @param state true=on, false=off
+ * @return true on success
+ */
+bool module_io_set_alert_led(uint8_t led, bool state);
+
+/**
+ * @brief Set main power link LED state
+ * 
+ * @param state true=on, false=off
+ * @return true on success
+ */
+bool module_io_set_link_led(bool state);
+
+/**
+ * @brief Process button debouncing and state changes
+ * Should be called periodically from main loop
+ */
+void module_io_process(void);
+
+#endif // MODULE_IO_H

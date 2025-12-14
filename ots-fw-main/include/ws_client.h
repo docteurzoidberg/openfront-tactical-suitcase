@@ -1,40 +1,21 @@
-﻿#pragma once
+﻿#ifndef WS_CLIENT_H
+#define WS_CLIENT_H
 
+#include <stdint.h>
+#include <stdbool.h>
+#include "esp_err.h"
 #include "protocol.h"
-#include <ESPAsyncWebServer.h>
-#include <functional>
 
-// Simple WebSocket server wrapper for the OTS firmware using ESPAsyncWebServer.
+typedef void (*ws_event_callback_t)(game_event_type_t event_type);
 
-class OtsWsClient {
-public:
-  void begin();
-  void loop();
+esp_err_t ws_client_init(const char *server_url);
+esp_err_t ws_client_start(void);
+void ws_client_stop(void);
+esp_err_t ws_client_send_state(const game_state_t *state);
+esp_err_t ws_client_send_event(const game_event_t *event);
+bool ws_client_is_connected(void);
+void ws_client_set_nuke_callback(ws_event_callback_t callback);
+void ws_client_set_alert_callback(ws_event_callback_t callback);
+void ws_client_set_game_state_callback(ws_event_callback_t callback);
 
-  // Send helpers
-  void sendGameState(const GameState &state);
-  void sendGameEvent(const GameEvent &event);
-  
-  // Connection status
-  bool isConnected() const;
-  
-  // Event callbacks
-  void setNukeLaunchedCallback(std::function<void(GameEventType)> callback) {
-    onNukeLaunched = callback;
-  }
-  void setAlertCallback(std::function<void(GameEventType)> callback) {
-    onAlert = callback;
-  }
-  void setGameStateCallback(std::function<void(GameEventType)> callback) {
-    onGameState = callback;
-  }
-
-private:
-  AsyncWebServer server{80};
-  AsyncWebSocket ws{"/ws"};
-  void setupHandlers();
-  
-  std::function<void(GameEventType)> onNukeLaunched;
-  std::function<void(GameEventType)> onAlert;
-  std::function<void(GameEventType)> onGameState;
-};
+#endif // WS_CLIENT_H

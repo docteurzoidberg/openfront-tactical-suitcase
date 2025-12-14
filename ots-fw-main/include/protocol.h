@@ -1,72 +1,71 @@
-#pragma once
+#ifndef PROTOCOL_H
+#define PROTOCOL_H
 
-#include <ArduinoJson.h>
+#include <stdint.h>
+#include <stdbool.h>
 
-// C++ representation of the shared OTS protocol.
-// This must stay in sync with `protocol-context.md` and
-// `ots-shared/src/game.ts`.
+// Game event types - must stay in sync with protocol-context.md and ots-shared/src/game.ts
+typedef enum {
+    GAME_EVENT_INFO = 0,
+    GAME_EVENT_GAME_START,
+    GAME_EVENT_GAME_END,
+    GAME_EVENT_WIN,
+    GAME_EVENT_LOOSE,
+    GAME_EVENT_NUKE_LAUNCHED,
+    GAME_EVENT_HYDRO_LAUNCHED,
+    GAME_EVENT_MIRV_LAUNCHED,
+    GAME_EVENT_ALERT_ATOM,
+    GAME_EVENT_ALERT_HYDRO,
+    GAME_EVENT_ALERT_MIRV,
+    GAME_EVENT_ALERT_LAND,
+    GAME_EVENT_ALERT_NAVAL,
+    GAME_EVENT_HARDWARE_TEST,
+    GAME_EVENT_INVALID
+} game_event_type_t;
 
-struct ModuleGeneralState {
-  bool m_link;
-};
+// Module states
+typedef struct {
+    bool link;
+} module_general_state_t;
 
-struct ModuleAlertState {
-  bool m_alert_warning;
-  bool m_alert_atom;
-  bool m_alert_hydro;
-  bool m_alert_mirv;
-  bool m_alert_land;
-  bool m_alert_naval;
-}; 
+typedef struct {
+    bool warning;
+    bool atom;
+    bool hydro;
+    bool mirv;
+    bool land;
+    bool naval;
+} module_alert_state_t;
 
-struct ModuleNukeState {
-  bool m_nuke_launched;
-  bool m_hydro_launched;
-  bool m_mirv_launched;
-};
+typedef struct {
+    bool nuke_launched;
+    bool hydro_launched;
+    bool mirv_launched;
+} module_nuke_state_t;
 
-struct HWState {
-  ModuleGeneralState m_general;
-  ModuleAlertState m_alert;
-  ModuleNukeState m_nuke;
-};
+typedef struct {
+    module_general_state_t general;
+    module_alert_state_t alert;
+    module_nuke_state_t nuke;
+} hw_state_t;
 
-struct GameState {
-  uint64_t timestamp;
-  String mapName;
-  String mode;
-  size_t playerCount;
-  HWState hwState;
-};
+typedef struct {
+    uint64_t timestamp;
+    char map_name[64];
+    char mode[32];
+    uint32_t player_count;
+    hw_state_t hw_state;
+} game_state_t;
 
-enum class GameEventType { 
-  INFO,
-  GAME_START,
-  GAME_END,
-  WIN,
-  LOOSE, 
-  NUKE_LAUNCHED, 
-  HYDRO_LAUNCHED, 
-  MIRV_LAUNCHED, 
-  ALERT_ATOM,
-  ALERT_HYDRO,
-  ALERT_MIRV,
-  ALERT_LAND,
-  ALERT_NAVAL,
-  HARDWARE_TEST
-};
+typedef struct {
+    game_event_type_t type;
+    uint64_t timestamp;
+    char message[128];
+    char data[256];  // JSON string for additional data
+} game_event_t;
 
-struct GameEvent {
-  GameEventType type;
-  uint64_t timestamp;
-};
+// Protocol helper functions
+const char* event_type_to_string(game_event_type_t type);
+game_event_type_t string_to_event_type(const char *str);
 
-// Serialize a minimal demo GameState into a JSON document.
-void serializeGameState(const GameState &state, JsonDocument &doc);
-
-// Serialize a minimal GameEvent into a JSON document.
-void serializeGameEvent(const GameEvent &event, JsonDocument &doc);
-
-// Parse received GameEvent from WebSocket (JSON string)
-// Returns true if parsing succeeded
-bool parseGameEvent(const String &jsonString, GameEvent &event);
+#endif // PROTOCOL_H
