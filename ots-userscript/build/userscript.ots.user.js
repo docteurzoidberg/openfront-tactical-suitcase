@@ -330,12 +330,14 @@
     console.log("[OTS Userscript]", ...args);
   }
   var WsClient = class {
-    constructor(hud, getWsUrl) {
+    constructor(hud, getWsUrl, onCommand) {
       this.hud = hud;
       this.getWsUrl = getWsUrl;
+      this.onCommand = onCommand;
       this.socket = null;
       this.reconnectTimeout = null;
       this.reconnectDelay = 2e3;
+      this.heartbeatInterval = null;
     }
     connect() {
       if (this.socket && this.socket.readyState === WebSocket.OPEN) {
@@ -354,12 +356,15 @@
         this.hud.setWsStatus("OPEN");
         this.hud.pushLog("info", "WebSocket connected");
         this.reconnectDelay = 2e3;
+        this.safeSend({ type: "handshake", clientType: "userscript" });
         this.sendInfo("userscript-connected", { url: window.location.href });
+        this.startHeartbeat();
       });
       this.socket.addEventListener("close", (ev) => {
         debugLog("WebSocket closed", ev.code, ev.reason);
         this.hud.setWsStatus("DISCONNECTED");
         this.hud.pushLog("info", `WebSocket closed (${ev.code} ${ev.reason || ""})`);
+        this.stopHeartbeat();
         this.scheduleReconnect();
       });
       this.socket.addEventListener("error", (err) => {
@@ -375,6 +380,7 @@
     }
     disconnect(code, reason) {
       if (!this.socket) return;
+      this.stopHeartbeat();
       try {
         this.socket.close(code, reason);
       } catch (e) {
@@ -425,6 +431,18 @@
     sendInfo(message, data) {
       this.sendEvent("INFO", message, data);
     }
+    startHeartbeat() {
+      this.stopHeartbeat();
+      this.heartbeatInterval = window.setInterval(() => {
+        this.sendInfo("heartbeat");
+      }, 5e3);
+    }
+    stopHeartbeat() {
+      if (this.heartbeatInterval !== null) {
+        window.clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
+    }
     handleServerMessage(raw) {
       var _a;
       if (typeof raw !== "string") {
@@ -445,10 +463,10 @@
         debugLog("Received command from dashboard:", action, params);
         if (action === "ping") {
           this.sendInfo("pong-from-userscript");
-        }
-        if (action.startsWith("focus-player:")) {
-          const playerId = action.split(":")[1];
-          this.sendInfo("focus-player-received", { playerId });
+        } else if (this.onCommand) {
+          this.onCommand(action, params);
+        } else {
+          debugLog("No command handler registered for:", action);
         }
       }
     }
@@ -473,129 +491,691 @@
       subtree: true
     });
   }
-  function waitForGameInstance(controlPanel, callback, checkInterval = 100) {
-    const existing = controlPanel.game;
-    if (existing) {
-      callback(existing);
-      return;
-    }
-    const intervalId = window.setInterval(() => {
-      const game = controlPanel.game;
-      if (game) {
-        window.clearInterval(intervalId);
-        callback(game);
+
+  // src/game/game-api.ts
+  function getGameView() {
+    try {
+      const eventsDisplay = document.querySelector("events-display");
+      if (eventsDisplay && eventsDisplay.game) {
+        return eventsDisplay.game;
       }
-    }, checkInterval);
+    } catch (e) {
+    }
+    return null;
+  }
+  function createGameAPI() {
+    let cachedGame = null;
+    let lastCheck = 0;
+    const CACHE_DURATION = 1e3;
+    const getGame = () => {
+      const now = Date.now();
+      if (!cachedGame || now - lastCheck > CACHE_DURATION) {
+        cachedGame = getGameView();
+        lastCheck = now;
+      }
+      return cachedGame;
+    };
+    return {
+      isValid() {
+        const game = getGame();
+        return game != null;
+      },
+      getMyPlayer() {
+        try {
+          const game = getGame();
+          if (!game || typeof game.myPlayer !== "function") return null;
+          return game.myPlayer();
+        } catch (e) {
+          return null;
+        }
+      },
+      getMyPlayerID() {
+        try {
+          const myPlayer = this.getMyPlayer();
+          if (!myPlayer || typeof myPlayer.id !== "function") return null;
+          return myPlayer.id();
+        } catch (e) {
+          return null;
+        }
+      },
+      getMySmallID() {
+        try {
+          const myPlayer = this.getMyPlayer();
+          if (!myPlayer || typeof myPlayer.smallID !== "function") return null;
+          return myPlayer.smallID();
+        } catch (e) {
+          return null;
+        }
+      },
+      getUnits(...types) {
+        try {
+          const game = getGame();
+          if (!game || typeof game.units !== "function") return [];
+          return game.units(...types) || [];
+        } catch (e) {
+          return [];
+        }
+      },
+      getTicks() {
+        try {
+          const game = getGame();
+          if (!game || typeof game.ticks !== "function") return null;
+          return game.ticks();
+        } catch (e) {
+          return null;
+        }
+      },
+      getX(tile) {
+        try {
+          const game = getGame();
+          if (!game || typeof game.x !== "function") return null;
+          return game.x(tile);
+        } catch (e) {
+          return null;
+        }
+      },
+      getY(tile) {
+        try {
+          const game = getGame();
+          if (!game || typeof game.y !== "function") return null;
+          return game.y(tile);
+        } catch (e) {
+          return null;
+        }
+      },
+      getOwner(tile) {
+        try {
+          const game = getGame();
+          if (!game || typeof game.owner !== "function") return null;
+          return game.owner(tile);
+        } catch (e) {
+          return null;
+        }
+      },
+      getUnit(unitId) {
+        try {
+          const game = getGame();
+          if (!game || typeof game.unit !== "function") return null;
+          return game.unit(unitId);
+        } catch (e) {
+          return null;
+        }
+      },
+      getPlayerBySmallID(smallID) {
+        try {
+          const game = getGame();
+          if (!game || typeof game.playerBySmallID !== "function") return null;
+          return game.playerBySmallID(smallID);
+        } catch (e) {
+          return null;
+        }
+      }
+    };
   }
 
-  // src/utils/logger.ts
-  function debugLog2(...args) {
-    console.log("[OTS Userscript]", ...args);
-  }
+  // src/game/nuke-tracker.ts
+  var NukeTracker = class {
+    constructor() {
+      this.trackedNukes = /* @__PURE__ */ new Map();
+      this.eventCallbacks = [];
+    }
+    onEvent(callback) {
+      this.eventCallbacks.push(callback);
+    }
+    emitEvent(event) {
+      this.eventCallbacks.forEach((cb) => {
+        try {
+          cb(event);
+        } catch (e) {
+          console.error("[NukeTracker] Error in event callback:", e);
+        }
+      });
+    }
+    /**
+     * Get target player ID from a tile
+     */
+    getTargetPlayerID(gameAPI, targetTile) {
+      if (!targetTile) return null;
+      try {
+        const owner = gameAPI.getOwner(targetTile);
+        if (owner && typeof owner.isPlayer === "function" && owner.isPlayer()) {
+          return owner.id();
+        }
+      } catch (e) {
+      }
+      return null;
+    }
+    /**
+     * Detect new nuke launches targeting the current player
+     */
+    detectLaunches(gameAPI, myPlayerID) {
+      const nukeTypes = ["Atom Bomb", "Hydrogen Bomb", "MIRV", "MIRV Warhead"];
+      const allNukes = gameAPI.getUnits(...nukeTypes);
+      for (const nuke of allNukes) {
+        try {
+          const nukeId = typeof nuke.id === "function" ? nuke.id() : null;
+          if (!nukeId || this.trackedNukes.has(nukeId)) continue;
+          const targetTile = typeof nuke.targetTile === "function" ? nuke.targetTile() : null;
+          const targetPlayerID = this.getTargetPlayerID(gameAPI, targetTile);
+          if (targetPlayerID === myPlayerID) {
+            const owner = typeof nuke.owner === "function" ? nuke.owner() : null;
+            const nukeType = typeof nuke.type === "function" ? nuke.type() : "Unknown";
+            const tracked = {
+              unitID: nukeId,
+              type: nukeType,
+              ownerID: owner && typeof owner.id === "function" ? owner.id() : "unknown",
+              ownerName: owner && typeof owner.name === "function" ? owner.name() : "Unknown",
+              targetTile,
+              targetPlayerID,
+              launchedTick: gameAPI.getTicks() || 0,
+              hasReachedTarget: false,
+              reported: false
+            };
+            this.trackedNukes.set(nukeId, tracked);
+            this.reportLaunch(tracked, gameAPI);
+          }
+        } catch (e) {
+          console.error("[NukeTracker] Error processing nuke:", e);
+        }
+      }
+    }
+    /**
+     * Detect nuke explosions or interceptions
+     */
+    detectExplosions(gameAPI) {
+      for (const [unitID, tracked] of this.trackedNukes.entries()) {
+        try {
+          const unit = gameAPI.getUnit(unitID);
+          if (!unit) {
+            if (!tracked.reported) {
+              const intercepted = !tracked.hasReachedTarget;
+              this.reportExplosion(tracked, intercepted, gameAPI);
+              tracked.reported = true;
+            }
+            this.trackedNukes.delete(unitID);
+            continue;
+          }
+          const reachedTarget = typeof unit.reachedTarget === "function" ? unit.reachedTarget() : false;
+          if (reachedTarget && !tracked.hasReachedTarget) {
+            tracked.hasReachedTarget = true;
+            this.reportExplosion(tracked, false, gameAPI);
+            tracked.reported = true;
+          }
+          tracked.hasReachedTarget = reachedTarget;
+        } catch (e) {
+          console.error("[NukeTracker] Error checking nuke explosion:", e);
+        }
+      }
+    }
+    reportLaunch(tracked, gameAPI) {
+      let eventType = "ALERT_ATOM";
+      let message = "Incoming nuclear strike detected!";
+      if (tracked.type.includes("Hydrogen")) {
+        eventType = "ALERT_HYDRO";
+        message = "Incoming hydrogen bomb detected!";
+      } else if (tracked.type.includes("MIRV")) {
+        eventType = "ALERT_MIRV";
+        message = "Incoming MIRV strike detected!";
+      }
+      const coordinates = {
+        x: gameAPI.getX(tracked.targetTile),
+        y: gameAPI.getY(tracked.targetTile)
+      };
+      const event = {
+        type: eventType,
+        timestamp: Date.now(),
+        message,
+        data: {
+          nukeType: tracked.type,
+          launcherPlayerID: tracked.ownerID,
+          launcherPlayerName: tracked.ownerName,
+          nukeUnitID: tracked.unitID,
+          targetTile: tracked.targetTile,
+          targetPlayerID: tracked.targetPlayerID,
+          tick: tracked.launchedTick,
+          coordinates
+        }
+      };
+      this.emitEvent(event);
+    }
+    reportExplosion(tracked, intercepted, gameAPI) {
+      const eventType = intercepted ? "NUKE_INTERCEPTED" : "NUKE_EXPLODED";
+      const message = intercepted ? "Nuclear weapon intercepted" : "Nuclear weapon exploded";
+      const event = {
+        type: eventType,
+        timestamp: Date.now(),
+        message,
+        data: {
+          nukeType: tracked.type,
+          unitID: tracked.unitID,
+          ownerID: tracked.ownerID,
+          ownerName: tracked.ownerName,
+          targetTile: tracked.targetTile,
+          tick: gameAPI.getTicks() || 0
+        }
+      };
+      this.emitEvent(event);
+      if (intercepted) {
+        console.log("[NukeTracker] Nuke intercepted:", tracked.unitID, tracked.type);
+      } else {
+        console.log("[NukeTracker] Nuke exploded:", tracked.unitID, tracked.type);
+      }
+    }
+    clear() {
+      this.trackedNukes.clear();
+    }
+  };
+
+  // src/game/boat-tracker.ts
+  var BoatTracker = class {
+    constructor() {
+      this.trackedBoats = /* @__PURE__ */ new Map();
+      this.eventCallbacks = [];
+    }
+    onEvent(callback) {
+      this.eventCallbacks.push(callback);
+    }
+    emitEvent(event) {
+      this.eventCallbacks.forEach((cb) => {
+        try {
+          cb(event);
+        } catch (e) {
+          console.error("[BoatTracker] Error in event callback:", e);
+        }
+      });
+    }
+    /**
+     * Get target player ID from a tile
+     */
+    getTargetPlayerID(gameAPI, targetTile) {
+      if (!targetTile) return null;
+      try {
+        const owner = gameAPI.getOwner(targetTile);
+        if (owner && typeof owner.isPlayer === "function" && owner.isPlayer()) {
+          return owner.id();
+        }
+      } catch (e) {
+      }
+      return null;
+    }
+    /**
+     * Detect new boat launches targeting the current player
+     */
+    detectLaunches(gameAPI, myPlayerID) {
+      const transportShips = gameAPI.getUnits("Transport");
+      for (const boat of transportShips) {
+        try {
+          const boatId = typeof boat.id === "function" ? boat.id() : null;
+          if (!boatId || this.trackedBoats.has(boatId)) continue;
+          const targetTile = typeof boat.targetTile === "function" ? boat.targetTile() : null;
+          const targetPlayerID = this.getTargetPlayerID(gameAPI, targetTile);
+          if (targetPlayerID === myPlayerID) {
+            const owner = typeof boat.owner === "function" ? boat.owner() : null;
+            const troops = typeof boat.troops === "function" ? boat.troops() : 0;
+            const tracked = {
+              unitID: boatId,
+              ownerID: owner && typeof owner.id === "function" ? owner.id() : "unknown",
+              ownerName: owner && typeof owner.name === "function" ? owner.name() : "Unknown",
+              troops,
+              targetTile,
+              targetPlayerID,
+              launchedTick: gameAPI.getTicks() || 0,
+              hasReachedTarget: false,
+              reported: false
+            };
+            this.trackedBoats.set(boatId, tracked);
+            this.reportLaunch(tracked, gameAPI);
+          }
+        } catch (e) {
+          console.error("[BoatTracker] Error processing boat:", e);
+        }
+      }
+    }
+    /**
+     * Detect boat arrivals or destructions
+     */
+    detectArrivals(gameAPI) {
+      for (const [unitID, tracked] of this.trackedBoats.entries()) {
+        try {
+          const unit = gameAPI.getUnit(unitID);
+          if (!unit) {
+            if (!tracked.reported) {
+              this.reportArrival(tracked, true, gameAPI);
+              tracked.reported = true;
+            }
+            this.trackedBoats.delete(unitID);
+            continue;
+          }
+          const reachedTarget = typeof unit.reachedTarget === "function" ? unit.reachedTarget() : false;
+          if (reachedTarget && !tracked.hasReachedTarget) {
+            tracked.hasReachedTarget = true;
+            this.reportArrival(tracked, false, gameAPI);
+            tracked.reported = true;
+          }
+          tracked.hasReachedTarget = reachedTarget;
+        } catch (e) {
+          console.error("[BoatTracker] Error checking boat arrival:", e);
+        }
+      }
+    }
+    reportLaunch(tracked, gameAPI) {
+      const coordinates = {
+        x: gameAPI.getX(tracked.targetTile),
+        y: gameAPI.getY(tracked.targetTile)
+      };
+      const event = {
+        type: "ALERT_NAVAL",
+        timestamp: Date.now(),
+        message: "Naval invasion detected!",
+        data: {
+          type: "boat",
+          attackerPlayerID: tracked.ownerID,
+          attackerPlayerName: tracked.ownerName,
+          transportShipUnitID: tracked.unitID,
+          troops: tracked.troops,
+          targetTile: tracked.targetTile,
+          targetPlayerID: tracked.targetPlayerID,
+          tick: tracked.launchedTick,
+          coordinates
+        }
+      };
+      this.emitEvent(event);
+    }
+    reportArrival(tracked, destroyed, gameAPI) {
+      if (destroyed) {
+        console.log("[BoatTracker] Boat destroyed:", tracked.unitID);
+      } else {
+        console.log("[BoatTracker] Boat arrived:", tracked.unitID);
+      }
+    }
+    clear() {
+      this.trackedBoats.clear();
+    }
+  };
+
+  // src/game/land-tracker.ts
+  var LandAttackTracker = class {
+    constructor() {
+      this.trackedAttacks = /* @__PURE__ */ new Map();
+      this.eventCallbacks = [];
+    }
+    onEvent(callback) {
+      this.eventCallbacks.push(callback);
+    }
+    emitEvent(event) {
+      this.eventCallbacks.forEach((cb) => {
+        try {
+          cb(event);
+        } catch (e) {
+          console.error("[LandAttackTracker] Error in event callback:", e);
+        }
+      });
+    }
+    /**
+     * Get player by smallID
+     */
+    getPlayerBySmallID(gameAPI, smallID) {
+      if (!smallID || smallID === 0) return null;
+      try {
+        return gameAPI.getPlayerBySmallID(smallID);
+      } catch (e) {
+        return null;
+      }
+    }
+    /**
+     * Detect new land attack launches targeting the current player
+     */
+    detectLaunches(gameAPI) {
+      const myPlayer = gameAPI.getMyPlayer();
+      if (!myPlayer) return;
+      try {
+        const incomingAttacks = typeof myPlayer.incomingAttacks === "function" ? myPlayer.incomingAttacks() : [];
+        const mySmallID = typeof myPlayer.smallID === "function" ? myPlayer.smallID() : null;
+        if (!mySmallID) return;
+        for (const attack of incomingAttacks) {
+          try {
+            if (attack.targetID === mySmallID && !this.trackedAttacks.has(attack.id)) {
+              const attacker = this.getPlayerBySmallID(gameAPI, attack.attackerID);
+              if (attacker) {
+                const tracked = {
+                  attackID: attack.id,
+                  attackerID: attack.attackerID,
+                  attackerPlayerID: typeof attacker.id === "function" ? attacker.id() : "unknown",
+                  attackerPlayerName: typeof attacker.name === "function" ? attacker.name() : "Unknown",
+                  troops: attack.troops || 0,
+                  targetPlayerID: typeof myPlayer.id === "function" ? myPlayer.id() : "unknown",
+                  launchedTick: gameAPI.getTicks() || 0,
+                  retreating: attack.retreating || false,
+                  reported: false
+                };
+                this.trackedAttacks.set(attack.id, tracked);
+                this.reportLaunch(tracked, gameAPI);
+              }
+            }
+          } catch (e) {
+            console.error("[LandAttackTracker] Error processing attack:", e);
+          }
+        }
+      } catch (e) {
+        console.error("[LandAttackTracker] Error getting incoming attacks:", e);
+      }
+    }
+    /**
+     * Detect land attack completions (when attacks disappear from incomingAttacks)
+     */
+    detectCompletions(gameAPI) {
+      const myPlayer = gameAPI.getMyPlayer();
+      if (!myPlayer) return;
+      try {
+        const incomingAttacks = typeof myPlayer.incomingAttacks === "function" ? myPlayer.incomingAttacks() : [];
+        const activeAttackIDs = new Set(incomingAttacks.map((a) => a.id));
+        for (const [attackID, tracked] of this.trackedAttacks.entries()) {
+          if (!activeAttackIDs.has(attackID)) {
+            if (!tracked.reported) {
+              const wasCancelled = tracked.retreating;
+              this.reportComplete(tracked, wasCancelled, gameAPI);
+              tracked.reported = true;
+            }
+            this.trackedAttacks.delete(attackID);
+          } else {
+            const currentAttack = incomingAttacks.find((a) => a.id === attackID);
+            if (currentAttack) {
+              tracked.retreating = currentAttack.retreating || false;
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[LandAttackTracker] Error checking attack completions:", e);
+      }
+    }
+    reportLaunch(tracked, gameAPI) {
+      const event = {
+        type: "ALERT_LAND",
+        timestamp: Date.now(),
+        message: "Land invasion detected!",
+        data: {
+          type: "land",
+          attackerPlayerID: tracked.attackerPlayerID,
+          attackerPlayerName: tracked.attackerPlayerName,
+          attackID: tracked.attackID,
+          troops: tracked.troops,
+          targetPlayerID: tracked.targetPlayerID,
+          tick: tracked.launchedTick
+        }
+      };
+      this.emitEvent(event);
+    }
+    reportComplete(tracked, wasCancelled, gameAPI) {
+      if (wasCancelled) {
+        console.log("[LandAttackTracker] Land attack cancelled:", tracked.attackID);
+      } else {
+        console.log("[LandAttackTracker] Land attack complete:", tracked.attackID);
+      }
+    }
+    clear() {
+      this.trackedAttacks.clear();
+    }
+  };
 
   // src/game/openfront-bridge.ts
   var CONTROL_PANEL_SELECTOR = "control-panel";
-  var GAME_UPDATE_EVENT = "openfront:game-update";
-  var GAME_UPDATE_TYPE_UNIT = 1;
-  var gameUpdateListenerAttached = false;
-  var initialPayloadSent = false;
-  function hookGameUpdates(game) {
-    if (!game) {
-      debugLog2("[OTS] No GameView instance to hook.");
-      return;
-    }
-    const proto = Object.getPrototypeOf(game);
-    if (!proto || typeof proto.update !== "function") {
-      debugLog2("[OTS] GameView prototype missing update method; skipping hook.");
-      return;
-    }
-    if (proto.__openfrontGameHooked) {
-      return;
-    }
-    const originalUpdate = proto.update;
-    proto.update = function patchedGameUpdate(...args) {
-      const result = originalUpdate.apply(this, args);
-      window.dispatchEvent(
-        new CustomEvent(GAME_UPDATE_EVENT, {
-          detail: { game: this, payload: args[0] }
-        })
-      );
-      return result;
-    };
-    Object.defineProperty(proto, "__openfrontGameHooked", {
-      value: true,
-      configurable: true
-    });
-    debugLog2("[OTS] Hooked GameView.update().");
-    attachGameUpdateListener();
-  }
-  function attachGameUpdateListener() {
-    if (gameUpdateListenerAttached) {
-      return;
-    }
-    window.addEventListener(GAME_UPDATE_EVENT, handleGameUpdate);
-    gameUpdateListenerAttached = true;
-  }
-  function handleGameUpdate(event) {
-    var _a, _b, _c;
-    const game = (_a = event == null ? void 0 : event.detail) == null ? void 0 : _a.game;
-    const viewData = (_b = event == null ? void 0 : event.detail) == null ? void 0 : _b.payload;
-    if (!game || !viewData || !viewData.updates) {
-      return;
-    }
-    const ws = window.otsWsClient;
-    if (!ws) {
-      return;
-    }
-    if (!initialPayloadSent) {
-      ws.sendEvent("INFO", "of-initial-gameview-payload", {
-        game,
-        payload: viewData
-      });
-      initialPayloadSent = true;
-    }
-    const myPlayer = typeof game.myPlayer === "function" ? game.myPlayer() : null;
-    const mySmallID = typeof (myPlayer == null ? void 0 : myPlayer.smallID) === "function" ? myPlayer.smallID() : void 0;
-    if (mySmallID === void 0) {
-      return;
-    }
-    const unitUpdates = (_c = viewData.updates[GAME_UPDATE_TYPE_UNIT]) != null ? _c : [];
-    const myUnits = unitUpdates.filter((u) => u.ownerID === mySmallID);
-    if (!myUnits.length) return;
-    ws.sendEvent("INFO", "of-game-unit-updates", {
-      count: myUnits.length,
-      sample: myUnits.slice(0, 3).map((u) => ({
-        id: u.id,
-        type: u.unitType,
-        ownerID: u.ownerID,
-        troops: u.troops,
-        underConstruction: u.underConstruction,
-        isActive: u.isActive
-      }))
-    });
-  }
+  var POLL_INTERVAL_MS = 100;
   var GameBridge = class {
     constructor(ws, hud) {
       this.ws = ws;
       this.hud = hud;
+      this.pollInterval = null;
+      this.gameConnected = false;
+      this.nukeTracker = new NukeTracker();
+      this.boatTracker = new BoatTracker();
+      this.landTracker = new LandAttackTracker();
+      this.nukeTracker.onEvent((event) => this.handleTrackerEvent(event));
+      this.boatTracker.onEvent((event) => this.handleTrackerEvent(event));
+      this.landTracker.onEvent((event) => this.handleTrackerEvent(event));
     }
     init() {
-      waitForElement(CONTROL_PANEL_SELECTOR, (controlPanel) => {
-        debugLog2("[OTS] control panel detected", controlPanel);
-        waitForGameInstance(controlPanel, (game) => {
-          ;
-          window.openfrontControlPanelGame = game;
-          debugLog2("[OTS] GameView ready", game);
-          this.ws.sendEvent("INFO", "of-game-instance-detected", game);
-          this.hud.setGameStatus(true);
-          hookGameUpdates(game);
-        });
+      waitForElement(CONTROL_PANEL_SELECTOR, () => {
+        console.log("[GameBridge] Control panel detected, waiting for game instance...");
+        this.waitForGameAndStart();
       });
+    }
+    waitForGameAndStart() {
+      const checkInterval = setInterval(() => {
+        const game = getGameView();
+        if (game) {
+          clearInterval(checkInterval);
+          console.log("[GameBridge] Game instance detected, starting trackers");
+          this.gameConnected = true;
+          this.hud.setGameStatus(true);
+          this.ws.sendEvent("INFO", "Game instance detected", { timestamp: Date.now() });
+          this.startPolling();
+        }
+      }, 100);
+    }
+    startPolling() {
+      if (this.pollInterval) return;
+      const gameAPI = createGameAPI();
+      this.pollInterval = window.setInterval(() => {
+        if (!gameAPI.isValid()) {
+          if (this.gameConnected) {
+            this.gameConnected = false;
+            this.hud.setGameStatus(false);
+            this.clearTrackers();
+          }
+          return;
+        }
+        if (!this.gameConnected) {
+          this.gameConnected = true;
+          this.hud.setGameStatus(true);
+        }
+        const myPlayerID = gameAPI.getMyPlayerID();
+        if (!myPlayerID) {
+          this.clearTrackers();
+          return;
+        }
+        try {
+          this.nukeTracker.detectLaunches(gameAPI, myPlayerID);
+          this.nukeTracker.detectExplosions(gameAPI);
+          this.boatTracker.detectLaunches(gameAPI, myPlayerID);
+          this.boatTracker.detectArrivals(gameAPI);
+          this.landTracker.detectLaunches(gameAPI);
+          this.landTracker.detectCompletions(gameAPI);
+        } catch (e) {
+          console.error("[GameBridge] Error in polling loop:", e);
+        }
+      }, POLL_INTERVAL_MS);
+    }
+    handleTrackerEvent(event) {
+      this.ws.sendEvent(event.type, event.message || "", event.data);
+    }
+    clearTrackers() {
+      this.nukeTracker.clear();
+      this.boatTracker.clear();
+      this.landTracker.clear();
+    }
+    handleCommand(action, params) {
+      console.log("[GameBridge] Received command:", action, params);
+      if (action === "send-nuke") {
+        this.handleSendNuke(params);
+      } else if (action === "ping") {
+        console.log("[GameBridge] Ping received");
+      } else {
+        console.warn("[GameBridge] Unknown command:", action);
+        this.ws.sendEvent("INFO", `Unknown command: ${action}`, { action, params });
+      }
+    }
+    handleSendNuke(params) {
+      const nukeType = params == null ? void 0 : params.nukeType;
+      if (!nukeType) {
+        console.error("[GameBridge] send-nuke command missing nukeType parameter");
+        this.ws.sendEvent("INFO", "send-nuke failed: missing nukeType", { params });
+        return;
+      }
+      const game = getGameView();
+      if (!game) {
+        console.error("[GameBridge] Game not available for nuke launch");
+        this.ws.sendEvent("INFO", "send-nuke failed: game not available", { nukeType });
+        return;
+      }
+      console.log("[GameBridge] Attempting to launch nuke:", nukeType);
+      console.log("[GameBridge] Game object methods:", Object.keys(game));
+      let success = false;
+      let method = "unknown";
+      if (typeof game.sendNuke === "function") {
+        try {
+          game.sendNuke(nukeType);
+          success = true;
+          method = "game.sendNuke()";
+        } catch (e) {
+          console.error("[GameBridge] game.sendNuke() failed:", e);
+        }
+      } else if (typeof game.launchNuke === "function") {
+        try {
+          game.launchNuke(nukeType);
+          success = true;
+          method = "game.launchNuke()";
+        } catch (e) {
+          console.error("[GameBridge] game.launchNuke() failed:", e);
+        }
+      } else if (typeof game.useNuke === "function") {
+        try {
+          game.useNuke(nukeType);
+          success = true;
+          method = "game.useNuke()";
+        } catch (e) {
+          console.error("[GameBridge] game.useNuke() failed:", e);
+        }
+      }
+      if (success) {
+        console.log(`[GameBridge] Nuke launched successfully via ${method}`);
+        let eventType = "NUKE_LAUNCHED";
+        if (nukeType === "hydro") {
+          eventType = "HYDRO_LAUNCHED";
+        } else if (nukeType === "mirv") {
+          eventType = "MIRV_LAUNCHED";
+        }
+        this.ws.sendEvent(eventType, `${nukeType} launched`, { nukeType, method });
+      } else {
+        console.error("[GameBridge] Nuke launch API not found");
+        this.ws.sendEvent("INFO", "send-nuke failed: API not found", {
+          nukeType,
+          availableMethods: Object.keys(game).filter((k) => typeof game[k] === "function").slice(0, 20)
+        });
+      }
+    }
+    stop() {
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval);
+        this.pollInterval = null;
+      }
+      this.clearTrackers();
+      this.gameConnected = false;
+      this.hud.setGameStatus(false);
     }
   };
 
   // src/storage/config.ts
-  var DEFAULT_WS_URL = "ws://localhost:3000/ws-script";
+  var DEFAULT_WS_URL = "ws://localhost:3000/ws";
   var STORAGE_KEY_WS_URL = "ots-ws-url";
   function loadWsUrl() {
     const saved = GM_getValue(STORAGE_KEY_WS_URL, null);
@@ -622,12 +1202,22 @@
         ws.connect();
       }
     );
-    const ws = new WsClient(hud, () => currentWsUrl);
-    const game = new GameBridge(ws, hud);
+    let game = null;
+    const ws = new WsClient(
+      hud,
+      () => currentWsUrl,
+      (action, params) => {
+        if (game) {
+          game.handleCommand(action, params);
+        }
+      }
+    );
+    game = new GameBridge(ws, hud);
     hud.ensure();
     ws.connect();
     game.init();
     window.otsShowHud = () => hud.ensure();
     window.otsWsClient = ws;
+    window.otsGameBridge = game;
   })();
 })();
