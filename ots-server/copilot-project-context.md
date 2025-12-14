@@ -89,7 +89,12 @@ This server also acts as a **hardware emulator** during development: when real h
 Messages follow the shared `IncomingMessage` / `OutgoingMessage` types defined in `/protocol-context.md`:
 
 - `type: 'event'` – carries a `GameEvent` with:
-  - `type: GameEventType` (`INFO`/`WIN`/`LOOSE`/`NUKE_LAUNCHED`/`HYDRO_LAUNCHED`/`MIRV_LAUNCHED`/`NUKE_ALERT`/`HYDRO_ALERT`/`MIRV_ALERT`/`LAND_ALERT`/`NAVAL_ALERT`)
+  - `type: GameEventType` - All event types defined in protocol:
+    - Game lifecycle: `GAME_START`, `GAME_END`, `WIN`, `LOOSE`
+    - Alert events: `ALERT_ATOM`, `ALERT_HYDRO`, `ALERT_MIRV`, `ALERT_LAND`, `ALERT_NAVAL`
+    - Launch events: `NUKE_LAUNCHED`, `HYDRO_LAUNCHED`, `MIRV_LAUNCHED`
+    - Outcome events: `NUKE_EXPLODED`, `NUKE_INTERCEPTED`
+    - Info events: `INFO`, `HARDWARE_TEST`
   - `timestamp`, optional `message`, optional `data`
 - `type: 'cmd'` (from UI to userscript) – action commands
   - Example: `{ action: 'send-nuke', params: { nukeType: 'atom' } }`
@@ -116,15 +121,17 @@ The Nuke Control Panel uses these specific message patterns:
   payload: {
     type: 'NUKE_LAUNCHED',  // or 'HYDRO_LAUNCHED', 'MIRV_LAUNCHED'
     timestamp: number,
-    message: 'Nuke sent',
-    data: { nukeType: 'atom' | 'hydro' | 'mirv' }
+    message: 'atom launched',
+    data: { nukeType: 'atom' | 'hydro' | 'mirv', method: 'game.sendNuke()' }
   }
 }
 ```
 
 When the UI receives a nuke launched event (NUKE_LAUNCHED, HYDRO_LAUNCHED, or MIRV_LAUNCHED), it triggers a 4-second LED blink on the corresponding button. Multiple nukes can blink independently.
 
-**Alert Events**: The system also supports alert events (`NUKE_ALERT`, `HYDRO_ALERT`, `MIRV_ALERT`, `LAND_ALERT`, `NAVAL_ALERT`) which trigger corresponding alert LEDs on the alert module.
+**Alert Events**: The Alert Module receives alert events (`ALERT_ATOM`, `ALERT_HYDRO`, `ALERT_MIRV`, `ALERT_LAND`, `ALERT_NAVAL`) which trigger corresponding alert LEDs with automatic timeouts (10s for nukes, 15s for invasions).
+
+**Outcome Events**: The system tracks nuke outcomes and emits `NUKE_EXPLODED` (when nuke reaches target) and `NUKE_INTERCEPTED` (when destroyed before impact) events for logging and statistics. These are informational only and don't trigger hardware actions.
 
 ## UX Notes
 

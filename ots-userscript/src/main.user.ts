@@ -18,12 +18,30 @@ import { loadWsUrl, saveWsUrl } from './storage/config'
       }
     )
 
-    const ws = new WsClient(hud, () => currentWsUrl)
-    const game = new GameBridge(ws, hud)
+    // Create game bridge first (needed for command handling)
+    let game: GameBridge | null = null
 
+    // Create WebSocket client with command handler
+    const ws = new WsClient(
+      hud,
+      () => currentWsUrl,
+      (action, params) => {
+        if (game) {
+          game.handleCommand(action, params)
+        }
+      }
+    )
+
+    // Create game bridge
+    game = new GameBridge(ws, hud)
+
+    // Start everything
     hud.ensure()
     ws.connect()
     game.init()
+
+    // Expose for debugging
       ; (window as any).otsShowHud = () => hud.ensure()
       ; (window as any).otsWsClient = ws
+      ; (window as any).otsGameBridge = game
   })()

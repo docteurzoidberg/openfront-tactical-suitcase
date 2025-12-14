@@ -53,6 +53,8 @@ export type GameEventType =
   | 'NUKE_LAUNCHED'
   | 'HYDRO_LAUNCHED'
   | 'MIRV_LAUNCHED'
+  | 'NUKE_EXPLODED'
+  | 'NUKE_INTERCEPTED'
   | 'ALERT_ATOM'
   | 'ALERT_HYDRO'
   | 'ALERT_MIRV'

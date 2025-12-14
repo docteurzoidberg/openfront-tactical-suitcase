@@ -59,12 +59,47 @@ bun run dev
 
 Currently implemented modules:
 
+### Main Power Module
+- POWER LED (always on when powered)
+- LINK LED (shows userscript connection status)
+- Component: `app/components/hardware/MainPowerModule.vue`
+- Spec: `/ots-hardware/modules/main-power-module.md`
+
+### Alert Module
+- WARNING LED (active when any threat detected)
+- 5 threat LEDs: ATOM, HYDRO, MIRV, LAND, NAVAL
+- Receives alert events and blinks LEDs for 10s (nukes) or 15s (invasions)
+- Component: `app/components/hardware/AlertModule.vue`
+- Spec: `/ots-hardware/modules/alert-module.md`
+
 ### Nuke Control Panel
 - Three buttons: Atom, Hydro, MIRV
 - Sends `send-nuke` commands to userscript
-- Receives `nuke-sent` events and blinks LEDs for 4 seconds
+- Receives `NUKE_LAUNCHED`/`HYDRO_LAUNCHED`/`MIRV_LAUNCHED` events and blinks LEDs for 4 seconds
 - Component: `app/components/hardware/NukeModule.vue`
 - Spec: `/ots-hardware/modules/nuke-module.md`
+
+## Event Types
+
+The dashboard displays all events from the game:
+
+**Alert Events** (trigger hardware LEDs):
+- `ALERT_ATOM`, `ALERT_HYDRO`, `ALERT_MIRV` - Incoming nuke threats (10s duration)
+- `ALERT_LAND`, `ALERT_NAVAL` - Incoming invasions (15s duration)
+
+**Launch Events** (from dashboard or hardware buttons):
+- `NUKE_LAUNCHED`, `HYDRO_LAUNCHED`, `MIRV_LAUNCHED` - Nuke fired
+
+**Outcome Events** (informational):
+- `NUKE_EXPLODED` - Tracked nuke reached target
+- `NUKE_INTERCEPTED` - Tracked nuke destroyed before impact
+
+**Game Lifecycle**:
+- `GAME_START`, `GAME_END`, `WIN`, `LOOSE`
+
+**Info Events**:
+- `INFO` - General logging and debug information
+- `HARDWARE_TEST` - Hardware diagnostics
 
 ## Protocol
 

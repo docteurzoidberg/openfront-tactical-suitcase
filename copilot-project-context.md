@@ -179,7 +179,7 @@ import type { GameState, GameEvent, IncomingMessage, OutgoingMessage } from '../
 ### Current Protocol Types
 
 Key types as of latest protocol update:
-- **GameEventType**: `INFO`, `WIN`, `LOOSE`, `NUKE_LAUNCHED`, `HYDRO_LAUNCHED`, `MIRV_LAUNCHED`, `NUKE_ALERT`, `HYDRO_ALERT`, `MIRV_ALERT`, `LAND_ALERT`, `NAVAL_ALERT`
+- **GameEventType**: `INFO`, `GAME_START`, `GAME_END`, `WIN`, `LOOSE`, `NUKE_LAUNCHED`, `HYDRO_LAUNCHED`, `MIRV_LAUNCHED`, `NUKE_EXPLODED`, `NUKE_INTERCEPTED`, `ALERT_ATOM`, `ALERT_HYDRO`, `ALERT_MIRV`, `ALERT_LAND`, `ALERT_NAVAL`, `HARDWARE_TEST`
 - **GameState**: Contains `timestamp`, `mapName`, `mode`, `playerCount`, and `hwState` (hardware module states)
 - **HWState**: Nested structure with `m_general`, `m_alert`, and `m_nuke` module states
 - **GameEvent**: Has `type`, `timestamp`, optional `message`, optional `data`
