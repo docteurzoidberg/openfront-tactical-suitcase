@@ -7,7 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed - 2025-12-14
+### Changed - 2025-12-14 (Phase 2: Build System & Dependencies)
+- **Fixed ESP-IDF build configuration** for successful compilation
+  - Restructured CMake configuration with proper project initialization
+  - Added ESP-IDF component dependencies (esp_websocket_client, json, esp_timer, driver)
+  - Created `idf_component.yml` to manage ESP-IDF managed components
+  - Fixed component registration in `src/CMakeLists.txt` with REQUIRES clause
+- **Updated GPIO configuration for ESP32-S3**
+  - Changed I2C pins from GPIO 21/22 to GPIO 8/9 (ESP32-S3 compatible)
+  - Added I2C pin definitions in `config.h`
+- **Fixed missing header includes**
+  - Added FreeRTOS headers to `io_expander.c` for `portTICK_PERIOD_MS`
+  - Added `esp_timer.h` to `main.c` for `esp_timer_get_time()`
+  - Added `config.h` include to `io_expander.c` for pin definitions
+- **Cleaned up PlatformIO configuration**
+  - Removed conflicting `CONFIG_LOG_DEFAULT_LEVEL` from build_flags
+  - Added proper sdkconfig defaults reference
+  - Removed all legacy `.bak` files from Arduino migration
+- **Fixed Python dependency issues**
+  - Resolved Click library compatibility with esptoolpy
+
+### Build Results - 2025-12-14
+- ✅ **Firmware compiles successfully for ESP32-S3**
+- Bootloader: 21KB
+- Firmware: 906KB (11.1% of 8MB flash)
+- RAM usage: 36,484 bytes (11.1% of 320KB)
+- All components properly linked
+
+### Changed - 2025-12-14 (Phase 1: Framework Migration)
 - **[BREAKING]** Migrated from Arduino framework to ESP-IDF framework
 - **[BREAKING]** Converted all C++ code to C for better ESP-IDF compatibility
 - Rewritten MCP23017 driver using native ESP-IDF I2C master driver
@@ -28,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added - 2025-12-14
 - CMakeLists.txt for ESP-IDF component registration
+- Component dependency management via idf_component.yml
 - Proper event handling for WiFi connection/disconnection
 - LED link status indicator for WiFi/WebSocket connection
 - Button debouncing in dedicated monitoring task
@@ -42,22 +70,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AsyncWebServer library
 - AsyncTCP library
 - ArduinoJson library
+- Legacy .bak backup files
 - OTA update functionality (to be re-implemented with ESP-IDF OTA)
 
 ### Technical Details - 2025-12-14
-- **Platform**: ESP-IDF via PlatformIO
-- **Board**: ESP32-S3-DevKitC-1
+- **Platform**: ESP-IDF v5.4.2 via PlatformIO
+- **Board**: ESP32-S3-DevKitC-1 (8MB Flash, 320KB RAM)
+- **Toolchain**: xtensa-esp-elf-gcc 14.2.0
 - **I2C Driver**: ESP-IDF I2C master (driver/i2c_master.h)
-- **WebSocket**: ESP-IDF WebSocket client (esp_websocket_client.h)
+- **I2C Pins**: SDA=GPIO8, SCL=GPIO9
+- **WebSocket**: ESP-IDF WebSocket client via managed component
 - **JSON**: cJSON (native ESP-IDF component)
 - **RTOS**: FreeRTOS (native ESP-IDF)
 - **WiFi**: ESP-IDF WiFi stack (esp_wifi.h)
 
 ### Migration Notes
-- All old Arduino files backed up with `.bak` extension
 - Protocol types synchronized with server and shared types
 - WebSocket now connects as client to server instead of acting as server
 - All hardware functionality preserved (buttons, LEDs, I/O expanders)
+- Build system fully functional with proper dependency management
 
 ## [0.1.0] - Initial Release
 

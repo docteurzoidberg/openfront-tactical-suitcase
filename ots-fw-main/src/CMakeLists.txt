@@ -1,0 +1,17 @@
+idf_component_register(
+    SRCS 
+        "main.c"
+        "io_expander.c"
+        "module_io.c"
+        "protocol.c"
+        "ws_client.c"
+    INCLUDE_DIRS 
+        "../include"
+    REQUIRES 
+        espressif__esp_websocket_client
+        esp_wifi
+        nvs_flash
+        esp_timer
+        json
+        driver
+)

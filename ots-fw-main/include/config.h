@@ -14,6 +14,10 @@
 static const uint8_t MCP23017_ADDRESSES[] = {0x20, 0x21};
 #define MCP23017_COUNT 2
 
+// I2C GPIO pins for ESP32-S3
+#define I2C_SDA_PIN 8
+#define I2C_SCL_PIN 9
+
 // Task priorities
 #define TASK_PRIORITY_BUTTON_MONITOR 5
 #define TASK_PRIORITY_LED_BLINK 4

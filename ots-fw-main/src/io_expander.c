@@ -1,6 +1,9 @@
 #include "io_expander.h"
+#include "config.h"
 #include "esp_log.h"
 #include "driver/i2c_master.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <string.h>
 
 static const char *TAG = "IO_EXPANDER";
@@ -50,8 +53,8 @@ bool io_expander_begin(const uint8_t *addresses, uint8_t count) {
     // Initialize I2C bus
     i2c_master_bus_config_t bus_config = {
         .i2c_port = I2C_NUM_0,
-        .sda_io_num = GPIO_NUM_21,
-        .scl_io_num = GPIO_NUM_22,
+        .sda_io_num = I2C_SDA_PIN,
+        .scl_io_num = I2C_SCL_PIN,
         .clk_source = I2C_CLK_SRC_DEFAULT,
         .glitch_ignore_cnt = 7,
         .flags.enable_internal_pullup = true,

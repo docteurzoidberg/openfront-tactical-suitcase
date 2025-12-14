@@ -1,10 +1,3 @@
-idf_component_register(
-    SRCS 
-        "src/main.c"
-        "src/io_expander.c"
-        "src/module_io.c"
-        "src/protocol.c"
-        "src/ws_client.c"
-    INCLUDE_DIRS 
-        "include"
-)
+cmake_minimum_required(VERSION 3.16)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(ots-fw-main)
