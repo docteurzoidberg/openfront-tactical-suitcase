@@ -1,0 +1,158 @@
+# Module: Nuke Control Panel
+
+Tactical nuclear weapon launch control interface with three distinct bomb types.
+
+## Overview
+- **Module Name**: Nuke Control Panel
+- **Size**: 16U 
+- **Game State Domain**: outbound nukes status and launch commands
+- **Hardware Interface**: direct I2C via MCP23017 I/O Expander
+
+## Description
+The Nuke module provides physical buttons to launch three types of nuclear weapons in the game:
+- **Atom Bomb** - Standard nuclear strike
+- **Hydro Bomb** - Hydrogen bomb
+- **MIRV Bomb** - Multiple Independent Reentry Vehicle
+
+Each button has an integrated LED indicator that illuminates/flashes when the corresponding weapon is launched, providing tactile and visual feedback.
+
+## Hardware Components
+- [x] 3x Illuminated momentary push buttons (with LED)
+
+
+### Communication Protocol
+Main controller polls or uses interrupt-driven reads:
+- **Read buttons**:
+- **Write LEDs**
+
+
+## Game State Mapping
+
+This module doesn't consume game state directly, but sends commands to the game and receives confirmation events.
+
+### Message Flow
+
+**Hardware → Server → Userscript → Game:**
+1. Button pressed on hardware
+2. Hardware/Server sends `cmd` message with `action: 'send-nuke'`
+3. Userscript receives command, calls game's nuke method
+4. Userscript sends back `event` message with `type: 'nuke-sent'`
+
+**Game → Userscript → Server → Hardware:**
+5. Server receives `nuke-sent` event
+6. Server triggers LED blink on hardware for X seconds
+
+### Command (Outbound to Game)
+```typescript
+// WebSocket cmd message sent when button is pressed
+type SendNukeCommand = {
+  type: 'cmd'
+  payload: {
+    action: 'send-nuke'
+    params: {
+      nukeType: 'atom' | 'hydro' | 'mirv'
+    }
+  }
+}
+```
+
+### Event (Inbound from Game)
+```typescript
+// WebSocket event message received after nuke is sent
+type NukeSentEvent = {
+  type: 'event'
+  payload: {
+    type: 'INFO'  // or custom 'NUKE_SENT'
+    timestamp: number
+    message: 'Nuke sent'
+    data: {
+      nukeType: 'atom' | 'hydro' | 'mirv'
+    }
+  }
+}
+```
+
+## Module Behavior
+
+### On Button Press
+1. User presses one of the three nuke buttons (Atom/Hydro/MIRV)
+2. Hardware detects button state change (via MCP23017 GPIO)
+3. Debounce input (50ms software debounce)
+4. Send `cmd` message via WebSocket:
+   - `action: 'send-nuke'`
+   - `params: { nukeType: 'atom' | 'hydro' | 'mirv' }`
+5. Message flows: Hardware → Server → Userscript
+6. Userscript calls game's nuke method for the specified type
+
+### On Nuke Sent Confirmation
+1. Userscript successfully sends nuke in game
+2. Userscript sends `event` message back:
+   - `type: 'INFO'` (or custom event type)
+   - `data: { nukeType: 'atom' | 'hydro' | 'mirv' }`
+3. Message flows: Userscript → Server → Hardware
+4. Server/Hardware receives event and triggers LED blink for that specific button
+5. Corresponding button LED blinks for X seconds (e.g., 3-5 seconds)
+6. LED returns to idle state (off)
+7. Multiple buttons can be blinking simultaneously if multiple nukes were sent
+
+### LED Blink Pattern
+- **Duration**: X seconds per button (configurable, e.g., 3-5 seconds)
+- **Pattern**: Fast blink (e.g., 100ms on, 100ms off)
+- **Trigger**: Receipt of `nuke-sent` event matching button type
+- **Independence**: Each button has its own blink timer and state
+
+## UI Component Mockup
+
+Vue component path: `ots-server/app/components/hardware/NukeModule.vue`
+
+### Props
+```typescript
+interface NukeModuleProps {
+  connected: boolean
+  blinkingButtons: {
+    atom: boolean
+    hydro: boolean
+    mirv: boolean
+  }
+}
+```
+
+### Emits
+```typescript
+interface NukeModuleEmits {
+  sendNuke: (nukeType: 'atom' | 'hydro' | 'mirv') => void
+}
+```
+
+### Visual Design
+Three large illuminated buttons in a row or triangle formation:
+- [🔴 ATOM] - Red button with glow effect
+- [🔴 HYDRO] - Red button with glow effect  
+- [🔴 MIRV] - Red button with glow effect
+
+Each button can blink independently. When `blinkingButtons.atom` is true, the atom button LED blinks. Same for hydro and mirv. Multiple buttons can blink simultaneously.
+
+## Firmware Implementation
+
+### Header
+`ots-fw-main/include/modules/nuke_module.h`
+
+### Source
+`ots-fw-main/src/modules/nuke_module.cpp`
+
+Key methods:
+- `init()`: Configure MCP23017 (direction, pull-ups)
+- `checkButtons()`: Poll GPIO, debounce, send WebSocket cmd messages
+- `updateLEDs()`: Handle blink patterns for all three buttons independently, update GPIO output
+- `handleNukeSentEvent()`: Process nuke-sent event and trigger LED blink for specific button
+- `startBlinkSequence()`: Initiate timed blink animation for specified button (X seconds)
+
+## Notes
+- Button debouncing implemented in firmware (50ms window)
+- Each LED has independent blink timer and state (non-blocking)
+- Multiple buttons can blink simultaneously
+- Blink duration configurable per button (default: 3-5 seconds)
+- Uses WebSocket protocol defined in `/protocol-context.md`
+- Command action: `'send-nuke'`
+- Event type: `'INFO'` with `data.nukeType`
+
