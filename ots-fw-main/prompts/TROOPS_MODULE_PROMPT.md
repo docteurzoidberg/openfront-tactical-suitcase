@@ -14,15 +14,26 @@ You are implementing the **Troops Module** for the OTS (OpenFront Tactical Stati
 ## Hardware Components
 
 ### LCD Display
-- **Model**: 2×16 I2C LCD (HD44780 + PCF8574 I2C backpack)
-- **I2C Address**: 0x27 (or 0x3F)
-- **Library**: LiquidCrystal_I2C
+- **Model**: I2C 1602A APKLVSR
+  - 16×2 character LCD with integrated I2C backpack
+  - Controller: HD44780 via PCF8574 I2C expander
+  - Yellow-green LED backlight
+- **I2C Address**: 0x27 (default) or 0x3F (if configured)
+- **ESP-IDF Driver**: Use built-in `i2c.h` driver
+  - Control PCF8574 I2C expander directly via I2C read/write
+  - Implement HD44780 4-bit mode commands
+  - Consider using ESP-IDF component: `esp_lcd_hd44780` or custom implementation
 - **Connection**: Shared I2C bus (SDA/SCL from main controller)
+- **Voltage**: 5V (regulated on I2C backpack)
 
 ### ADC (for slider)
 - **Model**: ADS1115 (16-bit I2C ADC)
 - **I2C Address**: 0x48
-- **Library**: Adafruit_ADS1X15
+- **ESP-IDF Driver**: Use built-in `i2c.h` driver
+  - Implement ADS1115 register read/write via I2C transactions
+  - Configure single-ended input on AIN0 (channel 0)
+  - Set gain to ±4.096V range (GAIN_ONE)
+  - Use continuous conversion or single-shot mode
 - **Connection**: Shared I2C bus
 - **Input**: Potentiometer slider on channel A0
 
@@ -134,14 +145,20 @@ struct TroopsModuleState {
 
 ```cpp
 void troops_module_init() {
-  // Initialize LCD
-  lcd.init();
-  lcd.backlight();
-  lcd.clear();
+  // Initialize I2C bus (if not already initialized by main)
+  // i2c_config_t conf = { ... };
+  // i2c_param_config(I2C_NUM_0, &conf);
+  // i2c_driver_install(I2C_NUM_0, conf.mode, 0, 0, 0);
   
-  // Initialize ADC
-  ads.setGain(GAIN_ONE);  // +/- 4.096V range
-  ads.begin();
+  // Initialize LCD (HD44780 via PCF8574)
+  lcd_init(0x27);  // Custom function to init HD44780 via I2C
+  lcd_backlight(true);
+  lcd_clear();
+  
+  // Initialize ADS1115 ADC
+  ads1115_init(0x48);  // Custom function to configure ADS1115
+  ads1115_set_gain(ADS1115_GAIN_ONE);  // ±4.096V range
+  ads1115_set_mode(ADS1115_MODE_CONTINUOUS);  // Continuous conversion
   
   // Initialize state
   troopsState.currentTroops = 0;
@@ -152,12 +169,12 @@ void troops_module_init() {
   troopsState.displayDirty = true;
   
   // Show startup message
-  lcd.setCursor(0, 0);
-  lcd.print("  TROOPS MODULE ");
-  lcd.setCursor(0, 1);
-  lcd.print("  Initializing  ");
-  delay(1000);
-  lcd.clear();
+  lcd_set_cursor(0, 0);
+  lcd_write_string("  TROOPS MODULE ");
+  lcd_set_cursor(0, 1);
+  lcd_write_string("  Initializing  ");
+  vTaskDelay(pdMS_TO_TICKS(1000));
+  lcd_clear();
 }
 ```
 
@@ -191,7 +208,7 @@ void troops_module_poll_slider() {
   troopsState.lastSliderRead = now;
   
   // Read ADC
-  int16_t adc = ads.readADC_SingleEnded(0);  // Channel A0
+  int16_t adc = ads1115_read_adc(ADS1115_CHANNEL_0);  // Channel A0
   if (adc < 0) adc = 0;
   
   // Map to percentage (0-100)
@@ -230,20 +247,16 @@ void troops_module_update_display() {
     line1 = " " + line1;  // Right-align
   }
   
-  lcd.setCursor(0, 0);
-  lcd.print(line1);
+  lcd_set_cursor(0, 0);
+  lcd_write_string(line1);
   
   // Line 2: Percent% (Calculated)
   uint32_t calculated = (troopsState.currentTroops * troopsState.sliderPercent) / 100;
-  String line2 = String(troopsState.sliderPercent) + "% (" + 
-                 formatTroops(calculated) + ")";
+  char line2[17];
+  snprintf(line2, sizeof(line2), "%-16s", 
+           (String(troopsState.sliderPercent) + "% (" + formatTroops(calculated) + ")").c_str());
   
-  // Center or left-align (pad to 16 chars)
-  while (line2.length() < 16) {
-    line2 = line2 + " ";  // Left-align
-  }
-  
-  lcd.setCursor(0, 1);
+  lcd_set_cursor(0, 1);
   lcd.print(line2);
   
   troopsState.displayDirty = false;
@@ -310,9 +323,10 @@ void ws_handle_message(const char* data) {
 ## Testing Checklist
 
 ### I2C Bus Test
-- [ ] LCD detected at 0x27 (or 0x3F)
-- [ ] ADC detected at 0x48
-- [ ] No I2C bus errors in serial output
+- [ ] I2C master driver initialized successfully
+- [ ] LCD (PCF8574) detected at 0x27 (or 0x3F) via i2c_master_write
+- [ ] ADC (ADS1115) detected at 0x48 via i2c_master_write
+- [ ] No I2C bus errors in ESP-IDF logs (ESP_ERROR_CHECK)
 
 ### Display Test
 - [ ] LCD backlight turns on
@@ -355,23 +369,96 @@ Place implementation in:
 
 ## Dependencies
 
-Add to `platformio.ini`:
-```ini
-lib_deps = 
-    marcoschwartz/LiquidCrystal_I2C@^1.1.4
-    adafruit/Adafruit ADS1X15@^2.4.0
-    bblanchon/ArduinoJson@^6.21.0
+**ESP-IDF Components**:
+- Built-in `i2c.h` driver (no external library needed)
+- `cJSON` for JSON parsing (built into ESP-IDF)
+- Custom implementation required for:
+  - HD44780 LCD control via PCF8574 I2C expander
+  - ADS1115 ADC communication via I2C
+
+**Optional ESP-IDF Components** (via `idf_component.yml`):
+```yaml
+dependencies:
+  # Optional: LCD component if available
+  # espressif/esp_lcd_hd44780: "^1.0.0"
+  # Or implement custom HD44780 + PCF8574 driver
+```
+
+**Implementation Notes**:
+1. Use ESP-IDF I2C master driver for all I2C communication
+2. Implement PCF8574 bit-banging for HD44780 control
+3. Implement ADS1115 register read/write functions
+4. Use ESP-IDF FreeRTOS APIs (`vTaskDelay`, `xTaskGetTickCount`)
+
+## ESP-IDF Implementation Guide
+
+### I2C Driver Setup
+```cpp
+#include "driver/i2c.h"
+
+#define I2C_MASTER_NUM I2C_NUM_0
+#define I2C_MASTER_SDA_IO GPIO_NUM_21  // Adjust to your pin
+#define I2C_MASTER_SCL_IO GPIO_NUM_22  // Adjust to your pin
+#define I2C_MASTER_FREQ_HZ 100000      // 100kHz
+
+void i2c_master_init() {
+    i2c_config_t conf = {
+        .mode = I2C_MODE_MASTER,
+        .sda_io_num = I2C_MASTER_SDA_IO,
+        .scl_io_num = I2C_MASTER_SCL_IO,
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,
+        .master.clk_speed = I2C_MASTER_FREQ_HZ,
+    };
+    i2c_param_config(I2C_MASTER_NUM, &conf);
+    i2c_driver_install(I2C_MASTER_NUM, conf.mode, 0, 0, 0);
+}
+```
+
+### PCF8574 LCD Helper Functions
+```cpp
+// PCF8574 pin mapping for HD44780
+#define LCD_RS 0x01
+#define LCD_RW 0x02
+#define LCD_EN 0x04
+#define LCD_BACKLIGHT 0x08
+
+void pcf8574_write(uint8_t addr, uint8_t data) {
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (addr << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_write_byte(cmd, data, true);
+    i2c_master_stop(cmd);
+    i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, pdMS_TO_TICKS(1000));
+    i2c_cmd_link_delete(cmd);
+}
+```
+
+### ADS1115 I2C Functions
+```cpp
+#define ADS1115_REG_CONFIG 0x01
+#define ADS1115_REG_CONVERSION 0x00
+
+int16_t ads1115_read_adc(uint8_t channel) {
+    // Write config register
+    uint16_t config = 0xC383 | (channel << 12);  // Single-shot, channel select
+    // Implement I2C write + read sequence
+    // Return 16-bit ADC value
+}
 ```
 
 ## Key Considerations
 
-1. **Debouncing**: 100ms minimum between slider reads to avoid command spam
-2. **Change Threshold**: Only send commands on ≥1% difference
-3. **Display Updates**: Immediate (no animations or delays)
-4. **Scaling**: Use 1 decimal place for K/M/B units (e.g., "1.2M" not "1234K")
-5. **Padding**: Right-align Line 1, left-align Line 2 (or adjust for readability)
-6. **Error Handling**: Handle missing troops data gracefully (show "---")
-7. **I2C Conflicts**: Ensure no address collisions with other modules
+1. **ESP-IDF Framework**: Use ESP-IDF APIs, not Arduino libraries
+2. **I2C Master Driver**: Use `driver/i2c.h` for all I2C communication
+3. **FreeRTOS**: Use `vTaskDelay()` instead of `delay()`, `xTaskGetTickCount()` instead of `millis()`
+4. **Debouncing**: 100ms minimum between slider reads to avoid command spam
+5. **Change Threshold**: Only send commands on ≥1% difference
+6. **Display Updates**: Immediate (no animations or delays)
+7. **Scaling**: Use 1 decimal place for K/M/B units (e.g., "1.2M" not "1234K")
+8. **Padding**: Right-align Line 1, left-align Line 2 (or adjust for readability)
+9. **Error Handling**: Handle missing troops data gracefully (show "---")
+10. **I2C Conflicts**: Ensure no address collisions with other modules (0x27=LCD, 0x48=ADC)
 
 ## Example Serial Debug Output
 

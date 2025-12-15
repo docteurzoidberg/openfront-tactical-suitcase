@@ -14,11 +14,15 @@ The Troops Module provides real-time visualization of available troops and contr
 ## Hardware Components
 
 ### Display
-- **LCD**: 2×16 character I2C LCD module
-  - I2C Address: 0x27 (or 0x3F, configurable)
-  - Controller: HD44780 compatible via I2C backpack (PCF8574)
-  - Backlight: Blue or green recommended
+- **LCD**: I2C 1602A APKLVSR (2×16 character I2C LCD module)
+  - Model: 1602A with APKLVSR I2C backpack
+  - I2C Address: 0x27 (default) or 0x3F (configurable via backpack jumpers)
+  - Controller: HD44780 via PCF8574 I2C expander
+  - Display: 16 characters × 2 lines
+  - Backlight: Yellow-green LED backlight
   - Character size: 5×8 dots
+  - Operating voltage: 5V (via I2C backpack regulator)
+  - Interface: I2C (SDA/SCL only, no parallel pins needed)
 
 ### Control Input
 - **Potentiometer Slider**: Linear 10kΩ potentiometer

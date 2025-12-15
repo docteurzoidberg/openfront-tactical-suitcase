@@ -1,6 +1,6 @@
 import { computed, ref, watchEffect } from 'vue'
 import { useWebSocket } from '@vueuse/core'
-import type { GameEvent, IncomingMessage, OutgoingMessage, NukeType, NukeSentEventData } from '../../../ots-shared/src/game'
+import type { GameEvent, IncomingMessage, OutgoingMessage, NukeType, NukeSentEventData, TroopsData } from '../../../ots-shared/src/game'
 
 const WS_URL =
   typeof window !== 'undefined'
@@ -42,6 +42,9 @@ const activeAlerts = ref<{
 
 const alertTimers = new Map<string, NodeJS.Timeout>()
 
+// Troops state
+const troops = ref<TroopsData | null>(null)
+
 export function useGameSocket() {
   const { status, data, send, open, close } = useWebSocket(WS_URL, {
     autoReconnect: {
@@ -63,7 +66,12 @@ export function useGameSocket() {
 
     try {
       const msg = JSON.parse(raw as string) as IncomingMessage
-      if (msg.type === 'event') {
+      if (msg.type === 'state') {
+        // Handle game state updates
+        if (msg.payload.troops) {
+          troops.value = msg.payload.troops
+        }
+      } else if (msg.type === 'event') {
         events.value = [msg.payload, ...events.value].slice(0, 100)
 
         if (msg.payload.type === 'INFO') {
@@ -189,6 +197,16 @@ export function useGameSocket() {
     powerOn.value = !powerOn.value
   }
 
+  const sendSetTroopsPercent = (percent: number) => {
+    sendMessage({
+      type: 'cmd',
+      payload: {
+        action: 'set-troops-percent',
+        params: { percent }
+      }
+    })
+  }
+
   return {
     uiStatus,
     userscriptStatus,
@@ -197,8 +215,10 @@ export function useGameSocket() {
     activeNukes,
     activeAlerts,
     powerOn,
+    troops,
     send: sendMessage,
     sendNukeCommand,
+    sendSetTroopsPercent,
     togglePower,
     open,
     close

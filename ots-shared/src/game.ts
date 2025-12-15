@@ -30,6 +30,11 @@ export type ModuleNukeState = {
   m_mirv_launched: boolean
 }
 
+export type TroopsData = {
+  current: number
+  max: number
+}
+
 export type HWState = {
   m_general: ModuleGeneralState
   m_alert: ModuleAlertState
@@ -41,6 +46,7 @@ export type GameState = {
   mapName: string
   mode: string
   playerCount: number
+  troops?: TroopsData
   hwState: HWState
 }
 

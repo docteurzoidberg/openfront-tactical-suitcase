@@ -16,6 +16,14 @@
             :power-on="powerOn"
             @toggle-power="togglePower"
           />
+          
+          <!-- Hardware Module: Troops Module -->
+          <HardwareTroopsModule
+            :connected="uiStatus === 'OPEN'"
+            :powered="powerOn"
+            :troops="troops"
+            @set-troops-percent="sendSetTroopsPercent"
+          />
 
           <!-- Hardware Module: Alert Module -->
           <HardwareAlertModule
@@ -31,6 +39,8 @@
             :active-nukes="activeNukes"
             @send-nuke="sendNukeCommand"
           />
+
+          
         </div>
 
         <!-- Column 2: Events Log -->
@@ -45,5 +55,5 @@
 <script setup lang="ts">
 import { useGameSocket } from '../composables/useGameSocket'
 
-const { uiStatus, userscriptStatus, events, activeNukes, activeAlerts, powerOn, sendNukeCommand, togglePower, userscriptHeartbeatId } = useGameSocket()
+const { uiStatus, userscriptStatus, events, activeNukes, activeAlerts, powerOn, troops, sendNukeCommand, sendSetTroopsPercent, togglePower, userscriptHeartbeatId } = useGameSocket()
 </script>

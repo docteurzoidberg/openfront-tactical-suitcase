@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-12-15 (Troops Module)
+- **Created Troops Module firmware implementation prompt**
+  - Added `prompts/TROOPS_MODULE_PROMPT.md` with complete ESP-IDF implementation guide
+  - Hardware specification for I2C 1602A APKLVSR LCD (yellow-green backlight)
+  - ADS1115 16-bit ADC for potentiometer slider input
+  - Protocol integration for troops state display and deployment percentage control
+  - Custom PCF8574 I2C LCD control functions (HD44780 via I2C expander)
+  - Custom ADS1115 I2C ADC functions for slider reading
+  - 2×16 character display format with K/M/B unit scaling
+  - Debounced slider polling (100ms) with 1% change threshold
+  - ESP-IDF I2C master driver implementation examples
+  - FreeRTOS timing functions (vTaskDelay, xTaskGetTickCount)
+  - Comprehensive testing checklist for I2C, display, slider, protocol, and integration
+
 ### Added - 2025-12-14 (Phase 3: OTA Implementation)
 - **Implemented ESP-IDF native OTA (Over-The-Air) updates**
   - Added HTTP server on port 3232 for receiving firmware updates
