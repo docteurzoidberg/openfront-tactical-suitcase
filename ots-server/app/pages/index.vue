@@ -7,8 +7,8 @@
         :userscript-blink="!!userscriptHeartbeatId"
       />
 
-      <section class="grid gap-6 lg:grid-cols-2">
-        <!-- Column 1: Hardware Modules -->
+      <section class="grid gap-6 lg:grid-cols-3">
+        <!-- Column 1: Power + Troops -->
         <div class="space-y-6">
           <!-- Hardware Module: Main Power Module -->
           <HardwareMainPowerModule
@@ -24,7 +24,10 @@
             :troops="troops"
             @set-troops-percent="sendSetTroopsPercent"
           />
+        </div>
 
+        <!-- Column 2: Alert + Nuke -->
+        <div class="space-y-6">
           <!-- Hardware Module: Alert Module -->
           <HardwareAlertModule
             :connected="uiStatus === 'OPEN'"
@@ -39,11 +42,9 @@
             :active-nukes="activeNukes"
             @send-nuke="sendNukeCommand"
           />
-
-          
         </div>
 
-        <!-- Column 2: Events Log -->
+        <!-- Column 3: Events Log -->
         <div class="lg:sticky lg:top-6 lg:self-start">
           <DashboardEventsList :events="events" />
         </div>
