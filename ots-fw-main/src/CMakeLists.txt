@@ -9,9 +9,12 @@ idf_component_register(
         "../include"
     REQUIRES 
         espressif__esp_websocket_client
+        espressif__mdns
         esp_wifi
         nvs_flash
         esp_timer
         json
         driver
+        esp_http_server
+        app_update
 )

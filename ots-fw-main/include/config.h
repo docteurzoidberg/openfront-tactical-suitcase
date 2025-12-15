@@ -26,4 +26,9 @@ static const uint8_t MCP23017_ADDRESSES[] = {0x20, 0x21};
 #define BUTTON_DEBOUNCE_MS 50
 #define LED_BLINK_INTERVAL_MS 500
 
+// OTA Configuration
+#define OTA_HOSTNAME "ots-fw-main"
+#define OTA_PASSWORD "ots2025"
+#define OTA_PORT 3232
+
 #endif // CONFIG_H

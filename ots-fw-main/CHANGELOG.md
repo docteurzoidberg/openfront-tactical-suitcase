@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-12-14 (Phase 3: OTA Implementation)
+- **Implemented ESP-IDF native OTA (Over-The-Air) updates**
+  - Added HTTP server on port 3232 for receiving firmware updates
+  - Implemented dual-partition OTA (ota_0 and ota_1) for safe updates
+  - Added mDNS service for hostname discovery (`ots-fw-main.local`)
+  - Created custom partition table (`partitions.csv`) supporting OTA
+  - Added visual feedback: LINK LED blinks during OTA upload showing progress
+  - Progress logging every 5% during firmware upload
+  - Automatic reboot after successful update
+  - Safe error handling: failed updates don't brick the device
+  - All module LEDs turn off during OTA update process
+- **Added OTA configuration**
+  - `OTA_HOSTNAME`: "ots-fw-main" for mDNS discovery
+  - `OTA_PORT`: 3232 (standard OTA port)
+  - `OTA_PASSWORD`: "ots2025" (placeholder, basic auth not fully implemented yet)
+- **Updated dependencies**
+  - Added `espressif__mdns` component for hostname resolution
+  - Added `esp_http_server` for OTA HTTP endpoint
+  - Added `app_update` for OTA partition management
+- **Updated documentation**
+  - Refreshed `OTA_GUIDE.md` with ESP-IDF specific instructions
+  - Added curl-based OTA upload examples
+  - Documented partition table layout and boot process
+  - Added troubleshooting section for ESP-IDF OTA
+
+### Technical Details - OTA Implementation
+- **Upload Method**: HTTP POST to `http://ots-fw-main.local:3232/update`
+- **Partition Scheme**: Factory (2MB) + OTA_0 (2MB) + OTA_1 (2MB)
+- **Current Size**: ~1MB firmware (48% of 2MB partition)
+- **Safety**: Dual partition with automatic rollback on boot failure
+- **Components**: esp_ota_ops, esp_http_server, mdns
+- **Progress Feedback**: Visual (LED) + Serial logging every 5%
+
 ### Changed - 2025-12-14 (Phase 2: Build System & Dependencies)
 - **Fixed ESP-IDF build configuration** for successful compilation
   - Restructured CMake configuration with proper project initialization

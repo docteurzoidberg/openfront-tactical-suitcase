@@ -59,6 +59,11 @@ ModuleNukeState = {
   m_mirv_launched: boolean;
 }
 
+TroopsData = {
+  current: number;        // current available troops
+  max: number;            // maximum troops capacity
+}
+
 HWState = {
   m_general: ModuleGeneralState;
   m_alert: ModuleAlertState;
@@ -70,6 +75,7 @@ GameState = {
   mapName: string;
   mode: string;
   playerCount: number;
+  troops?: TroopsData;    // optional: current troop counts
   hwState: HWState;       // hardware module states
 }
 ```
@@ -162,7 +168,7 @@ Commands sent via `cmd` messages with specific `action` values and expected `par
 #### `send-nuke`
 Send a nuclear weapon in the game (from hardware nuke module).
 
-**Flow**: Hardware → Server → Userscript → Game
+**Flow**: Hardware Button → Firmware → Server → Userscript → Game → Userscript → Server → Firmware LED
 
 ```ts
 {
@@ -177,9 +183,48 @@ Send a nuclear weapon in the game (from hardware nuke module).
 ```
 
 **Userscript behavior**:
-1. Receive `send-nuke` command
-2. Call game's nuke method with specified type
-3. Send back `nuke-sent` event (see Event Definitions below)
+1. Receive `send-nuke` command from server
+2. Attempt to call game API (tries `game.sendNuke()`, `game.launchNuke()`, `game.useNuke()`)
+3. On success:
+   - Emits `NUKE_LAUNCHED`/`HYDRO_LAUNCHED`/`MIRV_LAUNCHED` event
+   - Event flows back to server, then to firmware to activate LED confirmation
+4. On failure:
+   - Emits `INFO` event with error details
+
+**Note**: The game API for launching nukes is not yet fully reverse-engineered. The userscript tries multiple common patterns and logs available methods for debugging.
+
+#### `set-troops-percent`
+Set the troop deployment percentage (from hardware troops module).
+
+**Flow**: Hardware Slider → Firmware → Server → Userscript → Game UI
+
+```ts
+{
+  type: "cmd",
+  payload: {
+    action: "set-troops-percent",
+    params: {
+      percent: 50  // 0-100
+    }
+  }
+}
+```
+
+**Userscript behavior**:
+1. Receive `set-troops-percent` command from server
+2. Locate the game's troop deployment slider UI element
+3. Set the slider value to the specified percentage
+4. Trigger any necessary game events to update the deployment amount
+
+**Command throttling**: 
+- Firmware should only send commands when slider changes by ≥1%
+- Debounce slider readings (100ms minimum interval)
+- Prevents command flooding during rapid slider movement
+
+**Game behavior**:
+- Updates the visual slider position in the game UI
+- Recalculates troop deployment amount based on percentage
+- Updates any UI displays showing selected troop count
 
 ### Info / Status Events
 
@@ -333,10 +378,33 @@ Incoming atomic bomb threat detected.
   "payload": {
     "type": "ALERT_ATOM",
     "timestamp": 1234567890,
-    "message": "Incoming nuclear strike detected!"
+    "message": "Incoming nuclear strike detected!",
+    "data": {
+      "nukeType": "Atom Bomb",
+      "launcherPlayerID": "player-abc",
+      "launcherPlayerName": "EnemyPlayer",
+      "nukeUnitID": 12345,
+      "targetTile": 54321,
+      "targetPlayerID": "player-xyz",
+      "tick": 950,
+      "coordinates": {
+        "x": 123,
+        "y": 456
+      }
+    }
   }
 }
 ```
+
+**Data fields**:
+- `nukeType`: Game unit type name ("Atom Bomb", "Hydrogen Bomb", "MIRV", "MIRV Warhead")
+- `launcherPlayerID`: ID of the player who launched the nuke
+- `launcherPlayerName`: Display name of the launching player
+- `nukeUnitID`: Unique unit ID of the nuclear weapon
+- `targetTile`: Game tile ID being targeted
+- `targetPlayerID`: ID of the target player (current player)
+- `tick`: Game tick when nuke was launched
+- `coordinates`: Map coordinates of target tile
 
 **Hardware behavior**:
 1. Receive `ALERT_ATOM` event
@@ -354,10 +422,25 @@ Incoming hydrogen bomb threat detected.
   "payload": {
     "type": "ALERT_HYDRO",
     "timestamp": 1234567890,
-    "message": "Incoming hydrogen bomb detected!"
+    "message": "Incoming hydrogen bomb detected!",
+    "data": {
+      "nukeType": "Hydrogen Bomb",
+      "launcherPlayerID": "player-abc",
+      "launcherPlayerName": "EnemyPlayer",
+      "nukeUnitID": 12346,
+      "targetTile": 54322,
+      "targetPlayerID": "player-xyz",
+      "tick": 955,
+      "coordinates": {
+        "x": 124,
+        "y": 457
+      }
+    }
   }
 }
 ```
+
+**Data fields**: Same as `ALERT_ATOM` (see above).
 
 **Hardware behavior**: Same as `ALERT_ATOM` but for HYDRO alert LED (10 seconds).
 
@@ -370,15 +453,32 @@ Incoming MIRV threat detected.
   "payload": {
     "type": "ALERT_MIRV",
     "timestamp": 1234567890,
-    "message": "Incoming MIRV strike detected!"
+    "message": "Incoming MIRV strike detected!",
+    "data": {
+      "nukeType": "MIRV",
+      "launcherPlayerID": "player-def",
+      "launcherPlayerName": "AnotherEnemy",
+      "nukeUnitID": 12347,
+      "targetTile": 54323,
+      "targetPlayerID": "player-xyz",
+      "tick": 960,
+      "coordinates": {
+        "x": 125,
+        "y": 458
+      }
+    }
   }
 }
 ```
+
+**Data fields**: Same as `ALERT_ATOM` (see above).
 
 **Hardware behavior**: Same as `ALERT_ATOM` but for MIRV alert LED (10 seconds).
 
 #### `ALERT_LAND`
 Land invasion detected.
+
+**Flow**: Game → Userscript → Server → Firmware → Alert Module LEDs
 
 ```json
 {
@@ -386,15 +486,35 @@ Land invasion detected.
   "payload": {
     "type": "ALERT_LAND",
     "timestamp": 1234567890,
-    "message": "Land invasion detected!"
+    "message": "Land invasion detected!",
+    "data": {
+      "type": "land",
+      "attackerPlayerID": "player-abc",
+      "attackerPlayerName": "EnemyPlayer",
+      "attackID": 789,
+      "troops": 50000,
+      "targetPlayerID": "player-xyz",
+      "tick": 1000
+    }
   }
 }
 ```
+
+**Data fields**:
+- `type`: "land" (attack type identifier)
+- `attackerPlayerID`: ID of the attacking player
+- `attackerPlayerName`: Display name of the attacking player
+- `attackID`: Unique ID of this attack in the game
+- `troops`: Number of troops in the attack
+- `targetPlayerID`: ID of the target player (current player)
+- `tick`: Game tick when attack was launched
 
 **Hardware behavior**: Same as `ALERT_ATOM` but for LAND alert LED (15 seconds).
 
 #### `ALERT_NAVAL`
 Naval invasion detected.
+
+**Flow**: Game → Userscript → Server → Firmware → Alert Module LEDs
 
 ```json
 {
@@ -402,10 +522,35 @@ Naval invasion detected.
   "payload": {
     "type": "ALERT_NAVAL",
     "timestamp": 1234567890,
-    "message": "Naval invasion detected!"
+    "message": "Naval invasion detected!",
+    "data": {
+      "type": "boat",
+      "attackerPlayerID": "player-abc",
+      "attackerPlayerName": "EnemyPlayer",
+      "transportShipUnitID": 98765,
+      "troops": 25000,
+      "targetTile": 54324,
+      "targetPlayerID": "player-xyz",
+      "tick": 1005,
+      "coordinates": {
+        "x": 126,
+        "y": 459
+      }
+    }
   }
 }
 ```
+
+**Data fields**:
+- `type`: "boat" (attack type identifier)
+- `attackerPlayerID`: ID of the attacking player
+- `attackerPlayerName`: Display name of the attacking player
+- `transportShipUnitID`: Unique unit ID of the transport ship
+- `troops`: Number of troops being transported
+- `targetTile`: Game tile ID being targeted
+- `targetPlayerID`: ID of the target player (current player)
+- `tick`: Game tick when transport ship launched
+- `coordinates`: Map coordinates of target tile
 
 **Hardware behavior**: Same as `ALERT_ATOM` but for NAVAL alert LED (15 seconds).
 
@@ -505,11 +650,113 @@ General information events for logging and status.
 }
 ```
 
-**Common INFO message patterns**:
-- `"Nuke sent"` - Legacy nuke confirmation (with `data.nukeType`)
-- `"userscript-connected"` - Userscript established connection
-- `"pong-from-userscript"` - Response to ping command
-- `"Command: {action}"` - Server logged a command
+**Common INFO message patterns from userscript**:
+
+1. **Connection and Status**:
+   - `"userscript-connected"` - Userscript established WebSocket connection
+     ```json
+     { "data": { "url": "https://openfront.io/game/..." } }
+     ```
+   - `"heartbeat"` - Periodic heartbeat (sent every 5 seconds)
+   - `"pong-from-userscript"` - Response to ping command
+   - `"Game instance detected"` - Game object became available
+     ```json
+     { "data": { "timestamp": 1234567890 } }
+     ```
+
+2. **Command Execution**:
+   - `"Unknown command: {action}"` - Received unrecognized command
+     ```json
+     { "data": { "action": "unknown-action", "params": {...} } }
+     ```
+   - `"send-nuke failed: missing nukeType"` - Missing required parameter
+   - `"send-nuke failed: game not available"` - Game object not ready
+   - `"send-nuke failed: API not found"` - Game doesn't have nuke API
+     ```json
+     { 
+       "data": { 
+         "nukeType": "atom",
+         "availableMethods": ["method1", "method2", ...]
+       } 
+     }
+     ```
+
+3. **Server-Generated**:
+   - `"Command: {action}"` - Server logged a command execution
+   - `"userscript-disconnected"` - Userscript peer disconnected
+     ```json
+     { "data": { "peerId": "peer-123" } }
+     ```
+
+---
+
+## Userscript Event Detection
+
+The userscript (`ots-userscript`) monitors the game in real-time and automatically detects threats and actions targeting the current player. It uses polling (100ms interval) to track game state changes.
+
+### Nuke Detection (NukeTracker)
+
+**What it tracks**: Nuclear weapons (Atom Bomb, Hydrogen Bomb, MIRV, MIRV Warhead) targeting the current player.
+
+**Detection logic**:
+1. Polls all nuke units in the game
+2. For each new nuke, checks if `targetTile` belongs to current player
+3. If yes, emits `ALERT_ATOM`/`ALERT_HYDRO`/`ALERT_MIRV` event
+4. Continues tracking until:
+   - Unit reaches target → emits `NUKE_EXPLODED`
+   - Unit is deleted before target → emits `NUKE_INTERCEPTED`
+
+**Event data includes**:
+- Attacker player info (ID, name)
+- Nuke details (type, unit ID, target coordinates)
+- Game tick information
+
+### Naval Detection (BoatTracker)
+
+**What it tracks**: Transport ships targeting the current player's territory.
+
+**Detection logic**:
+1. Polls all Transport units in the game
+2. For each new transport, checks if `targetTile` belongs to current player
+3. If yes, emits `ALERT_NAVAL` event
+4. Tracks until arrival or destruction (logged but no additional events)
+
+**Event data includes**:
+- Attacker player info (ID, name)
+- Transport ship ID and troop count
+- Target coordinates
+
+### Land Attack Detection (LandAttackTracker)
+
+**What it tracks**: Land invasions via the player's `incomingAttacks` list.
+
+**Detection logic**:
+1. Polls `myPlayer.incomingAttacks()` array
+2. For each new attack, emits `ALERT_LAND` event
+3. Tracks until attack disappears from list (completion or cancellation)
+
+**Event data includes**:
+- Attacker player info (ID, name)
+- Attack ID and troop count
+- Game tick information
+
+### Polling Architecture
+
+All trackers run on a shared 100ms polling interval:
+```javascript
+setInterval(() => {
+  nukeTracker.detectLaunches(gameAPI, myPlayerID)
+  nukeTracker.detectExplosions(gameAPI)
+  
+  boatTracker.detectLaunches(gameAPI, myPlayerID)
+  boatTracker.detectArrivals(gameAPI)
+  
+  landTracker.detectLaunches(gameAPI)
+  landTracker.detectCompletions(gameAPI)
+}, 100)
+```
+
+**Important**: Events are only emitted for threats targeting the current player. Attacks on other players are ignored.
 
 ---
 
@@ -641,6 +888,69 @@ LED_LAND    = {1, 4}  // Invasion alerts
 LED_NAVAL   = {1, 5}
 ```
 
+### Troops Module (16U)
+
+**Purpose**: Real-time troop visualization and deployment percentage control.
+
+**Hardware Components**:
+- 1x LCD Display (2×16 character, I2C)
+- 1x Potentiometer Slider (via I2C ADC - ADS1115)
+
+**Protocol Behavior**:
+
+**Incoming (State → Display Update)**:
+Receives game state updates containing troop information:
+
+```json
+{
+  "type": "state",
+  "payload": {
+    "timestamp": 1234567890,
+    "troops": {
+      "current": 120000,
+      "max": 1100000
+    }
+  }
+}
+```
+
+**Display Format**:
+```
+120K / 1.1M     ← Line 1: current / max (with unit scaling)
+50% (60K)       ← Line 2: percent (calculated amount)
+```
+
+**Unit Scaling**: K (thousands), M (millions), B (billions) with 1 decimal place
+
+**Outgoing (Slider → Command)**:
+When slider position changes by ≥1%, send command:
+
+```json
+{
+  "type": "cmd",
+  "payload": {
+    "action": "set-troops-percent",
+    "params": {
+      "percent": 50
+    }
+  }
+}
+```
+
+**Important**:
+- Slider polling: 100ms debounce interval
+- Command throttling: Only on ≥1% change
+- Display updates: Immediate (no animations)
+- Both input and output module
+
+**I2C Addresses**:
+```cpp
+LCD_ADDRESS = 0x27  // (or 0x3F if conflict)
+ADC_ADDRESS = 0x48  // ADS1115 ADC
+```
+
+**Hardware Connection**: Both devices on shared I2C bus (main 2×05 IDC header)
+
 ---
 
 ## Timing Constants
@@ -666,6 +976,13 @@ LED_NAVAL   = {1, 5}
 #define WARNING_BLINK_INTERVAL   300  // 300ms for WARNING LED (fast)
 ```
 
+### Troops Module
+```cpp
+#define SLIDER_POLL_INTERVAL_MS  100   // 100ms debounce
+#define SLIDER_CHANGE_THRESHOLD  1     // 1% minimum change to send command
+#define DISPLAY_UPDATE_IMMEDIATE true  // No animation delay
+```
+
 ---
 
 ## Server-Side Behavior (`ots-server`)
@@ -674,17 +991,45 @@ The Nuxt/Nitro server has dual roles:
 
 ### Role 1: WebSocket Server (for userscript and UI)
 
-The server exposes:
+The server exposes a single WebSocket endpoint at `/api/ws` with client-type identification via handshake:
 
-- `/ws-script` – WebSocket endpoint for game bridges (userscript).
-- `/ws-ui` – WebSocket endpoint for dashboard UI clients.
+**Client Identification**:
+```json
+// Sent by client on connect
+{
+  "type": "handshake",
+  "clientType": "userscript" | "ui"
+}
 
-Key responsibilities:
+// Server response
+{
+  "type": "handshake-ack",
+  "clientType": "userscript" | "ui"
+}
+```
 
-- Accept `IncomingMessage` from userscript (game state and events).
-- Keep the latest `GameState` in memory.
-- Broadcast `state` and `event` messages to all subscribed UI peers via a dedicated channel (e.g. `"ui"`).
-- Forward `cmd` messages from UI peers to userscript via another channel (e.g. `"script"`).
+**Key responsibilities**:
+
+1. **Event Broadcasting**:
+   - Accept `event` messages from userscript (game-detected threats and actions)
+   - Broadcast all events to ALL connected clients (userscript and UI)
+   - Events flow: Userscript → Server → All clients (including back to userscript)
+
+2. **Command Routing**:
+   - Accept `cmd` messages from UI peers
+   - Broadcast commands to ALL clients (userscript receives and executes)
+   - Commands flow: UI → Server → All clients (userscript processes)
+
+3. **Connection Management**:
+   - Track client types (userscript vs UI)
+   - Generate INFO events on userscript connect/disconnect:
+     - `userscript-connected` when userscript connects
+     - `userscript-disconnected` when userscript disconnects
+   - Maintain separate pub/sub channels: `broadcast`, `ui`, `userscript`
+
+4. **State Management** (future):
+   - Keep latest `GameState` in memory (not yet implemented)
+   - Broadcast state updates to UI clients
 
 ### Role 2: WebSocket Client (for hardware)
 

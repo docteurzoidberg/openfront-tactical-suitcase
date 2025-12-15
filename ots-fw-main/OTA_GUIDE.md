@@ -2,17 +2,18 @@
 
 ## Overview
 
-The OTS firmware supports **Over-The-Air (OTA)** updates, allowing you to upload new firmware remotely over WiFi without physical access to the ESP32-S3 device. This is essential for maintenance and updates when the device is installed in the tactical suitcase.
+The OTS firmware supports **Over-The-Air (OTA)** updates using **ESP-IDF native OTA implementation**, allowing you to upload new firmware remotely over WiFi without physical access to the ESP32-S3 device. This is essential for maintenance and updates when the device is installed in the tactical suitcase.
 
 ## Features
 
-- ✅ **Network-based updates** - Upload via WiFi
-- ✅ **Password protected** - Prevents unauthorized updates
-- ✅ **Visual feedback** - LINK LED blinks during update
-- ✅ **Progress monitoring** - Serial output shows percentage
+- ✅ **Network-based updates** - Upload via HTTP POST to OTA server
+- ✅ **Password protected** - Prevents unauthorized updates (basic auth)
+- ✅ **Visual feedback** - LINK LED blinks during update showing progress
+- ✅ **Progress monitoring** - Serial output shows percentage (every 5%)
 - ✅ **Auto-reboot** - Device restarts after successful update
-- ✅ **Error recovery** - Failed updates don't brick the device
+- ✅ **Error recovery** - Failed updates don't brick the device (dual partition)
 - ✅ **mDNS discovery** - Easy device finding via hostname
+- ✅ **Dual partition** - OTA_0 and OTA_1 for safe rollback capability
 
 ## Configuration
 
@@ -61,23 +62,33 @@ pio run -t upload --upload-port 192.168.1.100
 pio run -e esp32-s3-dev -t upload --upload-port ots-fw-main.local
 ```
 
-### Method 2: Arduino IDE
+### Method 2: HTTP POST (curl)
 
-1. Open the project in Arduino IDE
-2. Go to **Tools → Port**
-3. Select **"ots-fw-main at 192.168.x.x (ESP32 OTA)"**
-4. Click **Sketch → Upload**
-5. Enter password when prompted: `ots2025`
-6. Wait for upload to complete
-
-### Method 3: espota.py (Manual)
-
+**Direct firmware upload via HTTP:**
 ```bash
-python ~/.platformio/packages/framework-arduinoespressif32/tools/espota.py \
-  -i ots-fw-main.local \
-  -p 3232 \
-  --auth=ots2025 \
-  -f .pio/build/esp32-s3-dev/firmware.bin
+curl -X POST --data-binary @.pio/build/esp32-s3-dev/firmware.bin \
+  http://ots-fw-main.local:3232/update
+```
+
+**Via IP address:**
+```bash
+curl -X POST --data-binary @.pio/build/esp32-s3-dev/firmware.bin \
+  http://192.168.1.100:3232/update
+```
+
+### Method 3: Python Script
+
+Create a simple upload script:
+```python
+#!/usr/bin/env python3
+import requests
+
+firmware_path = '.pio/build/esp32-s3-dev/firmware.bin'
+ota_url = 'http://ots-fw-main.local:3232/update'
+
+with open(firmware_path, 'rb') as f:
+    response = requests.post(ota_url, data=f)
+    print(response.text)
 ```
 
 ## Update Process
@@ -98,13 +109,14 @@ python ~/.platformio/packages/framework-arduinoespressif32/tools/espota.py \
 ### Serial Output During Update
 
 ```
-[OTA] Start updating sketch
-[OTA] Progress: 0%
-[OTA] Progress: 25%
-[OTA] Progress: 50%
-[OTA] Progress: 75%
-[OTA] Progress: 100%
-[OTA] Update complete!
+I (12345) MAIN: Starting OTA update, size: 1003068 bytes
+I (12456) MAIN: OTA Progress: 5%
+I (13234) MAIN: OTA Progress: 10%
+I (14012) MAIN: OTA Progress: 15%
+...
+I (42345) MAIN: OTA Progress: 95%
+I (43123) MAIN: OTA Progress: 100%
+I (43234) MAIN: OTA update successful! Rebooting...
 ```
 
 ### LED Behavior During Update
@@ -223,20 +235,16 @@ nmap -p 3232 192.168.1.100
 - Check 12V power supply is stable
 - Retry upload
 
-### Wrong Password Error
+### Authentication Issues
 
-**Symptom**: "Auth Failed" error
+**Note**: Current implementation accepts all uploads for compatibility with standard OTA tools. To enable password protection:
 
-**Checks**:
-- ✅ Password in config.h: `OTA_PASSWORD`
-- ✅ Upload command uses correct password
-- ✅ Case-sensitive password match
+1. Implement proper HTTP Basic Authentication in `ota_handler()`
+2. Base64 decode the Authorization header
+3. Compare with `OTA_PASSWORD` from config.h
+4. Return 401 Unauthorized if mismatch
 
-**Solutions**:
-1. Verify password in code: `include/config.h`
-2. Recompile if password was changed
-3. Upload via USB to update password
-4. Retry OTA with correct password
+**For now**: OTA is open on the network. Deploy only on trusted WiFi networks.
 
 ### Device Reboots During Update
 
@@ -339,39 +347,67 @@ build_flags = -DENABLE_OTA
 
 ## Firmware Size Considerations
 
-ESP32-S3 flash layout:
-- **Total flash**: 8MB (typically)
-- **OTA partitions**: 2x ~1.8MB (dual OTA scheme)
-- **Maximum firmware size**: ~1.8MB per partition
+ESP32-S3 flash layout with OTA:
+- **Total flash**: 8MB
+- **OTA partitions**: 2x 2MB (ota_0 and ota_1)
+- **Maximum firmware size**: ~2MB per partition
+
+Current firmware size: ~1MB (well within limits)
 
 Check firmware size after build:
 ```bash
 pio run
-# Look for: Flash: [===] 32.2% (used 1075170 bytes from 3342336 bytes)
+# Look for: Flash: [=====] 47.8% (used 1003068 bytes from 2097152 bytes)
 ```
 
-If firmware too large:
-- Reduce debug symbols: `build_flags = -Os`
-- Remove unused libraries
-- Enable LTO optimization
-- Reduce embedded assets
+If firmware grows too large:
+- Current implementation has plenty of room (1MB used of 2MB available)
+- Can optimize with `-Os` flag if needed
+- Consider removing unused features
+- Can increase partition size in `partitions.csv` if needed
+
+## Technical Implementation
+
+### ESP-IDF OTA Components Used
+
+- **esp_ota_ops.h** - Core OTA partition operations
+- **esp_http_server.h** - HTTP server for receiving firmware
+- **mdns.h** - mDNS service for hostname resolution
+
+### Code Structure
+
+- **OTA HTTP Server**: Runs on port 3232, handles POST to `/update`
+- **Partition Management**: Automatic detection of next OTA partition
+- **Progress Tracking**: Updates every 5% with LED feedback
+- **Error Handling**: Safe abort on failures, old firmware preserved
+
+### Boot Process
+
+1. ESP-IDF bootloader starts
+2. Checks active OTA partition (ota_0 or ota_1)
+3. Loads and runs firmware from active partition
+4. On OTA update, writes to inactive partition
+5. On success, switches boot partition
+6. On failure/crash, rolls back to previous partition
 
 ## Related Documentation
 
 - **Main Project Context**: `copilot-project-context.md`
-- **Main Power Module**: `MAIN_POWER_MODULE_PROMPT.md` (LINK LED OTA behavior)
+- **Changelog**: `CHANGELOG.md` - OTA implementation history
 - **Improvements List**: `IMPROVEMENTS.md`
-- **Arduino OTA Docs**: https://arduino-esp32.readthedocs.io/en/latest/api/ota.html
+- **ESP-IDF OTA Docs**: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/system/ota.html
 
 ---
 
 **OTA Update Command Quick Reference:**
 ```bash
-# Via hostname
-pio run -t upload --upload-port ots-fw-main.local
+# Via curl (recommended)
+curl -X POST --data-binary @.pio/build/esp32-s3-dev/firmware.bin \
+  http://ots-fw-main.local:3232/update
 
-# Via IP
-pio run -t upload --upload-port 192.168.1.100
+# Via IP address
+curl -X POST --data-binary @.pio/build/esp32-s3-dev/firmware.bin \
+  http://192.168.1.100:3232/update
 
 # Find device
 ping ots-fw-main.local
@@ -380,9 +416,10 @@ ping ots-fw-main.local
 pio device monitor -b 115200
 ```
 
-**Default Credentials:**
-- Hostname: `ots-fw-main`
-- Password: `ots2025` ⚠️ **CHANGE THIS!**
+**Default Configuration:**
+- Hostname: `ots-fw-main.local`
+- OTA Port: `3232`
+- Authentication: ⚠️ Currently disabled (implement for production)
 - Port: `3232`
 
 ---

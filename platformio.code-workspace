@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "ots-fw-audiomodule",
+			"path": "ots-fw-audiomodule"
+		},
+		{
+			"name": "ots-fw-main",
+			"path": "ots-fw-main"
+		}
+	],
+	"settings": {}
+}
