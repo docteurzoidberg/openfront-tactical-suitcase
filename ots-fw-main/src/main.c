@@ -344,10 +344,16 @@ static void handle_alert(game_event_type_t event_type) {
     xTimerStart(alert_led_timers[led_index], 0);
 }
 
+// Game state tracking
+static bool in_game = false;
+
 static void handle_game_state(game_event_type_t event_type) {
     ESP_LOGI(TAG, "Game state: %s", event_type_to_string(event_type));
     
     if (event_type == GAME_EVENT_GAME_START) {
+        // Game started - reset all state
+        in_game = true;
+        
         // Turn off all LEDs at game start
         for (int i = 0; i < 3; i++) {
             nuke_leds_blinking[i] = false;
@@ -357,6 +363,12 @@ static void handle_game_state(game_event_type_t event_type) {
             alert_leds_active[i] = false;
             module_io_set_alert_led(i, false);
         }
+        
+        ESP_LOGI(TAG, "Game started - state reset");
+    } else if (event_type == GAME_EVENT_GAME_END) {
+        // Game ended
+        in_game = false;
+        ESP_LOGI(TAG, "Game ended");
     }
 }
 

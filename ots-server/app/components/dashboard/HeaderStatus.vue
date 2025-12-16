@@ -29,6 +29,16 @@
         />
         <span class="uppercase tracking-wide text-xs text-slate-400">USERSCRIPT: {{ userscriptStatus }}</span>
       </div>
+      <div class="flex items-center gap-2">
+        <span
+          class="inline-flex h-2 w-2 rounded-full"
+          :class="{
+            'bg-emerald-400': gameStatus === 'IN_GAME',
+            'bg-slate-500': gameStatus === 'WAITING'
+          }"
+        />
+        <span class="uppercase tracking-wide text-xs text-slate-400">GAME: {{ gameStatus }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -38,7 +48,8 @@ const props = defineProps<{
   uiStatus: string
   userscriptStatus: string
   userscriptBlink: boolean
+  gameStatus: string
 }>()
 
-const { uiStatus, userscriptStatus, userscriptBlink } = toRefs(props)
+const { uiStatus, userscriptStatus, userscriptBlink, gameStatus } = toRefs(props)
 </script>

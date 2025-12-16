@@ -5,6 +5,7 @@
         :ui-status="uiStatus"
         :userscript-status="userscriptStatus"
         :userscript-blink="!!userscriptHeartbeatId"
+        :game-status="gameStatus"
       />
 
       <section class="grid gap-6 lg:grid-cols-3">
@@ -56,5 +57,5 @@
 <script setup lang="ts">
 import { useGameSocket } from '../composables/useGameSocket'
 
-const { uiStatus, userscriptStatus, events, activeNukes, activeAlerts, powerOn, troops, sendNukeCommand, sendSetTroopsPercent, togglePower, userscriptHeartbeatId } = useGameSocket()
+const { uiStatus, userscriptStatus, gameStatus, events, activeNukes, activeAlerts, powerOn, troops, sendNukeCommand, sendSetTroopsPercent, togglePower, userscriptHeartbeatId } = useGameSocket()
 </script>

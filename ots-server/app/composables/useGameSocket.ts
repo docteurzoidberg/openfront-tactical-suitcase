@@ -45,6 +45,9 @@ const alertTimers = new Map<string, NodeJS.Timeout>()
 // Troops state
 const troops = ref<TroopsData | null>(null)
 
+// Game state
+const inGame = ref<boolean>(false)
+
 export function useGameSocket() {
   const { status, data, send, open, close } = useWebSocket(WS_URL, {
     autoReconnect: {
@@ -95,6 +98,25 @@ export function useGameSocket() {
             lastUserscriptHeartbeat.value = Date.now()
             lastUserscriptHeartbeatId.value++
           }
+        }
+
+        // Handle game state events
+        if (msg.payload.type === 'GAME_START') {
+          inGame.value = true
+          // Clear all alerts and nukes on game start
+          Object.keys(activeAlerts.value).forEach(key => {
+            activeAlerts.value[key as keyof typeof activeAlerts.value] = false
+          })
+          Object.keys(activeNukes.value).forEach(key => {
+            activeNukes.value[key as keyof typeof activeNukes.value] = false
+          })
+          // Clear all timers
+          blinkTimers.forEach(timer => clearTimeout(timer))
+          blinkTimers.clear()
+          alertTimers.forEach(timer => clearTimeout(timer))
+          alertTimers.clear()
+        } else if (msg.payload.type === 'GAME_END') {
+          inGame.value = false
         }
 
         // Handle alert events
@@ -177,6 +199,10 @@ export function useGameSocket() {
     return 'OFFLINE'
   })
 
+  const gameStatus = computed(() => {
+    return inGame.value ? 'IN_GAME' : 'WAITING'
+  })
+
   const userscriptHeartbeatId = computed(() => lastUserscriptHeartbeatId.value)
 
   const sendMessage = (msg: OutgoingMessage) => {
@@ -210,6 +236,7 @@ export function useGameSocket() {
   return {
     uiStatus,
     userscriptStatus,
+    gameStatus,
     userscriptHeartbeatId,
     events,
     activeNukes,

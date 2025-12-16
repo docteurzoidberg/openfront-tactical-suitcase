@@ -16,6 +16,7 @@ export class GameBridge {
   private boatTracker: BoatTracker
   private landTracker: LandAttackTracker
   private gameConnected = false
+  private inGame = false
 
   constructor(
     private ws: WsClient,
@@ -79,8 +80,22 @@ export class GameBridge {
       const myPlayerID = gameAPI.getMyPlayerID()
       if (!myPlayerID) {
         // Not in a game yet or player not loaded
+        if (this.inGame) {
+          // Game ended
+          this.inGame = false
+          this.ws.sendEvent('GAME_END', 'Game ended')
+          console.log('[GameBridge] Game ended, clearing trackers')
+        }
         this.clearTrackers()
         return
+      }
+
+      // Detect game start
+      if (!this.inGame) {
+        this.inGame = true
+        this.ws.sendEvent('GAME_START', 'Game started')
+        console.log('[GameBridge] Game started')
+        this.clearTrackers() // Clear any stale state
       }
 
       try {
@@ -183,7 +198,7 @@ export class GameBridge {
 
     if (success) {
       console.log(`[GameBridge] Nuke launched successfully via ${method}`)
-      
+
       // Send confirmation event
       let eventType: 'NUKE_LAUNCHED' | 'HYDRO_LAUNCHED' | 'MIRV_LAUNCHED' = 'NUKE_LAUNCHED'
       if (nukeType === 'hydro') {

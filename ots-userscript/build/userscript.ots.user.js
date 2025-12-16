@@ -1026,6 +1026,7 @@
       this.hud = hud;
       this.pollInterval = null;
       this.gameConnected = false;
+      this.inGame = false;
       this.nukeTracker = new NukeTracker();
       this.boatTracker = new BoatTracker();
       this.landTracker = new LandAttackTracker();
@@ -1070,8 +1071,19 @@
         }
         const myPlayerID = gameAPI.getMyPlayerID();
         if (!myPlayerID) {
+          if (this.inGame) {
+            this.inGame = false;
+            this.ws.sendEvent("GAME_END", "Game ended");
+            console.log("[GameBridge] Game ended, clearing trackers");
+          }
           this.clearTrackers();
           return;
+        }
+        if (!this.inGame) {
+          this.inGame = true;
+          this.ws.sendEvent("GAME_START", "Game started");
+          console.log("[GameBridge] Game started");
+          this.clearTrackers();
         }
         try {
           this.nukeTracker.detectLaunches(gameAPI, myPlayerID);
