@@ -2,28 +2,33 @@
 
 ## Overview
 
-`ots-fw-main` is a **PlatformIO-based firmware** for an **ESP32-S3** dev board that emulates the OTS device controller for the OpenFront.io game.
+`ots-fw-main` is an **ESP-IDF firmware** for an **ESP32-S3** dev board that acts as the hardware controller for the OpenFront.io game. The firmware connects to the game server via WebSocket and controls physical hardware modules through I2C I/O expanders.
 
 Goals:
-- Connect to the same WebSocket server and use the **same protocol** as `ots-server` / `ots-userscript`.
-- Reuse the **shared protocol description** so that message types and semantics stay in sync.
-- Allow rapid iteration on game logic by keeping device behavior and `ots-server` behavior aligned.
+- Act as a **WebSocket client** connecting to `ots-server` game backend
+- Use the **same protocol** as defined in `protocol-context.md`
+- Provide modular hardware abstraction mirroring physical PCB modules
+- Support event-driven architecture with clean separation of concerns
 
-This firmware should:
-- Maintain a stable WebSocket connection to the OTS backend.
-- Send and receive messages that conform to the protocol defined in `protocol-context.md` at the repo root.
-- Mirror the logical behavior of the server-side OTS simulator where appropriate (e.g., state updates, event emission, command handling).
+This firmware:
+- Maintains a stable WebSocket connection to the game server
+- Sends and receives messages conforming to `protocol-context.md`
+- Uses hardware modules (Alert, Nuke, Main Power) with standardized interfaces
+- Implements event dispatcher for flexible event routing
+- Supports Over-The-Air (OTA) updates via HTTP
 
 ## Tech Stack
 
 - Platform: **ESP32-S3** dev board
-- Framework: **PlatformIO** with Arduino framework
-- Language: **C++** (Arduino-style) for firmware logic
-- Connectivity: Wi-Fi + WebSocket server running on-device
-- I/O Expansion: **MCP23017** I2C I/O expanders (up to 8 boards supported)
-  - Library: Adafruit MCP23017 Arduino Library
-  - I2C bus: SDA=GPIO21, SCL=GPIO22, 100kHz
-  - Default addresses: 0x20, 0x21 (configurable in `config.h`)
+- Framework: **ESP-IDF** (native Espressif framework)
+- Build System: **CMake** + ESP-IDF components
+- Language: **C** for firmware logic
+- Connectivity: Wi-Fi + WebSocket **client** to game server
+- I/O Expansion: **MCP23017** I2C I/O expanders (2 boards)
+  - Native ESP-IDF I2C master driver
+  - I2C bus: SDA=GPIO8, SCL=GPIO9 (ESP32-S3 compatible)
+  - Addresses: 0x20 (inputs), 0x21 (outputs)
+- OTA Updates: HTTP server on port 3232 with dual-partition support
 
 ## Responsibilities
 
@@ -40,215 +45,282 @@ This firmware should:
 
 ```txt
 ots-fw-main/
-  platformio.ini           # PlatformIO configuration for ESP32-S3 board
+  CMakeLists.txt           # ESP-IDF project configuration
+  platformio.ini           # PlatformIO configuration
+  partitions.csv           # OTA partition table
   src/
-    main.cpp               # Firmware entrypoint
-    ws_client.cpp          # WebSocket server implementation
-    protocol.cpp           # Protocol message parsing/serialization
-    io_expander.cpp        # MCP23017 I/O expander driver
-    module_io.cpp          # Module-specific I/O abstractions
+    main.c                 # Firmware entrypoint
+    protocol.c             # Game event type conversions
+    io_expander.c          # MCP23017 I/O expander driver
+    module_io.c            # Global I/O board configuration
+    
+    # Network & Communication
+    network_manager.c      # WiFi lifecycle and mDNS
+    ws_client.c            # WebSocket transport layer
+    ws_protocol.c          # WebSocket protocol parsing/building
+    ota_manager.c          # OTA HTTP server
+    
+    # Event System
+    event_dispatcher.c     # Centralized event routing
+    game_state.c           # Game phase tracking
+    
+    # Hardware Control
+    led_controller.c       # LED effect management (dedicated task)
+    button_handler.c       # Button debouncing
+    io_task.c              # Dedicated I/O scanning task
+    
+    # Hardware Modules
+    module_manager.c       # Hardware module registration
+    nuke_module.c          # Nuke module (3 buttons + 3 LEDs)
+    alert_module.c         # Alert module (6 LEDs)
+    main_power_module.c    # Main power module (link LED)
+    
+    CMakeLists.txt         # Component registration
   include/
-    ws_client.h            # WebSocket server interface
-    protocol.h             # C++ representation of shared protocol structures
-    io_expander.h          # IOExpander class for MCP23017 management
-    module_io.h            # ModuleIO class with pin mappings
-    config.h               # Wi-Fi credentials, server URL, I2C pins, MCP addresses
+    config.h               # Wi-Fi, WebSocket, OTA config
+    protocol.h             # Game event types
+    game_state.h           # Game phase definitions
+    
+    # Hardware interfaces
+    hardware_module.h      # Base module interface
+    module_manager.h       # Module coordination
+    nuke_module.h          # Nuke module interface
+    alert_module.h         # Alert module interface
+    main_power_module.h    # Main power interface
+    
+  prompts/               # AI assistant prompts for modules
+  CHANGELOG.md
   copilot-project-context.md
 ```
 
-> NOTE: The exact set of files may evolve. Copilot should keep this file updated when structural changes are introduced.
-
 ## Synchronization with `ots-server` and `ots-userscript`
 
-- The **authoritative specification** for messages is `protocol-context.md` at the repo root.
-- Current protocol uses hardware-focused `GameState` with nested `hwState` containing:
-  - `m_general`: General module state (link status)
-  - `m_alert`: Alert module state (warning, atom, hydro, mirv, land, naval)
-  - `m_nuke`: Nuke module state (nuke, hydro, mirv launched)
-- Event types include hardware-specific events: `NUKE_LAUNCHED`, `HYDRO_LAUNCHED`, `MIRV_LAUNCHED`, alert types, plus `INFO`, `WIN`, `LOOSE`
-- When adding new commands, events, or state fields:
-  - Update `protocol-context.md`.
-  - Then update both:
-    - The server/clients in `ots-server` and `ots-userscript`.
-    - The firmware structures and handlers in `ots-fw-main`.
+- The **authoritative specification** is `protocol-context.md` at repo root
+- Event types defined in `protocol.h` must stay in sync with protocol-context.md:
+  - Game events: `GAME_START`, `GAME_END`, `WIN`, `LOOSE`
+  - Nuke events: `NUKE_LAUNCHED`, `HYDRO_LAUNCHED`, `MIRV_LAUNCHED`, `NUKE_EXPLODED`, `NUKE_INTERCEPTED`
+  - Alert events: `ALERT_ATOM`, `ALERT_HYDRO`, `ALERT_MIRV`, `ALERT_LAND`, `ALERT_NAVAL`
+  - Internal events: `INTERNAL_EVENT_NETWORK_CONNECTED`, `INTERNAL_EVENT_WS_CONNECTED`, etc.
+- Game phases in `game_state.h` must match ots-shared: `LOBBY`, `SPAWNING`, `IN_GAME`, `WON`, `LOST`, `ENDED`
+- When adding new events:
+  1. Update `protocol-context.md`
+  2. Add to `protocol.h` enum
+  3. Update `protocol.c` string conversions
+  4. Add handlers in appropriate hardware modules
+  5. Update ots-server and ots-userscript
 
 ## WebSocket Behavior (Firmware)
 
-**Important**: The firmware acts as a **WebSocket server**, not a client. The `ots-server` connects TO the firmware.
+**Important**: The firmware acts as a **WebSocket client** connecting TO `ots-server`.
 
-The firmware WebSocket server should:
+The firmware WebSocket client:
 
-- Host a WebSocket server on the ESP32-S3 for the OTS backend to connect to.
-- Accept connections from `ots-server` (which acts as WebSocket client to hardware).
-- Receive from server:
-  - `state` messages with `GameState` payloads (containing game state and hwState).
-  - `event` messages with `GameEvent` payloads.
-- Send to server:
-  - `cmd` messages from hardware modules (button presses, sensor inputs, etc.).
-  - `event` messages for hardware-specific events (errors, status changes).
+- Connects to `ots-server` WebSocket endpoint (configured in `config.h`)
+- Sends handshake on connection: `{"type": "handshake", "clientType": "firmware"}`
+- Receives from server:
+  - `event` messages with `GameEvent` payloads
+  - `cmd` messages for server-initiated commands
+- Sends to server:
+  - `event` messages for button presses and hardware events
+- Auto-reconnects on disconnection
+- Posts internal events (`INTERNAL_EVENT_WS_CONNECTED`, etc.) to event dispatcher
 
 ## Hardware I/O Architecture
 
-### MCP23017 I/O Expander Boards
+### Global I/O Board Configuration
 
-The firmware uses **MCP23017** I2C I/O expander chips to interface with physical buttons and LEDs. This allows the ESP32-S3 to control many more I/O pins than natively available.
+The firmware uses **2 MCP23017** I2C I/O expander chips with global pin direction configuration:
 
-**Key components:**
+- **Board 0 (0x20)**: ALL 16 pins configured as INPUT with pullup (buttons, sensors)
+- **Board 1 (0x21)**: ALL 16 pins configured as OUTPUT (LEDs, relays)
 
-1. **IOExpander class** (`io_expander.h/cpp`)
-   - Low-level driver for MCP23017 chips
-   - Manages multiple boards (up to 8) on the I2C bus
-   - Provides per-pin digital I/O operations
-   - Configurable I2C addresses (default: 0x20, 0x21)
+This global configuration simplifies initialization and matches the physical hardware design.
 
-2. **ModuleIO class** (`module_io.h/cpp`)
-   - High-level abstraction for module-specific I/O
-   - Uses hardware-agnostic pin mappings (PinMap struct)
-   - Batch operations for reading/writing module states
-   - LED state tracking and toggle support
+### Key Components
 
-3. **Pin Mappings** (in `module_io.h`)
-   - Namespaced pin definitions per module (MainModule, NukeModule, AlertModule, etc.)
-   - Each PinMap specifies board index + pin number
-   - Centralized location for hardware wiring configuration
+1. **io_expander.c** - Low-level MCP23017 driver
+   - Native ESP-IDF I2C master driver
+   - Per-pin and per-port operations
+   - Manages 2 boards on I2C bus
 
-### Main Power Module Hardware
+2. **module_io.c** - I/O board initialization and abstraction
+   - Configures entire boards (16 pins at once)
+   - Provides module-specific helper functions
+   - Maps logical functions to physical pins
 
-The Main Power Module provides power distribution and connection status indication:
+3. **Hardware Modules** - Event-driven module implementations
+   - Each module implements `hardware_module_t` interface
+   - Modules handle their own events via event dispatcher
+   - Self-contained: init, update, handle_event, get_status, shutdown
 
-**Physical Components (Not Firmware Controlled):**
-- Global Power Switch: Hardware on/off switch that provides 12V to entire suitcase
-- POWER LED: Directly connected to 12V rail, illuminates when power is ON
+4. **module_manager.c** - Module coordination
+   - Registers up to 8 hardware modules
+   - Initializes all modules in sequence
+   - Routes events to all registered modules
 
-**Outputs (Firmware Controlled):**
-- LINK LED: Board 0, Pin 0 - WebSocket connection status indicator
+### Main Power Module (main_power_module.c)
 
-**Workflow:**
-1. User turns power switch ON → 12V provided to all modules
-2. ESP32 boots and connects to WiFi
-3. Firmware establishes WebSocket connection to game server
-4. LINK LED turns ON when connection is active
-5. LINK LED turns OFF when connection is lost
+**Hardware:**
+- LINK LED: Board 1, Pin 7 - Connection status indicator
 
-### Nuke Module Hardware
+**Event Handling:**
+- `INTERNAL_EVENT_NETWORK_CONNECTED`: Blinks link LED (500ms) - waiting for WebSocket
+- `INTERNAL_EVENT_NETWORK_DISCONNECTED`: Turns off link LED
+- `INTERNAL_EVENT_WS_CONNECTED`: Solid ON - fully connected
+- `INTERNAL_EVENT_WS_DISCONNECTED`: Blinks (500ms) - network OK but no WS
+- `INTERNAL_EVENT_WS_ERROR`: Fast blink (200ms) - error state
 
-The Nuke Module uses the following I/O:
+**LED States:**
+- OFF: No network connection
+- Blinking (500ms): Network connected, waiting for WebSocket
+- Solid ON: Fully connected to game server
+- Fast blink (200ms): Error state
 
-**Inputs (Buttons):**
-- ATOM button: Board 0, Pin 1 (configured with internal pull-up, active-low)
-- HYDRO button: Board 0, Pin 2 (configured with internal pull-up, active-low)
-- MIRV button: Board 0, Pin 3 (configured with internal pull-up, active-low)
+### Nuke Module (nuke_module.c)
 
-**Outputs (LEDs):**
-- ATOM LED: Board 0, Pin 8
-- HYDRO LED: Board 0, Pin 9
-- MIRV LED: Board 0, Pin 10
+**Hardware:**
 
-**Button Configuration:**
-- All button inputs use MCP23017 internal pull-up resistors (100kΩ)
-- Buttons are active-low: pressing button connects pin to GND
-- Firmware automatically configures INPUT_PULLUP mode
-- Debouncing: 50ms polling interval in main loop
+Inputs (Board 0):
+- ATOM button: Pin 1 (active-low with pullup)
+- HYDRO button: Pin 2 (active-low with pullup)
+- MIRV button: Pin 3 (active-low with pullup)
 
-**Workflow:**
-1. Firmware polls button states via `ModuleIO::readNukeButtons()`
-2. On button press, firmware sends `cmd` message to server
-3. Server processes command and sends back `state` update
-4. Firmware updates LED states via `ModuleIO::writeNukeLEDs()`
+Outputs (Board 1):
+- ATOM LED: Pin 8
+- HYDRO LED: Pin 9
+- MIRV LED: Pin 10
 
-### Alert Module Hardware
+**Event Handling:**
+- `GAME_EVENT_NUKE_LAUNCHED`: Blinks atom LED for 10 seconds
+- `GAME_EVENT_HYDRO_LAUNCHED`: Blinks hydro LED for 10 seconds
+- `GAME_EVENT_MIRV_LAUNCHED`: Blinks MIRV LED for 10 seconds
 
-Alert Module LED outputs on Board 1:
-- WARNING LED: Board 1, Pin 0
-- ATOM LED: Board 1, Pin 1
-- HYDRO LED: Board 1, Pin 2
-- MIRV LED: Board 1, Pin 3
-- LAND LED: Board 1, Pin 4
-- NAVAL LED: Board 1, Pin 5
+**Button Flow:**
+1. Button handler scans buttons every 50ms (io_task)
+2. On press, posts `GAME_EVENT_*_LAUNCHED` to event dispatcher
+3. Event sent to WebSocket server
+4. Nuke module receives event and blinks corresponding LED
+
+### Alert Module (alert_module.c)
+
+**Hardware:**
+
+Outputs (Board 1):
+- WARNING LED: Pin 0 (active when any alert is present)
+- ATOM LED: Pin 1
+- HYDRO LED: Pin 2
+- MIRV LED: Pin 3
+- LAND LED: Pin 4
+- NAVAL LED: Pin 5
+
+**Event Handling:**
+- `GAME_EVENT_ALERT_ATOM/HYDRO/MIRV`: Blinks corresponding LED + warning LED (10s)
+- `GAME_EVENT_ALERT_LAND/NAVAL`: Blinks corresponding LED + warning LED (15s)
+- `GAME_EVENT_NUKE_EXPLODED/INTERCEPTED`: Clears all nuke alerts
+- `GAME_EVENT_GAME_START`: Turns on warning LED
+- `GAME_EVENT_GAME_END/WIN/LOOSE`: Turns off all alerts
 
 ## Implementation Notes
 
-- Prefer small, testable modules (e.g., separate WebSocket, protocol, I/O, and game logic).
-- Avoid blocking loops where possible; use `loop()` to drive I/O polling, reconnection, and heartbeat logic.
-- Keep message parsing and construction centralized in `protocol.h/.cpp` so protocol changes are easy to propagate.
-- Pin mappings are defined in `module_io.h` - update this file when wiring changes.
-- MCP23017 addresses are configured in `config.h` - adjust for hardware setup.
-- All button inputs are automatically configured with internal pull-ups (INPUT_PULLUP mode).
-- Button wiring: Connect one side to MCP23017 pin, other side to GND (active-low).
-- WiFi automatically reconnects if connection is lost (checked every 5 seconds).
-- OTA updates are enabled - use PlatformIO or Arduino IDE to upload remotely.
+### Architecture Principles
+- **Modular Design**: Each physical PCB = one software module with standardized interface
+- **Event-Driven**: All module communication via event dispatcher
+- **Separation of Concerns**: Network, protocol, I/O, and modules are independent
+- **FreeRTOS Tasks**: Dedicated tasks for LED control, I/O scanning, event dispatching
+
+### Hardware Configuration
+- **I/O Board 0 (0x20)**: All pins = INPUT with pullup (configured globally)
+- **I/O Board 1 (0x21)**: All pins = OUTPUT (configured globally)
+- **Button Wiring**: Connect to Board 0 pins, other side to GND (active-low)
+- **LED Wiring**: Connect to Board 1 pins with appropriate current limiting
+
+### Event System
+- Game events from protocol (GAME_EVENT_*) are routed to all modules
+- Internal events (INTERNAL_EVENT_*) for system status (network, WebSocket)
+- Modules register handlers via event dispatcher
+- Event queue size: 32 events
+
+### Adding New Modules
+1. Create `module_name.h/c` implementing `hardware_module_t` interface
+2. Define pin mappings in header
+3. Implement init, update, handle_event, get_status, shutdown
+4. Register module in `main.c` via `module_manager_register()`
+5. Add to CMakeLists.txt
+
+### Network & WebSocket
+- WiFi auto-reconnects on disconnect
+- WebSocket auto-reconnects with exponential backoff
+- mDNS hostname: `ots-fw-main.local`
+- Connection events posted to event dispatcher for LED feedback
 
 ## Over-The-Air (OTA) Updates
 
-The firmware supports OTA updates for remote maintenance without physical access to the device.
+ESP-IDF native OTA with HTTP upload and dual-partition support.
 
 ### Configuration
 
-OTA settings are defined in `include/config.h`:
-- **Hostname**: `ots-fw-main` (mDNS name for network discovery)
-- **Password**: `ots2025` (change this for security!)
-- **Port**: 3232 (default Arduino OTA port)
+OTA settings in `include/config.h`:
+- **Hostname**: `ots-fw-main` (mDNS discovery)
+- **Password**: `ots2025` (not fully implemented)
+- **Port**: 3232 (HTTP server)
 
-### Uploading via OTA
+### Partition Layout
 
-**Using PlatformIO:**
+- **Factory**: 2MB (initial firmware)
+- **OTA_0**: 2MB (partition A)
+- **OTA_1**: 2MB (partition B)
+- **Storage**: NVS, OTA data
+
+### Uploading Firmware
+
+**Using curl:**
 ```bash
-# Upload firmware over network
-pio run -t upload --upload-port ots-fw-main.local
-
-# Or use IP address directly
-pio run -t upload --upload-port 192.168.x.x
+# Upload binary to OTA endpoint
+curl -X POST --data-binary @firmware.bin http://ots-fw-main.local:3232/update
 ```
 
-**Using Arduino IDE:**
-1. Tools → Port → Select "ots-fw-main at 192.168.x.x"
-2. Sketch → Upload
-3. Enter password when prompted: `ots2025`
+**Using ESP-IDF:**
+```bash
+idf.py build
+curl -X POST --data-binary @build/ots-fw-main.bin http://192.168.x.x:3232/update
+```
 
 ### OTA Behavior
 
-During OTA update:
-- All LEDs turn off
-- LINK LED blinks to indicate upload progress
-- Serial output shows progress percentage
-- Device automatically reboots after successful update
+- All module LEDs turn off during update
+- LINK LED blinks showing progress (every 5%)
+- Serial logs progress percentage
+- Auto-reboot after successful update
+- Failed updates don't brick device (dual partition safety)
 
-On OTA error:
-- LINK LED rapid blinks (10 times)
-- Error message printed to serial
-- Device continues normal operation
+### See Also
 
-### Security Recommendations
-
-1. **Change the default OTA password** in `config.h`
-2. Only enable OTA on trusted networks
-3. Use strong WiFi encryption (WPA2/WPA3)
-4. Consider adding IP filtering if needed
-
-### Troubleshooting OTA
-
-**Cannot find device:**
-- Ensure device and computer are on same network
-- Check mDNS is working: `ping ots-fw-main.local`
-- Try using IP address instead of hostname
-- Verify WiFi is connected (LINK LED should be ON)
-
-**Authentication failed:**
-- Check OTA_PASSWORD in `config.h` matches upload password
-- Recompile and upload via USB if password was changed
-
-**Upload fails midway:**
-- Check WiFi signal strength
-- Ensure sufficient free heap memory
-- Verify firmware size is within flash limits
+See `OTA_GUIDE.md` for detailed instructions and troubleshooting.
 
 ## When Updating This Project
 
-When making changes that affect the protocol or behavior shared with `ots-server` / `ots-userscript`:
+### Protocol Changes
 
-1. Update `protocol-context.md` at repo root.
-2. Update corresponding implementations in:
-   - `ots-server` (Nuxt server routes and client composables).
-   - `ots-userscript` (userscript WebSocket bridge).
-   - `ots-fw-main` (firmware WebSocket client and protocol structs).
-3. Reflect major changes in this file so Copilot understands the updated expectations.
+1. Update `protocol-context.md` at repo root
+2. Update event types in `include/protocol.h`
+3. Add string conversions in `src/protocol.c`
+4. Update handlers in relevant modules
+5. Update `ots-server` and `ots-userscript` implementations
+6. Test end-to-end event flow
+
+### Adding Hardware Modules
+
+1. Create `module_name.h` with pin definitions
+2. Create `module_name.c` implementing `hardware_module_t`
+3. Add module to `src/CMakeLists.txt`
+4. Register in `main.c` via `module_manager_register()`
+5. Update this context file with module description
+6. Create prompt file in `prompts/` if needed
+
+### Major Changes
+
+- Update `CHANGELOG.md` with version and date
+- Update this context file for architecture changes
+- Update module prompt files if interfaces change
+- Test compilation with `idf.py build`
+- Test OTA update procedure

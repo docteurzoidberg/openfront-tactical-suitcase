@@ -11,38 +11,46 @@ typedef struct {
     uint8_t pin;
 } pin_map_t;
 
-// Main Power Module pins
-#define MAIN_LED_LINK_BOARD 0
-#define MAIN_LED_LINK_PIN   0
+// I/O Board configuration
+// Board 0 (address 0x20): ALL pins = INPUT (buttons, sensors)
+// Board 1 (address 0x21): ALL pins = OUTPUT (LEDs, relays)
+#define IO_BOARD_INPUT   0
+#define IO_BOARD_OUTPUT  1
+
+// Main Power Module pins (OUTPUT board)
+#define MAIN_LED_LINK_BOARD  IO_BOARD_OUTPUT
+#define MAIN_LED_LINK_PIN    7
 
 // Nuke Module pins
-#define NUKE_BTN_ATOM_BOARD  0
-#define NUKE_BTN_ATOM_PIN    1
-#define NUKE_BTN_HYDRO_BOARD 0
-#define NUKE_BTN_HYDRO_PIN   2
-#define NUKE_BTN_MIRV_BOARD  0
-#define NUKE_BTN_MIRV_PIN    3
+// Buttons on INPUT board
+#define NUKE_BTN_ATOM_BOARD   IO_BOARD_INPUT
+#define NUKE_BTN_ATOM_PIN     1
+#define NUKE_BTN_HYDRO_BOARD  IO_BOARD_INPUT
+#define NUKE_BTN_HYDRO_PIN    2
+#define NUKE_BTN_MIRV_BOARD   IO_BOARD_INPUT
+#define NUKE_BTN_MIRV_PIN     3
 
-#define NUKE_LED_ATOM_BOARD  0
-#define NUKE_LED_ATOM_PIN    8
-#define NUKE_LED_HYDRO_BOARD 0
-#define NUKE_LED_HYDRO_PIN   9
-#define NUKE_LED_MIRV_BOARD  0
-#define NUKE_LED_MIRV_PIN    10
+// LEDs on OUTPUT board
+#define NUKE_LED_ATOM_BOARD   IO_BOARD_OUTPUT
+#define NUKE_LED_ATOM_PIN     8
+#define NUKE_LED_HYDRO_BOARD  IO_BOARD_OUTPUT
+#define NUKE_LED_HYDRO_PIN    9
+#define NUKE_LED_MIRV_BOARD   IO_BOARD_OUTPUT
+#define NUKE_LED_MIRV_PIN     10
 
-// Alert Module pins
-#define ALERT_LED_WARNING_BOARD 1
-#define ALERT_LED_WARNING_PIN   0
-#define ALERT_LED_ATOM_BOARD    1
-#define ALERT_LED_ATOM_PIN      1
-#define ALERT_LED_HYDRO_BOARD   1
-#define ALERT_LED_HYDRO_PIN     2
-#define ALERT_LED_MIRV_BOARD    1
-#define ALERT_LED_MIRV_PIN      3
-#define ALERT_LED_LAND_BOARD    1
-#define ALERT_LED_LAND_PIN      4
-#define ALERT_LED_NAVAL_BOARD   1
-#define ALERT_LED_NAVAL_PIN     5
+// Alert Module pins (all LEDs on OUTPUT board)
+#define ALERT_LED_WARNING_BOARD  IO_BOARD_OUTPUT
+#define ALERT_LED_WARNING_PIN    0
+#define ALERT_LED_ATOM_BOARD     IO_BOARD_OUTPUT
+#define ALERT_LED_ATOM_PIN       1
+#define ALERT_LED_HYDRO_BOARD    IO_BOARD_OUTPUT
+#define ALERT_LED_HYDRO_PIN      2
+#define ALERT_LED_MIRV_BOARD     IO_BOARD_OUTPUT
+#define ALERT_LED_MIRV_PIN       3
+#define ALERT_LED_LAND_BOARD     IO_BOARD_OUTPUT
+#define ALERT_LED_LAND_PIN       4
+#define ALERT_LED_NAVAL_BOARD    IO_BOARD_OUTPUT
+#define ALERT_LED_NAVAL_PIN      5
 
 /**
  * @brief Initialize all module I/O pins

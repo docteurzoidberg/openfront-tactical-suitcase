@@ -2,457 +2,120 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/timers.h"
 #include "esp_system.h"
-#include "esp_wifi.h"
-#include "esp_event.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "nvs_flash.h"
-#include "esp_ota_ops.h"
-#include "esp_http_server.h"
-#include "mdns.h"
 
 #include "config.h"
 #include "io_expander.h"
 #include "module_io.h"
 #include "protocol.h"
 #include "ws_client.h"
+#include "ws_protocol.h"
+#include "led_controller.h"
+#include "button_handler.h"
+#include "io_task.h"
+#include "network_manager.h"
+#include "ota_manager.h"
+#include "game_state.h"
+#include "event_dispatcher.h"
+#include "module_manager.h"
+#include "nuke_module.h"
+#include "alert_module.h"
+#include "main_power_module.h"
 
 static const char *TAG = "MAIN";
 
-// OTA state
-static httpd_handle_t ota_server = NULL;
-static bool ota_in_progress = false;
+// Event handlers
+static bool handle_event(const internal_event_t *event);
+static void handle_button_press(uint8_t button_index);
+static void handle_network_event(network_event_type_t event_type, const char *ip_address);
+static void handle_game_state_change(game_phase_t old_phase, game_phase_t new_phase);
+static void handle_ws_connection(bool connected);
 
-// LED blink states (for alerts and nuke buttons)
-static bool nuke_leds_blinking[3] = {false, false, false};
-static bool alert_leds_active[6] = {false, false, false, false, false, false};
-static TimerHandle_t nuke_led_timers[3] = {NULL, NULL, NULL};
-static TimerHandle_t alert_led_timers[6] = {NULL, NULL, NULL, NULL, NULL, NULL};
-
-// Button monitoring
-static void button_monitor_task(void *pvParameters);
-static void nuke_led_blink_timer_callback(TimerHandle_t xTimer);
-static void alert_led_timer_callback(TimerHandle_t xTimer);
-
-// mDNS initialization
-static void mdns_init_service(void) {
-    esp_err_t err = mdns_init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "mDNS init failed: %d", err);
-        return;
-    }
-
-    mdns_hostname_set(OTA_HOSTNAME);
-    mdns_instance_name_set("OTS Firmware Main Controller");
-    
-    mdns_service_add(NULL, "_arduino", "_tcp", OTA_PORT, NULL, 0);
-    mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
-    
-    ESP_LOGI(TAG, "mDNS service started: %s.local", OTA_HOSTNAME);
-}
-
-// OTA HTTP handler
-static esp_err_t ota_post_handler(httpd_req_t *req) {
-    char buf[1024];
-    esp_ota_handle_t ota_handle;
-    const esp_partition_t *update_partition = NULL;
-    esp_err_t err;
-    int remaining = req->content_len;
-    bool image_header_was_checked = false;
-
-    ESP_LOGI(TAG, "Starting OTA update, size: %d bytes", remaining);
-    ota_in_progress = true;
-    
-    // Turn off all module LEDs during OTA
-    for (int i = 0; i < 3; i++) {
-        module_io_set_nuke_led(i, false);
-    }
-    for (int i = 0; i < 6; i++) {
-        module_io_set_alert_led(i, false);
-    }
-
-    update_partition = esp_ota_get_next_update_partition(NULL);
-    if (update_partition == NULL) {
-        ESP_LOGE(TAG, "Failed to find update partition");
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No update partition");
-        ota_in_progress = false;
-        return ESP_FAIL;
-    }
-
-    err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &ota_handle);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_ota_begin failed: %s", esp_err_to_name(err));
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA begin failed");
-        ota_in_progress = false;
-        return ESP_FAIL;
-    }
-
-    int received = 0;
-    int progress = 0;
-    bool led_state = false;
-
-    while (remaining > 0) {
-        int recv_len = httpd_req_recv(req, buf, sizeof(buf) < remaining ? sizeof(buf) : remaining);
-        
-        if (recv_len <= 0) {
-            if (recv_len == HTTPD_SOCK_ERR_TIMEOUT) {
-                continue;
-            }
-            ESP_LOGE(TAG, "HTTP receive failed");
-            esp_ota_abort(ota_handle);
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Receive failed");
-            ota_in_progress = false;
-            return ESP_FAIL;
-        }
-
-        err = esp_ota_write(ota_handle, buf, recv_len);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "esp_ota_write failed: %s", esp_err_to_name(err));
-            esp_ota_abort(ota_handle);
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Write failed");
-            ota_in_progress = false;
-            return ESP_FAIL;
-        }
-
-        received += recv_len;
-        remaining -= recv_len;
-        
-        // Show progress with LINK LED blinking
-        int new_progress = (received * 100) / req->content_len;
-        if (new_progress != progress && new_progress % 5 == 0) {
-            progress = new_progress;
-            led_state = !led_state;
-            module_io_set_link_led(led_state);
-            ESP_LOGI(TAG, "OTA Progress: %d%%", progress);
-        }
-    }
-
-    err = esp_ota_end(ota_handle);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_ota_end failed: %s", esp_err_to_name(err));
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA end failed");
-        ota_in_progress = false;
-        return ESP_FAIL;
-    }
-
-    err = esp_ota_set_boot_partition(update_partition);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_ota_set_boot_partition failed: %s", esp_err_to_name(err));
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Set boot partition failed");
-        ota_in_progress = false;
-        return ESP_FAIL;
-    }
-
-    ESP_LOGI(TAG, "OTA update successful! Rebooting...");
-    httpd_resp_sendstr(req, "Update successful, rebooting...");
-    
-    ota_in_progress = false;
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    esp_restart();
-    
-    return ESP_OK;
-}
-
-// Basic auth check for OTA
-static bool check_ota_auth(httpd_req_t *req) {
-    char *buf = NULL;
-    size_t buf_len = 0;
-    
-    buf_len = httpd_req_get_hdr_value_len(req, "Authorization") + 1;
-    if (buf_len > 1) {
-        buf = malloc(buf_len);
-        if (httpd_req_get_hdr_value_str(req, "Authorization", buf, buf_len) == ESP_OK) {
-            // Check for "Basic " prefix
-            if (strncmp(buf, "Basic ", 6) == 0) {
-                // Simple password check - in production use proper base64 decode
-                // For now, just check if Authorization header exists
-                // Real implementation would decode base64 and verify credentials
-                free(buf);
-                return true;  // TODO: Implement proper auth
-            }
-        }
-        free(buf);
-    }
-    
-    // For compatibility with Arduino OTA tools, allow without auth for now
-    // In production, enforce authentication
-    return true;
-}
-
-// OTA handler wrapper with auth
-static esp_err_t ota_handler(httpd_req_t *req) {
-    if (!check_ota_auth(req)) {
-        httpd_resp_set_status(req, "401 Unauthorized");
-        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"OTA Update\"");
-        httpd_resp_send(req, NULL, 0);
-        return ESP_OK;
-    }
-    return ota_post_handler(req);
-}
-
-// Start OTA HTTP server
-static void start_ota_server(void) {
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.server_port = OTA_PORT;
-    config.ctrl_port = OTA_PORT + 1;
-    
-    httpd_uri_t ota_uri = {
-        .uri = "/update",
-        .method = HTTP_POST,
-        .handler = ota_handler,
-        .user_ctx = NULL
-    };
-
-    if (httpd_start(&ota_server, &config) == ESP_OK) {
-        httpd_register_uri_handler(ota_server, &ota_uri);
-        ESP_LOGI(TAG, "OTA server started on port %d", OTA_PORT);
-    } else {
-        ESP_LOGE(TAG, "Failed to start OTA server");
-    }
-}
-
-// WiFi event handler
-static void wifi_event_handler(void *arg, esp_event_base_t event_base,
-                               int32_t event_id, void *event_data) {
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        ESP_LOGI(TAG, "WiFi disconnected, reconnecting...");
-        module_io_set_link_led(false);
-        esp_wifi_connect();
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-        ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
-        module_io_set_link_led(true);
-        
-        // Initialize mDNS
-        mdns_init_service();
+// Network event handler
+static void handle_network_event(network_event_type_t event_type, const char *ip_address) {
+    if (event_type == NETWORK_EVENT_GOT_IP) {
+        ESP_LOGI(TAG, "Network connected with IP: %s", ip_address);
         
         // Start OTA server
-        start_ota_server();
+        if (ota_manager_start() != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to start OTA server");
+        }
         
         // Start WebSocket client
         ws_client_start();
+    } else if (event_type == NETWORK_EVENT_DISCONNECTED) {
+        ESP_LOGI(TAG, "Network disconnected");
     }
 }
 
-// Initialize WiFi
-static void wifi_init(void) {
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_sta();
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, 
-                                               &wifi_event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, 
-                                               &wifi_event_handler, NULL));
-
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = WIFI_SSID,
-            .password = WIFI_PASSWORD,
-        },
-    };
-
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
-
-    ESP_LOGI(TAG, "WiFi initialized, connecting to %s", WIFI_SSID);
-}
-
-// Callback handlers for WebSocket events
-static void handle_nuke_launched(game_event_type_t event_type) {
-    ESP_LOGI(TAG, "Nuke launched: %s", event_type_to_string(event_type));
-    
-    uint8_t led_index = 0;
-    if (event_type == GAME_EVENT_NUKE_LAUNCHED) led_index = 0;
-    else if (event_type == GAME_EVENT_HYDRO_LAUNCHED) led_index = 1;
-    else if (event_type == GAME_EVENT_MIRV_LAUNCHED) led_index = 2;
-    
-    // Start blinking the nuke LED
-    nuke_leds_blinking[led_index] = true;
-    
-    // Stop existing timer if any
-    if (nuke_led_timers[led_index]) {
-        xTimerStop(nuke_led_timers[led_index], 0);
-        xTimerDelete(nuke_led_timers[led_index], 0);
-    }
-    
-    // Create timer to stop blinking after 10 seconds
-    nuke_led_timers[led_index] = xTimerCreate("nuke_led", 
-                                              pdMS_TO_TICKS(10000), 
-                                              pdFALSE, 
-                                              (void *)led_index, 
-                                              nuke_led_blink_timer_callback);
-    xTimerStart(nuke_led_timers[led_index], 0);
-}
-
-static void handle_alert(game_event_type_t event_type) {
-    ESP_LOGI(TAG, "Alert: %s", event_type_to_string(event_type));
-    
-    uint8_t led_index = 0;
-    uint32_t duration_ms = 10000;  // Default 10 seconds for nuke alerts
-    
-    switch (event_type) {
-        case GAME_EVENT_ALERT_ATOM:
-            led_index = 1;  // LED index 1 (atom)
-            break;
-        case GAME_EVENT_ALERT_HYDRO:
-            led_index = 2;  // LED index 2 (hydro)
-            break;
-        case GAME_EVENT_ALERT_MIRV:
-            led_index = 3;  // LED index 3 (mirv)
-            break;
-        case GAME_EVENT_ALERT_LAND:
-            led_index = 4;  // LED index 4 (land invasion)
-            duration_ms = 15000;  // 15 seconds for invasions
-            break;
-        case GAME_EVENT_ALERT_NAVAL:
-            led_index = 5;  // LED index 5 (naval invasion)
-            duration_ms = 15000;
-            break;
-        default:
-            return;
-    }
-    
-    // Turn on alert LED
-    alert_leds_active[led_index] = true;
-    module_io_set_alert_led(led_index, true);
-    
-    // Also turn on warning LED
-    alert_leds_active[0] = true;
-    module_io_set_alert_led(0, true);
-    
-    // Stop existing timer if any
-    if (alert_led_timers[led_index]) {
-        xTimerStop(alert_led_timers[led_index], 0);
-        xTimerDelete(alert_led_timers[led_index], 0);
-    }
-    
-    // Create timer to turn off after duration
-    alert_led_timers[led_index] = xTimerCreate("alert_led",
-                                               pdMS_TO_TICKS(duration_ms),
-                                               pdFALSE,
-                                               (void *)led_index,
-                                               alert_led_timer_callback);
-    xTimerStart(alert_led_timers[led_index], 0);
-}
-
-// Game state tracking
-static bool in_game = false;
-
-static void handle_game_state(game_event_type_t event_type) {
-    ESP_LOGI(TAG, "Game state: %s", event_type_to_string(event_type));
-    
-    if (event_type == GAME_EVENT_GAME_START) {
-        // Game started - reset all state
-        in_game = true;
-        
-        // Turn off all LEDs at game start
-        for (int i = 0; i < 3; i++) {
-            nuke_leds_blinking[i] = false;
-            module_io_set_nuke_led(i, false);
-        }
-        for (int i = 0; i < 6; i++) {
-            alert_leds_active[i] = false;
-            module_io_set_alert_led(i, false);
-        }
-        
-        ESP_LOGI(TAG, "Game started - state reset");
-    } else if (event_type == GAME_EVENT_GAME_END) {
-        // Game ended
-        in_game = false;
-        ESP_LOGI(TAG, "Game ended");
+// WebSocket connection handler
+static void handle_ws_connection(bool connected) {
+    if (connected) {
+        ESP_LOGI(TAG, "WebSocket connected");
+    } else {
+        ESP_LOGI(TAG, "WebSocket disconnected");
     }
 }
 
-// Timer callbacks
-static void nuke_led_blink_timer_callback(TimerHandle_t xTimer) {
-    uint8_t led_index = (uint8_t)(uint32_t)pvTimerGetTimerID(xTimer);
-    nuke_leds_blinking[led_index] = false;
-    module_io_set_nuke_led(led_index, false);
+// Game state change handler
+static void handle_game_state_change(game_phase_t old_phase, game_phase_t new_phase) {
+    ESP_LOGI(TAG, "Game state changed: %d -> %d", old_phase, new_phase);
 }
 
-static void alert_led_timer_callback(TimerHandle_t xTimer) {
-    uint8_t led_index = (uint8_t)(uint32_t)pvTimerGetTimerID(xTimer);
-    alert_leds_active[led_index] = false;
-    module_io_set_alert_led(led_index, false);
+// Centralized event handler (now just delegates to game state)
+static bool handle_event(const internal_event_t *event) {
+    ESP_LOGD(TAG, "Handling event: type=%s, source=%d", 
+             event_type_to_string(event->type), event->source);
     
-    // Check if any alerts are still active, if not turn off warning LED
-    bool any_active = false;
-    for (int i = 1; i < 6; i++) {
-        if (alert_leds_active[i]) {
-            any_active = true;
-            break;
-        }
+    // Handle game state events
+    if (event->type == GAME_EVENT_GAME_START ||
+        event->type == GAME_EVENT_GAME_END ||
+        event->type == GAME_EVENT_WIN ||
+        event->type == GAME_EVENT_LOOSE) {
+        game_state_update(event->type);
+        return true;
     }
-    if (!any_active) {
-        alert_leds_active[0] = false;
-        module_io_set_alert_led(0, false);
-    }
+    
+    return false;
 }
 
-// Button monitoring task
-static void button_monitor_task(void *pvParameters) {
-    ESP_LOGI(TAG, "Button monitor task started");
-    
-    bool last_button_states[3] = {false, false, false};
-    
-    while (1) {
-        // Check each button
-        for (int i = 0; i < 3; i++) {
-            bool pressed = false;
-            if (module_io_read_nuke_button(i, &pressed)) {
-                if (pressed && !last_button_states[i]) {
-                    // Button just pressed
-                    ESP_LOGI(TAG, "Button %d pressed", i);
-                    
-                    // Send nuke event
-                    game_event_t event = {0};
-                    event.timestamp = esp_timer_get_time() / 1000;  // Convert to ms
-                    
-                    if (i == 0) {
-                        event.type = GAME_EVENT_NUKE_LAUNCHED;
-                        strncpy(event.message, "Nuke sent", sizeof(event.message) - 1);
-                        strncpy(event.data, "{\"nukeType\":\"atom\"}", sizeof(event.data) - 1);
-                    } else if (i == 1) {
-                        event.type = GAME_EVENT_HYDRO_LAUNCHED;
-                        strncpy(event.message, "Nuke sent", sizeof(event.message) - 1);
-                        strncpy(event.data, "{\"nukeType\":\"hydro\"}", sizeof(event.data) - 1);
-                    } else if (i == 2) {
-                        event.type = GAME_EVENT_MIRV_LAUNCHED;
-                        strncpy(event.message, "Nuke sent", sizeof(event.message) - 1);
-                        strncpy(event.data, "{\"nukeType\":\"mirv\"}", sizeof(event.data) - 1);
-                    }
-                    
-                    ws_client_send_event(&event);
-                }
-                last_button_states[i] = pressed;
-            }
-        }
-        
-        // Blink nuke LEDs if they're in blinking state
-        for (int i = 0; i < 3; i++) {
-            if (nuke_leds_blinking[i]) {
-                static uint32_t last_blink_time = 0;
-                uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-                if (now - last_blink_time > LED_BLINK_INTERVAL_MS) {
-                    static bool blink_state = false;
-                    blink_state = !blink_state;
-                    module_io_set_nuke_led(i, blink_state);
-                    last_blink_time = now;
-                }
-            }
-        }
-        
-        vTaskDelay(pdMS_TO_TICKS(50));  // 50ms scan rate
+// Button mapping table
+typedef struct {
+    game_event_type_t event_type;
+    const char *nuke_type;
+} button_mapping_t;
+
+static const button_mapping_t button_map[] = {
+    {GAME_EVENT_NUKE_LAUNCHED, "atom"},
+    {GAME_EVENT_HYDRO_LAUNCHED, "hydro"},
+    {GAME_EVENT_MIRV_LAUNCHED, "mirv"}
+};
+
+// Button press handler
+static void handle_button_press(uint8_t button_index) {
+    if (button_index >= sizeof(button_map) / sizeof(button_map[0])) {
+        ESP_LOGW(TAG, "Invalid button index: %d", button_index);
+        return;
     }
+    
+    ESP_LOGI(TAG, "Button %d pressed (%s)", button_index, button_map[button_index].nuke_type);
+    
+    // Create and post button event using lookup table
+    game_event_t game_event = {0};
+    game_event.timestamp = esp_timer_get_time() / 1000;
+    game_event.type = button_map[button_index].event_type;
+    strncpy(game_event.message, "Nuke sent", sizeof(game_event.message) - 1);
+    snprintf(game_event.data, sizeof(game_event.data), "{\"nukeType\":\"%s\"}", 
+             button_map[button_index].nuke_type);
+    
+    // Post to event dispatcher (for local handling)
+    event_dispatcher_post_game_event(&game_event, EVENT_SOURCE_BUTTON);
+    
+    // Send to WebSocket server
+    ws_client_send_event(&game_event);
 }
 
 void app_main(void) {
@@ -479,18 +142,90 @@ void app_main(void) {
         return;
     }
     
-    // Initialize WiFi
-    wifi_init();
+    // Initialize event dispatcher
+    if (event_dispatcher_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize event dispatcher!");
+        return;
+    }
+    
+    // Register event handler (handles game state events)
+    event_dispatcher_register(GAME_EVENT_INVALID, handle_event);
+    
+    // Initialize module manager
+    if (module_manager_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize module manager!");
+        return;
+    }
+    
+    // Register hardware modules
+    ESP_LOGI(TAG, "Registering hardware modules...");
+    module_manager_register(&nuke_module);
+    module_manager_register(&alert_module);
+    module_manager_register(&main_power_module);
+    
+    // Initialize all hardware modules
+    if (module_manager_init_all() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize hardware modules!");
+        return;
+    }
+    
+    // Initialize game state manager
+    if (game_state_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize game state!");
+        return;
+    }
+    game_state_set_callback(handle_game_state_change);
+    
+    // Initialize LED controller
+    if (led_controller_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize LED controller!");
+        return;
+    }
+    
+    // Initialize button handler
+    if (button_handler_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize button handler!");
+        return;
+    }
+    button_handler_set_callback(handle_button_press);
+    
+    // Initialize network manager
+    if (network_manager_init(WIFI_SSID, WIFI_PASSWORD, OTA_HOSTNAME) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize network manager!");
+        return;
+    }
+    network_manager_set_event_callback(handle_network_event);
+    
+    // Initialize OTA manager
+    if (ota_manager_init(OTA_PORT, OTA_HOSTNAME) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize OTA manager!");
+        return;
+    }
+    
+    // Initialize WebSocket protocol
+    if (ws_protocol_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WebSocket protocol!");
+        return;
+    }
     
     // Initialize WebSocket client
-    ws_client_init(WS_SERVER_URL);
-    ws_client_set_nuke_callback(handle_nuke_launched);
-    ws_client_set_alert_callback(handle_alert);
-    ws_client_set_game_state_callback(handle_game_state);
+    if (ws_client_init(WS_SERVER_URL) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WebSocket client!");
+        return;
+    }
+    ws_client_set_connection_callback(handle_ws_connection);
     
-    // Create button monitoring task
-    xTaskCreate(button_monitor_task, "button_mon", 4096, NULL, 
-                TASK_PRIORITY_BUTTON_MONITOR, NULL);
+    // Start network services
+    if (network_manager_start() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start network!");
+        return;
+    }
+    
+    // Start dedicated I/O task
+    if (io_task_start() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start I/O task!");
+        return;
+    }
     
     ESP_LOGI(TAG, "OTS Firmware initialized successfully");
 }

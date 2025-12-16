@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - 2025-12-16 (Phase 4: Architecture Refactoring & Code Quality)
+- **Refactored firmware for cleaner module separation and protocol alignment**
+  - Created hardware module abstraction layer mirroring physical PCB modules
+  - Implemented module manager for centralized hardware module coordination
+  - Created dedicated modules: nuke_module, alert_module, main_power_module
+  - Each hardware module implements standardized interface (init, update, handle_event, get_status, shutdown)
+
+- **Fixed missing and consolidated event types**
+  - Added missing event types: `GAME_EVENT_NUKE_EXPLODED`, `GAME_EVENT_NUKE_INTERCEPTED`
+  - Added internal-only events: `INTERNAL_EVENT_NETWORK_CONNECTED`, `INTERNAL_EVENT_NETWORK_DISCONNECTED`, `INTERNAL_EVENT_WS_CONNECTED`, `INTERNAL_EVENT_WS_DISCONNECTED`, `INTERNAL_EVENT_WS_ERROR`
+  - Fixed alert_module to use correct `GAME_EVENT_ALERT_*` events (was using non-existent `*_INBOUND` events)
+  - Consolidated `game_phase_t` enum to single source of truth in game_state.h
+  - Updated protocol.c with string conversions for all event types
+
+- **Simplified event structures**
+  - Unified `internal_event_t` field sizes to match `game_event_t` (128 for message, 256 for data)
+  - Removed confusion between game events and internal events
+  - Alert module now properly handles game lifecycle events
+
+- **Reduced code duplication**
+  - Created button mapping lookup table in main.c (eliminated repetitive if/else chains)
+  - Button handler now uses `button_map[]` array for maintainability
+  - Reduced `handle_button_press()` from 20 lines to 15 lines
+
+- **Cleaned up unused code**
+  - Removed unused `hw_state_t`, `game_state_t`, and related module state structures from protocol.h
+  - Removed 200+ bytes of unused struct definitions
+  - Kept only essential `game_event_t` structure
+
+- **Improved event routing**
+  - network_manager now posts `INTERNAL_EVENT_NETWORK_CONNECTED/DISCONNECTED` to event dispatcher
+  - ws_client now posts `INTERNAL_EVENT_WS_CONNECTED/DISCONNECTED/ERROR` to event dispatcher
+  - main_power_module receives these events and controls link LED accordingly
+  - Alert module properly triggers warning LED on any alert event
+
+- **Global I/O board configuration**
+  - Board 0 (0x20): ALL 16 pins configured as INPUT with pullup (buttons, sensors)
+  - Board 1 (0x21): ALL 16 pins configured as OUTPUT (LEDs, relays)
+  - Simplified module_io.c initialization to configure entire boards globally
+
+### Technical Details - Phase 4
+- **Module Architecture**: Each physical PCB = one software module with standardized interface
+- **Module Manager**: Supports up to 8 hardware modules with registration and coordination
+- **Event Flow**: Button → Event Dispatcher → Hardware Modules → LED Controller
+- **Protocol Alignment**: Event types now match protocol-context.md specification
+- **Code Quality**: No compilation errors, cleaner architecture, better maintainability
+
 ### Added - 2025-12-15 (Troops Module)
 - **Created Troops Module firmware implementation prompt**
   - Added `prompts/TROOPS_MODULE_PROMPT.md` with complete ESP-IDF implementation guide

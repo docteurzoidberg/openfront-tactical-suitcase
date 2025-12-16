@@ -34,7 +34,11 @@
           class="inline-flex h-2 w-2 rounded-full"
           :class="{
             'bg-emerald-400': gameStatus === 'IN_GAME',
-            'bg-slate-500': gameStatus === 'WAITING'
+            'bg-amber-400': gameStatus === 'SPAWNING',
+            'bg-slate-500': gameStatus === 'LOBBY',
+            'bg-emerald-500': gameStatus === 'WON',
+            'bg-rose-500': gameStatus === 'LOST',
+            'bg-slate-600': gameStatus === 'UNKNOWN'
           }"
         />
         <span class="uppercase tracking-wide text-xs text-slate-400">GAME: {{ gameStatus }}</span>

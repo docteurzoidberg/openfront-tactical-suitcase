@@ -1,6 +1,6 @@
 import { computed, ref, watchEffect } from 'vue'
 import { useWebSocket } from '@vueuse/core'
-import type { GameEvent, IncomingMessage, OutgoingMessage, NukeType, NukeSentEventData, TroopsData } from '../../../ots-shared/src/game'
+import type { GameEvent, IncomingMessage, OutgoingMessage, NukeType, NukeSentEventData, TroopsData, GamePhase } from '../../../ots-shared/src/game'
 
 const WS_URL =
   typeof window !== 'undefined'
@@ -45,8 +45,8 @@ const alertTimers = new Map<string, NodeJS.Timeout>()
 // Troops state
 const troops = ref<TroopsData | null>(null)
 
-// Game state
-const inGame = ref<boolean>(false)
+// Game phase tracking - null means userscript not connected
+const gamePhase = ref<GamePhase | null>(null)
 
 export function useGameSocket() {
   const { status, data, send, open, close } = useWebSocket(WS_URL, {
@@ -92,8 +92,15 @@ export function useGameSocket() {
           if (message === 'userscript-disconnected') {
             lastUserscriptHeartbeat.value = null
             lastUserscriptHeartbeatId.value++
+            gamePhase.value = null // Reset to unknown when userscript disconnects
           }
-          // Handle userscript connect or other INFO messages as heartbeat
+          // Handle userscript connect - initialize to lobby
+          else if (message === 'userscript-connected') {
+            lastUserscriptHeartbeat.value = Date.now()
+            lastUserscriptHeartbeatId.value++
+            gamePhase.value = 'lobby' // Default to lobby when userscript connects
+          }
+          // Handle other INFO messages as heartbeat
           else {
             lastUserscriptHeartbeat.value = Date.now()
             lastUserscriptHeartbeatId.value++
@@ -102,7 +109,7 @@ export function useGameSocket() {
 
         // Handle game state events
         if (msg.payload.type === 'GAME_START') {
-          inGame.value = true
+          gamePhase.value = 'in-game'
           // Clear all alerts and nukes on game start
           Object.keys(activeAlerts.value).forEach(key => {
             activeAlerts.value[key as keyof typeof activeAlerts.value] = false
@@ -116,7 +123,11 @@ export function useGameSocket() {
           alertTimers.forEach(timer => clearTimeout(timer))
           alertTimers.clear()
         } else if (msg.payload.type === 'GAME_END') {
-          inGame.value = false
+          gamePhase.value = 'lobby'
+        } else if (msg.payload.type === 'WIN') {
+          gamePhase.value = 'game-won'
+        } else if (msg.payload.type === 'LOOSE') {
+          gamePhase.value = 'game-lost'
         }
 
         // Handle alert events
@@ -200,8 +211,29 @@ export function useGameSocket() {
   })
 
   const gameStatus = computed(() => {
-    return inGame.value ? 'IN_GAME' : 'WAITING'
+    // Return UNKNOWN if userscript not connected
+    if (userscriptStatus.value === 'UNKNOWN' || userscriptStatus.value === 'OFFLINE' || gamePhase.value === null) {
+      return 'UNKNOWN'
+    }
+
+    // Map phase to display status
+    switch (gamePhase.value) {
+      case 'lobby':
+        return 'LOBBY'
+      case 'spawning':
+        return 'SPAWNING'
+      case 'in-game':
+        return 'IN_GAME'
+      case 'game-won':
+        return 'WON'
+      case 'game-lost':
+        return 'LOST'
+      default:
+        return 'UNKNOWN'
+    }
   })
+
+  const isInGame = computed(() => gamePhase.value === 'in-game')
 
   const userscriptHeartbeatId = computed(() => lastUserscriptHeartbeatId.value)
 
@@ -237,6 +269,8 @@ export function useGameSocket() {
     uiStatus,
     userscriptStatus,
     gameStatus,
+    gamePhase,
+    isInGame,
     userscriptHeartbeatId,
     events,
     activeNukes,

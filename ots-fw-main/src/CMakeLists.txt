@@ -5,6 +5,18 @@ idf_component_register(
         "module_io.c"
         "protocol.c"
         "ws_client.c"
+        "ws_protocol.c"
+        "led_controller.c"
+        "button_handler.c"
+        "io_task.c"
+        "game_state.c"
+        "network_manager.c"
+        "ota_manager.c"
+        "event_dispatcher.c"
+        "module_manager.c"
+        "nuke_module.c"
+        "alert_module.c"
+        "main_power_module.c"
     INCLUDE_DIRS 
         "../include"
     REQUIRES 

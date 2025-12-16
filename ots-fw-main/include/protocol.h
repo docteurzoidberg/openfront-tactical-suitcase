@@ -14,49 +14,24 @@ typedef enum {
     GAME_EVENT_NUKE_LAUNCHED,
     GAME_EVENT_HYDRO_LAUNCHED,
     GAME_EVENT_MIRV_LAUNCHED,
+    GAME_EVENT_NUKE_EXPLODED,
+    GAME_EVENT_NUKE_INTERCEPTED,
     GAME_EVENT_ALERT_ATOM,
     GAME_EVENT_ALERT_HYDRO,
     GAME_EVENT_ALERT_MIRV,
     GAME_EVENT_ALERT_LAND,
     GAME_EVENT_ALERT_NAVAL,
     GAME_EVENT_HARDWARE_TEST,
+    // Internal-only events (not in protocol)
+    INTERNAL_EVENT_NETWORK_CONNECTED,
+    INTERNAL_EVENT_NETWORK_DISCONNECTED,
+    INTERNAL_EVENT_WS_CONNECTED,
+    INTERNAL_EVENT_WS_DISCONNECTED,
+    INTERNAL_EVENT_WS_ERROR,
     GAME_EVENT_INVALID
 } game_event_type_t;
 
-// Module states
-typedef struct {
-    bool link;
-} module_general_state_t;
-
-typedef struct {
-    bool warning;
-    bool atom;
-    bool hydro;
-    bool mirv;
-    bool land;
-    bool naval;
-} module_alert_state_t;
-
-typedef struct {
-    bool nuke_launched;
-    bool hydro_launched;
-    bool mirv_launched;
-} module_nuke_state_t;
-
-typedef struct {
-    module_general_state_t general;
-    module_alert_state_t alert;
-    module_nuke_state_t nuke;
-} hw_state_t;
-
-typedef struct {
-    uint64_t timestamp;
-    char map_name[64];
-    char mode[32];
-    uint32_t player_count;
-    hw_state_t hw_state;
-} game_state_t;
-
+// Game event structure
 typedef struct {
     game_event_type_t type;
     uint64_t timestamp;

@@ -75,6 +75,9 @@ export type GameEvent = {
   data?: unknown
 }
 
+// Game phase tracking
+export type GamePhase = 'lobby' | 'spawning' | 'in-game' | 'game-won' | 'game-lost'
+
 // Nuke types for hardware module
 export type NukeType = 'atom' | 'hydro' | 'mirv'
 

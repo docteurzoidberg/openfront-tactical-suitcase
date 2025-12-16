@@ -11,12 +11,19 @@ const char* event_type_to_string(game_event_type_t type) {
         case GAME_EVENT_NUKE_LAUNCHED: return "NUKE_LAUNCHED";
         case GAME_EVENT_HYDRO_LAUNCHED: return "HYDRO_LAUNCHED";
         case GAME_EVENT_MIRV_LAUNCHED: return "MIRV_LAUNCHED";
+        case GAME_EVENT_NUKE_EXPLODED: return "NUKE_EXPLODED";
+        case GAME_EVENT_NUKE_INTERCEPTED: return "NUKE_INTERCEPTED";
         case GAME_EVENT_ALERT_ATOM: return "ALERT_ATOM";
         case GAME_EVENT_ALERT_HYDRO: return "ALERT_HYDRO";
         case GAME_EVENT_ALERT_MIRV: return "ALERT_MIRV";
         case GAME_EVENT_ALERT_LAND: return "ALERT_LAND";
         case GAME_EVENT_ALERT_NAVAL: return "ALERT_NAVAL";
         case GAME_EVENT_HARDWARE_TEST: return "HARDWARE_TEST";
+        case INTERNAL_EVENT_NETWORK_CONNECTED: return "INTERNAL:NET_CONNECTED";
+        case INTERNAL_EVENT_NETWORK_DISCONNECTED: return "INTERNAL:NET_DISCONNECTED";
+        case INTERNAL_EVENT_WS_CONNECTED: return "INTERNAL:WS_CONNECTED";
+        case INTERNAL_EVENT_WS_DISCONNECTED: return "INTERNAL:WS_DISCONNECTED";
+        case INTERNAL_EVENT_WS_ERROR: return "INTERNAL:WS_ERROR";
         default: return "INVALID";
     }
 }
@@ -38,6 +45,8 @@ game_event_type_t string_to_event_type(const char *str) {
     if (strcmp(str, "ALERT_LAND") == 0) return GAME_EVENT_ALERT_LAND;
     if (strcmp(str, "ALERT_NAVAL") == 0) return GAME_EVENT_ALERT_NAVAL;
     if (strcmp(str, "HARDWARE_TEST") == 0) return GAME_EVENT_HARDWARE_TEST;
+    if (strcmp(str, "NUKE_EXPLODED") == 0) return GAME_EVENT_NUKE_EXPLODED;
+    if (strcmp(str, "NUKE_INTERCEPTED") == 0) return GAME_EVENT_NUKE_INTERCEPTED;
     
     // Handle nuke type shortcuts (for send-nuke command)
     if (strcmp(str, "atom") == 0) return GAME_EVENT_NUKE_LAUNCHED;

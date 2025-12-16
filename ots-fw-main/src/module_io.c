@@ -10,49 +10,32 @@ static uint32_t button_press_times[3] = {0, 0, 0};
 esp_err_t module_io_init(void) {
     ESP_LOGI(TAG, "Initializing module I/O...");
     
-    // Configure nuke button inputs
-    if (!io_expander_set_pin_mode(NUKE_BTN_ATOM_BOARD, NUKE_BTN_ATOM_PIN, IO_MODE_INPUT_PULLUP)) {
-        ESP_LOGE(TAG, "Failed to configure atom button");
-        return ESP_FAIL;
-    }
-    if (!io_expander_set_pin_mode(NUKE_BTN_HYDRO_BOARD, NUKE_BTN_HYDRO_PIN, IO_MODE_INPUT_PULLUP)) {
-        ESP_LOGE(TAG, "Failed to configure hydro button");
-        return ESP_FAIL;
-    }
-    if (!io_expander_set_pin_mode(NUKE_BTN_MIRV_BOARD, NUKE_BTN_MIRV_PIN, IO_MODE_INPUT_PULLUP)) {
-        ESP_LOGE(TAG, "Failed to configure mirv button");
-        return ESP_FAIL;
+    // Configure entire boards (global setup)
+    // Board 0 (0x20): ALL pins = INPUT with pullup (buttons, sensors)
+    // Board 1 (0x21): ALL pins = OUTPUT (LEDs, relays)
+    
+    ESP_LOGI(TAG, "Configuring Board %d (0x20) - ALL INPUT with pullup", IO_BOARD_INPUT);
+    for (int pin = 0; pin < 16; pin++) {
+        if (!io_expander_set_pin_mode(IO_BOARD_INPUT, pin, IO_MODE_INPUT_PULLUP)) {
+            ESP_LOGE(TAG, "Failed to configure Board %d pin %d as input", IO_BOARD_INPUT, pin);
+            return ESP_FAIL;
+        }
     }
     
-    // Configure nuke LED outputs
-    io_expander_set_pin_mode(NUKE_LED_ATOM_BOARD, NUKE_LED_ATOM_PIN, IO_MODE_OUTPUT);
-    io_expander_set_pin_mode(NUKE_LED_HYDRO_BOARD, NUKE_LED_HYDRO_PIN, IO_MODE_OUTPUT);
-    io_expander_set_pin_mode(NUKE_LED_MIRV_BOARD, NUKE_LED_MIRV_PIN, IO_MODE_OUTPUT);
+    ESP_LOGI(TAG, "Configuring Board %d (0x21) - ALL OUTPUT", IO_BOARD_OUTPUT);
+    for (int pin = 0; pin < 16; pin++) {
+        if (!io_expander_set_pin_mode(IO_BOARD_OUTPUT, pin, IO_MODE_OUTPUT)) {
+            ESP_LOGE(TAG, "Failed to configure Board %d pin %d as output", IO_BOARD_OUTPUT, pin);
+            return ESP_FAIL;
+        }
+    }
     
-    // Configure alert LED outputs
-    io_expander_set_pin_mode(ALERT_LED_WARNING_BOARD, ALERT_LED_WARNING_PIN, IO_MODE_OUTPUT);
-    io_expander_set_pin_mode(ALERT_LED_ATOM_BOARD, ALERT_LED_ATOM_PIN, IO_MODE_OUTPUT);
-    io_expander_set_pin_mode(ALERT_LED_HYDRO_BOARD, ALERT_LED_HYDRO_PIN, IO_MODE_OUTPUT);
-    io_expander_set_pin_mode(ALERT_LED_MIRV_BOARD, ALERT_LED_MIRV_PIN, IO_MODE_OUTPUT);
-    io_expander_set_pin_mode(ALERT_LED_LAND_BOARD, ALERT_LED_LAND_PIN, IO_MODE_OUTPUT);
-    io_expander_set_pin_mode(ALERT_LED_NAVAL_BOARD, ALERT_LED_NAVAL_PIN, IO_MODE_OUTPUT);
+    // Turn off all LEDs initially (entire OUTPUT board)
+    for (int pin = 0; pin < 16; pin++) {
+        io_expander_digital_write(IO_BOARD_OUTPUT, pin, 0);
+    }
     
-    // Configure main power link LED
-    io_expander_set_pin_mode(MAIN_LED_LINK_BOARD, MAIN_LED_LINK_PIN, IO_MODE_OUTPUT);
-    
-    // Turn off all LEDs initially
-    module_io_set_nuke_led(0, false);
-    module_io_set_nuke_led(1, false);
-    module_io_set_nuke_led(2, false);
-    module_io_set_alert_led(0, false);
-    module_io_set_alert_led(1, false);
-    module_io_set_alert_led(2, false);
-    module_io_set_alert_led(3, false);
-    module_io_set_alert_led(4, false);
-    module_io_set_alert_led(5, false);
-    module_io_set_link_led(false);
-    
-    ESP_LOGI(TAG, "Module I/O initialized");
+    ESP_LOGI(TAG, "Module I/O initialized (Board 0=INPUT, Board 1=OUTPUT)");
     return ESP_OK;
 }
 
