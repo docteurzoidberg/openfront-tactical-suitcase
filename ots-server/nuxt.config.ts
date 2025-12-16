@@ -9,5 +9,10 @@ export default defineNuxtConfig({
   },
   css: ['~/assets/css/main.css'],
   ssr: false,
-  modules: ['@nuxt/eslint', '@nuxt/ui', '@nuxt/fonts']
+  modules: ['@nuxt/eslint', '@nuxt/ui', '@nuxt/fonts'],
+  fonts: {
+    families: [
+      { name: 'LCD Matrix', src: '/fonts/Tims_8x5_LCD_Matrix.ttf' }
+    ]
+  }
 })

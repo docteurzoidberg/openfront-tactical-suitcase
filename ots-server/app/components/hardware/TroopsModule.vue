@@ -11,13 +11,9 @@
           <div class="lcd-screen">
             <div class="lcd-content">
               <!-- Line 1: current / max -->
-              <div class="lcd-line">
-                <span v-for="(char, i) in displayLine1" :key="`line1-${i}`" class="lcd-char">{{ char }}</span>
-              </div>
+              <div class="lcd-line">{{ displayLine1 }}</div>
               <!-- Line 2: percent (calculated) -->
-              <div class="lcd-line">
-                <span v-for="(char, i) in displayLine2" :key="`line2-${i}`" class="lcd-char">{{ char }}</span>
-              </div>
+              <div class="lcd-line">{{ displayLine2 }}</div>
             </div>
           </div>
         </div>
@@ -175,21 +171,14 @@ watch(() => props.troops, (newTroops) => {
 }
 
 .lcd-line {
-  display: flex;
-  gap: 0;
-  font-family: 'Courier New', 'Courier', monospace;
-  font-size: 16px;
-  font-weight: 700;
+  font-family: 'LCD Matrix', 'Courier New', monospace;
+  font-size: 18px;
+  font-weight: 400;
   line-height: 1.3;
-  letter-spacing: 0;
-}
-
-.lcd-char {
-  display: inline-block;
-  width: 0.6em;
+  letter-spacing: 0.5px;
   color: #2d3d1f;
   text-shadow: 0 0 2px rgba(45, 61, 31, 0.5);
-  text-align: center;
+  white-space: pre;
   font-feature-settings: 'tnum';
 }
 
