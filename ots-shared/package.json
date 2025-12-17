@@ -3,13 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "dist/index.mjs",
-  "exports": {
-    ".": "./dist/index.mjs"
-  },
-  "scripts": {
-    "build": "tsc -p tsconfig.json"
-  },
+  "description": "Shared TypeScript types for OTS protocol - source-only, no build step",
   "devDependencies": {
     "typescript": "^5.9.3"
   }
