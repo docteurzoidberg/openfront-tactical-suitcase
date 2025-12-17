@@ -66,14 +66,14 @@ ots-fw-main/
     
     # Hardware Control
     led_controller.c       # LED effect management (dedicated task)
-    button_handler.c       # Button debouncing
+    button_handler.c       # Button debouncing and event posting
     io_task.c              # Dedicated I/O scanning task
     
     # Hardware Modules
     module_manager.c       # Hardware module registration
-    nuke_module.c          # Nuke module (3 buttons + 3 LEDs)
+    nuke_module.c          # Nuke module (3 buttons + 3 LEDs) - handles button->nuke logic
     alert_module.c         # Alert module (6 LEDs)
-    main_power_module.c    # Main power module (link LED)
+    main_power_module.c    # Main power module (link LED + connection status)
     
     CMakeLists.txt         # Component registration
   include/

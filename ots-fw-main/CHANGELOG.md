@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - 2025-12-17 (Phase 4.5: Button Handling Encapsulation)
+- **Refactored button handling for proper module encapsulation**
+  - Added `INTERNAL_EVENT_BUTTON_PRESSED` internal event type
+  - button_handler.c now posts internal events instead of using callbacks
+  - Moved button->nuke mapping logic from main.c into nuke_module.c
+  - nuke_module now handles complete button press workflow (detect → create event → send to WebSocket → LED feedback)
+  - Removed 50+ lines of button-specific logic from main.c
+  - Each module now owns its entire feature set without leaking logic to main.c
+  - Improved link LED feedback: added `led_controller_link_blink()` helper function
+  - Fixed main_power_module to properly show connection states via blinking:
+    * Network connected → BLINK 500ms (waiting for WebSocket)
+    * WebSocket connected → SOLID ON (fully connected)
+    * WebSocket disconnected → BLINK 500ms (network OK, no WS)
+    * WebSocket error → FAST BLINK 200ms (error state)
+
 ### Changed - 2025-12-16 (Phase 4: Architecture Refactoring & Code Quality)
 - **Refactored firmware for cleaner module separation and protocol alignment**
   - Created hardware module abstraction layer mirroring physical PCB modules

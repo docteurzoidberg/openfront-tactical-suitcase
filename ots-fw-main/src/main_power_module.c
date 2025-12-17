@@ -39,8 +39,8 @@ static bool main_power_module_handle_event(const internal_event_t *event) {
     switch (event->type) {
         // Network connection events
         case INTERNAL_EVENT_NETWORK_CONNECTED:
-            ESP_LOGI(TAG, "Network connected - link LED ON");
-            led_controller_link_set(true);
+            ESP_LOGI(TAG, "Network connected - blinking link LED");
+            led_controller_link_blink(500);  // Blink every 500ms = waiting for WS
             handled = true;
             break;
             

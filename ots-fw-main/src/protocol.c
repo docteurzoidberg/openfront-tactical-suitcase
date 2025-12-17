@@ -24,6 +24,7 @@ const char* event_type_to_string(game_event_type_t type) {
         case INTERNAL_EVENT_WS_CONNECTED: return "INTERNAL:WS_CONNECTED";
         case INTERNAL_EVENT_WS_DISCONNECTED: return "INTERNAL:WS_DISCONNECTED";
         case INTERNAL_EVENT_WS_ERROR: return "INTERNAL:WS_ERROR";
+        case INTERNAL_EVENT_BUTTON_PRESSED: return "INTERNAL:BUTTON_PRESSED";
         default: return "INVALID";
     }
 }

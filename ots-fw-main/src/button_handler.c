@@ -1,6 +1,7 @@
 #include "button_handler.h"
 #include "module_io.h"
 #include "config.h"
+#include "event_dispatcher.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 
@@ -78,9 +79,17 @@ esp_err_t button_handler_scan(void) {
                 // Send to queue (non-blocking)
                 xQueueSend(button_event_queue, &event, 0);
                 
-                // Call callback if registered (for press events only)
-                if (pressed && button_callback) {
-                    button_callback(i);
+                // Post internal event (for press events only)
+                if (pressed) {
+                    internal_event_t int_event = {
+                        .type = INTERNAL_EVENT_BUTTON_PRESSED,
+                        .source = EVENT_SOURCE_BUTTON,
+                        .timestamp = now,
+                        .data = {0}
+                    };
+                    // Store button index in first byte of data
+                    int_event.data[0] = i;
+                    event_dispatcher_post(&int_event);
                 }
                 
                 // Track press time

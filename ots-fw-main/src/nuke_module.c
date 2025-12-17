@@ -38,8 +38,48 @@ static esp_err_t nuke_module_update(void) {
     return ESP_OK;
 }
 
+// Button to nuke type mapping
+typedef struct {
+    game_event_type_t event_type;
+    const char *nuke_type;
+} button_mapping_t;
+
+static const button_mapping_t button_map[] = {
+    {GAME_EVENT_NUKE_LAUNCHED, "atom"},
+    {GAME_EVENT_HYDRO_LAUNCHED, "hydro"},
+    {GAME_EVENT_MIRV_LAUNCHED, "mirv"}
+};
+
 // Handle events
 static bool nuke_module_handle_event(const internal_event_t *event) {
+    // Handle button press events
+    if (event->type == INTERNAL_EVENT_BUTTON_PRESSED) {
+        uint8_t button_index = event->data[0];
+        
+        if (button_index >= sizeof(button_map) / sizeof(button_map[0])) {
+            ESP_LOGW(TAG, "Invalid button index: %d", button_index);
+            return false;
+        }
+        
+        ESP_LOGI(TAG, "Button %d pressed (%s)", button_index, button_map[button_index].nuke_type);
+        
+        // Create and send game event
+        game_event_t game_event = {0};
+        game_event.timestamp = esp_timer_get_time() / 1000;
+        game_event.type = button_map[button_index].event_type;
+        strncpy(game_event.message, "Nuke sent", sizeof(game_event.message) - 1);
+        snprintf(game_event.data, sizeof(game_event.data), "{\"nukeType\":\"%s\"}", 
+                 button_map[button_index].nuke_type);
+        
+        // Post to event dispatcher (for local handling - LED feedback)
+        event_dispatcher_post_game_event(&game_event, EVENT_SOURCE_BUTTON);
+        
+        // Send to WebSocket server
+        ws_client_send_event(&game_event);
+        
+        return true;
+    }
+    
     // Handle nuke launch events (for LED feedback)
     if (event->type == GAME_EVENT_NUKE_LAUNCHED || 
         event->type == GAME_EVENT_HYDRO_LAUNCHED ||

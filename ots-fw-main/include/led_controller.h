@@ -82,6 +82,14 @@ bool led_controller_alert_on(uint8_t index, uint32_t duration_ms);
 bool led_controller_link_set(bool on);
 
 /**
+ * @brief Helper function to set link LED blinking at specified rate
+ * 
+ * @param blink_rate_ms Blink interval in milliseconds
+ * @return true if command was queued
+ */
+bool led_controller_link_blink(uint32_t blink_rate_ms);
+
+/**
  * @brief Get LED controller queue handle (for advanced usage)
  * 
  * @return Queue handle or NULL if not initialized

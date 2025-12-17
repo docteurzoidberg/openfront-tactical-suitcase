@@ -82,42 +82,6 @@ static bool handle_event(const internal_event_t *event) {
     return false;
 }
 
-// Button mapping table
-typedef struct {
-    game_event_type_t event_type;
-    const char *nuke_type;
-} button_mapping_t;
-
-static const button_mapping_t button_map[] = {
-    {GAME_EVENT_NUKE_LAUNCHED, "atom"},
-    {GAME_EVENT_HYDRO_LAUNCHED, "hydro"},
-    {GAME_EVENT_MIRV_LAUNCHED, "mirv"}
-};
-
-// Button press handler
-static void handle_button_press(uint8_t button_index) {
-    if (button_index >= sizeof(button_map) / sizeof(button_map[0])) {
-        ESP_LOGW(TAG, "Invalid button index: %d", button_index);
-        return;
-    }
-    
-    ESP_LOGI(TAG, "Button %d pressed (%s)", button_index, button_map[button_index].nuke_type);
-    
-    // Create and post button event using lookup table
-    game_event_t game_event = {0};
-    game_event.timestamp = esp_timer_get_time() / 1000;
-    game_event.type = button_map[button_index].event_type;
-    strncpy(game_event.message, "Nuke sent", sizeof(game_event.message) - 1);
-    snprintf(game_event.data, sizeof(game_event.data), "{\"nukeType\":\"%s\"}", 
-             button_map[button_index].nuke_type);
-    
-    // Post to event dispatcher (for local handling)
-    event_dispatcher_post_game_event(&game_event, EVENT_SOURCE_BUTTON);
-    
-    // Send to WebSocket server
-    ws_client_send_event(&game_event);
-}
-
 void app_main(void) {
     ESP_LOGI(TAG, "OTS Firmware Main Controller Starting...");
     
@@ -187,7 +151,6 @@ void app_main(void) {
         ESP_LOGE(TAG, "Failed to initialize button handler!");
         return;
     }
-    button_handler_set_callback(handle_button_press);
     
     // Initialize network manager
     if (network_manager_init(WIFI_SSID, WIFI_PASSWORD, OTA_HOSTNAME) != ESP_OK) {

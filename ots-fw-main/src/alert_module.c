@@ -63,14 +63,14 @@ static bool alert_module_handle_event(const internal_event_t *event) {
             
         case GAME_EVENT_ALERT_LAND:
             ESP_LOGI(TAG, "Land attack alert!");
-            led_controller_alert_blink(4);  // Alert LED 4 = Land
+            led_controller_alert_on(4, 15000);  // Alert LED 4 = Land, 15s
             led_controller_alert_on(0, 15000);  // Warning LED (longer)
             handled = true;
             break;
             
         case GAME_EVENT_ALERT_NAVAL:
             ESP_LOGI(TAG, "Naval attack alert!");
-            led_controller_alert_blink(5);  // Alert LED 5 = Naval
+            led_controller_alert_on(5, 15000);  // Alert LED 5 = Naval, 15s
             led_controller_alert_on(0, 15000);  // Warning LED (longer)
             handled = true;
             break;

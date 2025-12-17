@@ -130,6 +130,18 @@ bool led_controller_link_set(bool on) {
     return led_controller_send_command(&cmd);
 }
 
+bool led_controller_link_blink(uint32_t blink_rate_ms) {
+    led_command_t cmd = {
+        .type = LED_TYPE_LINK,
+        .index = 0,
+        .effect = LED_EFFECT_BLINK,
+        .duration_ms = 0,  // Blink indefinitely
+        .blink_rate_ms = blink_rate_ms
+    };
+    
+    return led_controller_send_command(&cmd);
+}
+
 QueueHandle_t led_controller_get_queue(void) {
     return led_command_queue;
 }
