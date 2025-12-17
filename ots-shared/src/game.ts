@@ -1,15 +1,12 @@
-export type TroopsData = {
-  current: number
-  max: number
-}
+// ============================================================================
+// Enums & Union Types
+// ============================================================================
 
-export type GameState = {
-  timestamp: number
-  mapName: string
-  mode: string
-  playerCount: number
-  troops?: TroopsData
-}
+export type GamePhase = 'lobby' | 'spawning' | 'in-game' | 'game-won' | 'game-lost'
+
+export type NukeType = 'atom' | 'hydro' | 'mirv'
+
+export type WsStatus = 'DISCONNECTED' | 'CONNECTING' | 'OPEN' | 'ERROR'
 
 export type GameEventType =
   | 'INFO'
@@ -29,6 +26,27 @@ export type GameEventType =
   | 'ALERT_NAVAL'
   | 'HARDWARE_TEST'
 
+// ============================================================================
+// Game State Types
+// ============================================================================
+
+export type TroopsData = {
+  current: number
+  max: number
+}
+
+export type GameState = {
+  timestamp: number
+  mapName: string
+  mode: string
+  playerCount: number
+  troops?: TroopsData
+}
+
+// ============================================================================
+// Event Types
+// ============================================================================
+
 export type GameEvent = {
   type: GameEventType
   timestamp: number
@@ -36,18 +54,13 @@ export type GameEvent = {
   data?: unknown
 }
 
-// Game phase tracking
-export type GamePhase = 'lobby' | 'spawning' | 'in-game' | 'game-won' | 'game-lost'
-
-// Nuke types for hardware module
-export type NukeType = 'atom' | 'hydro' | 'mirv'
-
-// WebSocket connection status
-export type WsStatus = 'DISCONNECTED' | 'CONNECTING' | 'OPEN' | 'ERROR'
-
 export type NukeSentEventData = {
   nukeType: NukeType
 }
+
+// ============================================================================
+// Protocol Message Types
+// ============================================================================
 
 export type IncomingMessage =
   | { type: 'state'; payload: GameState }
@@ -57,7 +70,10 @@ export type OutgoingMessage =
   | { type: 'cmd'; payload: { action: string; params?: unknown } }
   | { type: 'ack'; payload?: unknown }
 
+// ============================================================================
 // Protocol Constants
+// ============================================================================
+
 export const PROTOCOL_CONSTANTS = {
   // WebSocket configuration
   DEFAULT_WS_URL: 'ws://localhost:3000/ws',
