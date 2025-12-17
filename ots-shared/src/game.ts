@@ -1,16 +1,3 @@
-export type TeamScore = {
-  teamA: number
-  teamB: number
-}
-
-export type PlayerInfo = {
-  id: string
-  name: string
-  clanTag?: string
-  isAlly: boolean
-  score: number
-}
-
 export type ModuleGeneralState = {
   m_link: boolean
 }
@@ -83,13 +70,6 @@ export type NukeType = 'atom' | 'hydro' | 'mirv'
 
 // WebSocket connection status
 export type WsStatus = 'DISCONNECTED' | 'CONNECTING' | 'OPEN' | 'ERROR'
-
-export type SendNukeCommand = {
-  action: 'send-nuke'
-  params: {
-    nukeType: NukeType
-  }
-}
 
 export type NukeSentEventData = {
   nukeType: NukeType
