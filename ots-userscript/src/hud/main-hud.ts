@@ -6,10 +6,12 @@ declare function GM_setValue<T = unknown>(key: string, value: T): void
 const STORAGE_KEY_HUD_POS = 'ots-hud-pos'
 const STORAGE_KEY_HUD_SIZE = 'ots-hud-size'
 
+import type { WsStatus } from '../../../ots-shared/src/game'
+
 type HudPos = { left: number; top: number }
 type HudSize = { width: number; height: number }
 
-export type WsStatus = 'DISCONNECTED' | 'CONNECTING' | 'OPEN' | 'ERROR'
+export type { WsStatus }
 export type LogDirection = 'send' | 'recv' | 'info'
 
 type LogEntry = {

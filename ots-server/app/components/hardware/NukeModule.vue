@@ -86,7 +86,7 @@
 </template>
 
 <script setup lang="ts">
-type NukeType = 'atom' | 'hydro' | 'mirv'
+import type { NukeType } from '../../../../ots-shared/src/game'
 
 interface Props {
   connected: boolean

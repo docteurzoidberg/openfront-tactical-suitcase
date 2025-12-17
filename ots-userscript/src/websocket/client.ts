@@ -1,7 +1,5 @@
-import type { GameState, GameEventType } from '../../../ots-shared/src/game'
+import type { GameState, GameEventType, WsStatus } from '../../../ots-shared/src/game'
 import type { Hud } from '../hud/main-hud'
-
-type WsStatus = 'DISCONNECTED' | 'CONNECTING' | 'OPEN' | 'ERROR'
 
 type DashboardCommand = {
   type: 'cmd'

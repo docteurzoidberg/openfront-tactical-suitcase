@@ -81,6 +81,9 @@ export type GamePhase = 'lobby' | 'spawning' | 'in-game' | 'game-won' | 'game-lo
 // Nuke types for hardware module
 export type NukeType = 'atom' | 'hydro' | 'mirv'
 
+// WebSocket connection status
+export type WsStatus = 'DISCONNECTED' | 'CONNECTING' | 'OPEN' | 'ERROR'
+
 export type SendNukeCommand = {
   action: 'send-nuke'
   params: {
