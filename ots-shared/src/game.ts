@@ -1,31 +1,6 @@
-export type ModuleGeneralState = {
-  m_link: boolean
-}
-
-export type ModuleAlertState = {
-  m_alert_warning: boolean
-  m_alert_atom: boolean
-  m_alert_hydro: boolean
-  m_alert_mirv: boolean
-  m_alert_land: boolean
-  m_alert_naval: boolean
-}
-
-export type ModuleNukeState = {
-  m_nuke_launched: boolean
-  m_hydro_launched: boolean
-  m_mirv_launched: boolean
-}
-
 export type TroopsData = {
   current: number
   max: number
-}
-
-export type HWState = {
-  m_general: ModuleGeneralState
-  m_alert: ModuleAlertState
-  m_nuke: ModuleNukeState
 }
 
 export type GameState = {
@@ -34,7 +9,6 @@ export type GameState = {
   mode: string
   playerCount: number
   troops?: TroopsData
-  hwState: HWState
 }
 
 export type GameEventType =
@@ -104,7 +78,3 @@ export const PROTOCOL_CONSTANTS = {
   RECONNECT_DELAY_MS: 2000,
   RECONNECT_MAX_DELAY_MS: 15000,
 } as const
-
-export type ClientType = typeof PROTOCOL_CONSTANTS.CLIENT_TYPE_UI
-  | typeof PROTOCOL_CONSTANTS.CLIENT_TYPE_USERSCRIPT
-  | typeof PROTOCOL_CONSTANTS.CLIENT_TYPE_FIRMWARE
