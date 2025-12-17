@@ -1,4 +1,5 @@
 import type { GameState, GameEventType, WsStatus } from '../../../ots-shared/src/game'
+import { PROTOCOL_CONSTANTS } from '../../../ots-shared/src/game'
 import type { Hud } from '../hud/main-hud'
 
 type DashboardCommand = {
@@ -47,7 +48,7 @@ export class WsClient {
       // Send handshake to identify as userscript client
       this.safeSend({ type: 'handshake', clientType: 'userscript' })
 
-      this.sendInfo('userscript-connected', { url: window.location.href })
+      this.sendInfo(PROTOCOL_CONSTANTS.INFO_MESSAGE_USERSCRIPT_CONNECTED, { url: window.location.href })
 
       // Start periodic heartbeat (every 5 seconds)
       this.startHeartbeat()

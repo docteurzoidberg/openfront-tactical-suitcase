@@ -1,5 +1,6 @@
 import { defineWebSocketHandler } from 'h3'
 import type { IncomingMessage, OutgoingMessage } from '../../../ots-shared/src/game'
+import { PROTOCOL_CONSTANTS } from '../../../ots-shared/src/game'
 
 // Track peer types using a Map
 const peerTypes = new Map<string, 'ui' | 'userscript' | 'unknown'>()
@@ -26,7 +27,7 @@ export default defineWebSocketHandler({
         payload: {
           type: 'INFO',
           timestamp: Date.now(),
-          message: 'userscript-disconnected',
+          message: PROTOCOL_CONSTANTS.INFO_MESSAGE_USERSCRIPT_DISCONNECTED,
           data: { peerId: peer.id }
         }
       })
@@ -49,7 +50,7 @@ export default defineWebSocketHandler({
 
       // Check for handshake message to identify client type
       if (parsed.type === 'handshake' && parsed.clientType) {
-        const clientType = parsed.clientType === 'ui' ? 'ui' : 'userscript'
+        const clientType = parsed.clientType === PROTOCOL_CONSTANTS.CLIENT_TYPE_UI ? 'ui' : 'userscript'
 
         // Only update if changing from default or if it's UI
         if (clientType === 'ui') {
@@ -73,7 +74,7 @@ export default defineWebSocketHandler({
             payload: {
               type: 'INFO',
               timestamp: Date.now(),
-              message: 'userscript-connected',
+              message: PROTOCOL_CONSTANTS.INFO_MESSAGE_USERSCRIPT_CONNECTED,
               data: { peerId: peer.id }
             }
           })

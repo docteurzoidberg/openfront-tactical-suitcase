@@ -1,4 +1,6 @@
-const DEFAULT_WS_URL = 'ws://localhost:3000/ws'
+import { PROTOCOL_CONSTANTS } from '../../../ots-shared/src/game'
+
+const DEFAULT_WS_URL = PROTOCOL_CONSTANTS.DEFAULT_WS_URL
 const STORAGE_KEY_WS_URL = 'ots-ws-url'
 
 export function loadWsUrl(): string {

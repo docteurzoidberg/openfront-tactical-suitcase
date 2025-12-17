@@ -1,6 +1,7 @@
 import { computed, ref, watchEffect } from 'vue'
 import { useWebSocket } from '@vueuse/core'
 import type { GameEvent, IncomingMessage, OutgoingMessage, NukeType, NukeSentEventData, TroopsData, GamePhase } from '../../../ots-shared/src/game'
+import { PROTOCOL_CONSTANTS } from '../../../ots-shared/src/game'
 
 const WS_URL =
   typeof window !== 'undefined'
@@ -59,7 +60,7 @@ export function useGameSocket() {
     },
     onConnected() {
       // Send handshake to identify as UI client
-      send(JSON.stringify({ type: 'handshake', clientType: 'ui' }))
+      send(JSON.stringify({ type: 'handshake', clientType: PROTOCOL_CONSTANTS.CLIENT_TYPE_UI }))
     }
   })
 
@@ -80,7 +81,7 @@ export function useGameSocket() {
         if (msg.payload.type === 'INFO') {
           const message = msg.payload.message
 
-          if (message === 'Nuke sent') {
+          if (message === PROTOCOL_CONSTANTS.INFO_MESSAGE_NUKE_SENT) {
             // Handle nuke-sent event
             const data = msg.payload.data as NukeSentEventData | undefined
             if (data?.nukeType) {
@@ -89,13 +90,13 @@ export function useGameSocket() {
           }
 
           // Handle userscript disconnect
-          if (message === 'userscript-disconnected') {
+          if (message === PROTOCOL_CONSTANTS.INFO_MESSAGE_USERSCRIPT_DISCONNECTED) {
             lastUserscriptHeartbeat.value = null
             lastUserscriptHeartbeatId.value++
             gamePhase.value = null // Reset to unknown when userscript disconnects
           }
           // Handle userscript connect - initialize to lobby
-          else if (message === 'userscript-connected') {
+          else if (message === PROTOCOL_CONSTANTS.INFO_MESSAGE_USERSCRIPT_CONNECTED) {
             lastUserscriptHeartbeat.value = Date.now()
             lastUserscriptHeartbeatId.value++
             gamePhase.value = 'lobby' // Default to lobby when userscript connects
