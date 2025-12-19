@@ -12,14 +12,20 @@ const events = ref<GameEvent[]>([])
 const lastUserscriptHeartbeat = ref<number | null>(null)
 const lastUserscriptHeartbeatId = ref<number>(0)
 
-// Nuke blink state
-const activeNukes = ref<{ atom: boolean; hydro: boolean; mirv: boolean }>({
-  atom: false,
-  hydro: false,
-  mirv: false,
-})
+// Nuke tracking state - track each individual nuke by ID
+interface TrackedNuke {
+  id: string
+  type: 'atom' | 'hydro' | 'mirv'
+  launchedAt: number
+}
 
-const blinkTimers = new Map<NukeType, NodeJS.Timeout>()
+const trackedNukes = ref<Map<string, TrackedNuke>>(new Map())
+
+const activeNukes = computed(() => ({
+  atom: Array.from(trackedNukes.value.values()).some(n => n.type === 'atom'),
+  hydro: Array.from(trackedNukes.value.values()).some(n => n.type === 'hydro'),
+  mirv: Array.from(trackedNukes.value.values()).some(n => n.type === 'mirv'),
+}))
 
 // Power state
 const powerOn = ref<boolean>(true)
@@ -82,14 +88,6 @@ export function useGameSocket() {
         if (msg.payload.type === 'INFO') {
           const message = msg.payload.message
 
-          if (message === PROTOCOL_CONSTANTS.INFO_MESSAGE_NUKE_SENT) {
-            // Handle nuke-sent event
-            const data = msg.payload.data as NukeSentEventData | undefined
-            if (data?.nukeType) {
-              startNukeBlink(data.nukeType)
-            }
-          }
-
           // Handle userscript disconnect
           if (message === PROTOCOL_CONSTANTS.INFO_MESSAGE_USERSCRIPT_DISCONNECTED) {
             lastUserscriptHeartbeat.value = null
@@ -116,12 +114,8 @@ export function useGameSocket() {
           Object.keys(activeAlerts.value).forEach(key => {
             activeAlerts.value[key as keyof typeof activeAlerts.value] = false
           })
-          Object.keys(activeNukes.value).forEach(key => {
-            activeNukes.value[key as keyof typeof activeNukes.value] = false
-          })
+          trackedNukes.value.clear()
           // Clear all timers
-          blinkTimers.forEach(timer => clearTimeout(timer))
-          blinkTimers.clear()
           alertTimers.forEach(timer => clearTimeout(timer))
           alertTimers.clear()
         } else if (msg.payload.type === 'GAME_END') {
@@ -147,6 +141,27 @@ export function useGameSocket() {
           }
         }
 
+        // Handle nuke launch events (outgoing nukes launched by player)
+        if (msg.payload.type === 'NUKE_LAUNCHED' || msg.payload.type === 'HYDRO_LAUNCHED' || msg.payload.type === 'MIRV_LAUNCHED') {
+          const data = msg.payload.data as any
+          if (data?.nukeUnitID) {
+            let nukeType: 'atom' | 'hydro' | 'mirv' = 'atom'
+            if (msg.payload.type === 'HYDRO_LAUNCHED') nukeType = 'hydro'
+            else if (msg.payload.type === 'MIRV_LAUNCHED') nukeType = 'mirv'
+
+            trackNukeLaunch(data.nukeUnitID, nukeType)
+          }
+        }
+
+        // Handle nuke completion events (exploded or intercepted)
+        if (msg.payload.type === 'NUKE_EXPLODED' || msg.payload.type === 'NUKE_INTERCEPTED') {
+          const data = msg.payload.data as any
+          if (data?.unitID && data?.isOutgoing) {
+            // Only stop tracking if it's our outgoing nuke
+            stopTrackingNuke(data.unitID)
+          }
+        }
+
         // Handle alert events
         if (msg.payload.type === 'ALERT_ATOM') {
           startAlert('atom')
@@ -165,23 +180,21 @@ export function useGameSocket() {
     }
   })
 
-  const startNukeBlink = (nukeType: NukeType) => {
-    // Clear existing timer if any
-    const existingTimer = blinkTimers.get(nukeType)
-    if (existingTimer) {
-      clearTimeout(existingTimer)
+  const trackNukeLaunch = (nukeUnitID: string, nukeType: 'atom' | 'hydro' | 'mirv') => {
+    console.log(`[Nuke Tracking] Tracking ${nukeType} nuke: ${nukeUnitID}`)
+    trackedNukes.value.set(nukeUnitID, {
+      id: nukeUnitID,
+      type: nukeType,
+      launchedAt: Date.now()
+    })
+  }
+
+  const stopTrackingNuke = (nukeUnitID: string) => {
+    const nuke = trackedNukes.value.get(nukeUnitID)
+    if (nuke) {
+      console.log(`[Nuke Tracking] Stopped tracking ${nuke.type} nuke: ${nukeUnitID}`)
+      trackedNukes.value.delete(nukeUnitID)
     }
-
-    // Start blinking
-    activeNukes.value[nukeType as keyof typeof activeNukes.value] = true
-
-    // Stop blinking after 4 seconds
-    const timer = setTimeout(() => {
-      activeNukes.value[nukeType as keyof typeof activeNukes.value] = false
-      blinkTimers.delete(nukeType)
-    }, 4000)
-
-    blinkTimers.set(nukeType, timer)
   }
 
   const startAlert = (alertType: 'atom' | 'hydro' | 'mirv' | 'land' | 'naval') => {
