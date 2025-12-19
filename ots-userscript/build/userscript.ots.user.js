@@ -707,7 +707,7 @@
       return null;
     }
     /**
-     * Detect new nuke launches targeting the current player
+     * Detect new nuke launches (both incoming and outgoing)
      */
     detectLaunches(gameAPI, myPlayerID) {
       const nukeTypes = ["Atom Bomb", "Hydrogen Bomb", "MIRV", "MIRV Warhead"];
@@ -716,21 +716,25 @@
         try {
           const nukeId = typeof nuke.id === "function" ? nuke.id() : null;
           if (!nukeId || this.trackedNukes.has(nukeId)) continue;
+          const owner = typeof nuke.owner === "function" ? nuke.owner() : null;
+          const ownerID = owner && typeof owner.id === "function" ? owner.id() : "unknown";
           const targetTile = typeof nuke.targetTile === "function" ? nuke.targetTile() : null;
           const targetPlayerID = this.getTargetPlayerID(gameAPI, targetTile);
-          if (targetPlayerID === myPlayerID) {
-            const owner = typeof nuke.owner === "function" ? nuke.owner() : null;
-            const nukeType = typeof nuke.type === "function" ? nuke.type() : "Unknown";
+          const nukeType = typeof nuke.type === "function" ? nuke.type() : "Unknown";
+          const isIncoming = targetPlayerID === myPlayerID;
+          const isOutgoing = ownerID === myPlayerID;
+          if (isIncoming || isOutgoing) {
             const tracked = {
               unitID: nukeId,
               type: nukeType,
-              ownerID: owner && typeof owner.id === "function" ? owner.id() : "unknown",
+              ownerID,
               ownerName: owner && typeof owner.name === "function" ? owner.name() : "Unknown",
               targetTile,
-              targetPlayerID,
+              targetPlayerID: targetPlayerID || "unknown",
               launchedTick: gameAPI.getTicks() || 0,
               hasReachedTarget: false,
-              reported: false
+              reported: false,
+              isOutgoing
             };
             this.trackedNukes.set(nukeId, tracked);
             this.reportLaunch(tracked, gameAPI);
@@ -769,57 +773,96 @@
       }
     }
     reportLaunch(tracked, gameAPI) {
-      let eventType = "ALERT_ATOM";
-      let message = "Incoming nuclear strike detected!";
-      if (tracked.type.includes("Hydrogen")) {
-        eventType = "ALERT_HYDRO";
-        message = "Incoming hydrogen bomb detected!";
-      } else if (tracked.type.includes("MIRV")) {
-        eventType = "ALERT_MIRV";
-        message = "Incoming MIRV strike detected!";
-      }
       const coordinates = {
         x: gameAPI.getX(tracked.targetTile),
         y: gameAPI.getY(tracked.targetTile)
       };
-      const event = {
-        type: eventType,
-        timestamp: Date.now(),
-        message,
-        data: {
-          nukeType: tracked.type,
-          launcherPlayerID: tracked.ownerID,
-          launcherPlayerName: tracked.ownerName,
-          nukeUnitID: tracked.unitID,
-          targetTile: tracked.targetTile,
-          targetPlayerID: tracked.targetPlayerID,
-          tick: tracked.launchedTick,
-          coordinates
+      if (tracked.isOutgoing) {
+        let eventType = "NUKE_LAUNCHED";
+        if (tracked.type.includes("Hydrogen")) {
+          eventType = "HYDRO_LAUNCHED";
+        } else if (tracked.type.includes("MIRV")) {
+          eventType = "MIRV_LAUNCHED";
         }
-      };
-      this.emitEvent(event);
+        const event = {
+          type: eventType,
+          timestamp: Date.now(),
+          message: `${tracked.type} launched`,
+          data: {
+            nukeType: tracked.type,
+            nukeUnitID: tracked.unitID,
+            targetTile: tracked.targetTile,
+            targetPlayerID: tracked.targetPlayerID,
+            tick: tracked.launchedTick,
+            coordinates
+          }
+        };
+        this.emitEvent(event);
+        console.log("[NukeTracker] Player launched:", tracked.type, "at", coordinates);
+      } else {
+        let eventType = "ALERT_ATOM";
+        let message = "Incoming nuclear strike detected!";
+        if (tracked.type.includes("Hydrogen")) {
+          eventType = "ALERT_HYDRO";
+          message = "Incoming hydrogen bomb detected!";
+        } else if (tracked.type.includes("MIRV")) {
+          eventType = "ALERT_MIRV";
+          message = "Incoming MIRV strike detected!";
+        }
+        const event = {
+          type: eventType,
+          timestamp: Date.now(),
+          message,
+          data: {
+            nukeType: tracked.type,
+            launcherPlayerID: tracked.ownerID,
+            launcherPlayerName: tracked.ownerName,
+            nukeUnitID: tracked.unitID,
+            targetTile: tracked.targetTile,
+            targetPlayerID: tracked.targetPlayerID,
+            tick: tracked.launchedTick,
+            coordinates
+          }
+        };
+        this.emitEvent(event);
+      }
     }
     reportExplosion(tracked, intercepted, gameAPI) {
-      const eventType = intercepted ? "NUKE_INTERCEPTED" : "NUKE_EXPLODED";
-      const message = intercepted ? "Nuclear weapon intercepted" : "Nuclear weapon exploded";
-      const event = {
-        type: eventType,
-        timestamp: Date.now(),
-        message,
-        data: {
-          nukeType: tracked.type,
-          unitID: tracked.unitID,
-          ownerID: tracked.ownerID,
-          ownerName: tracked.ownerName,
-          targetTile: tracked.targetTile,
-          tick: gameAPI.getTicks() || 0
-        }
-      };
-      this.emitEvent(event);
-      if (intercepted) {
-        console.log("[NukeTracker] Nuke intercepted:", tracked.unitID, tracked.type);
+      if (tracked.isOutgoing) {
+        const eventType = intercepted ? "NUKE_INTERCEPTED" : "NUKE_EXPLODED";
+        const event = {
+          type: eventType,
+          timestamp: Date.now(),
+          message: intercepted ? `${tracked.type} intercepted` : `${tracked.type} exploded`,
+          data: {
+            nukeType: tracked.type,
+            unitID: tracked.unitID,
+            targetTile: tracked.targetTile,
+            targetPlayerID: tracked.targetPlayerID,
+            tick: gameAPI.getTicks() || 0,
+            isOutgoing: true
+          }
+        };
+        this.emitEvent(event);
+        console.log("[NukeTracker] Player nuke", intercepted ? "intercepted" : "landed", ":", tracked.type);
       } else {
-        console.log("[NukeTracker] Nuke exploded:", tracked.unitID, tracked.type);
+        const eventType = intercepted ? "NUKE_INTERCEPTED" : "NUKE_EXPLODED";
+        const message = intercepted ? "Nuclear weapon intercepted" : "Nuclear weapon exploded";
+        const event = {
+          type: eventType,
+          timestamp: Date.now(),
+          message,
+          data: {
+            nukeType: tracked.type,
+            unitID: tracked.unitID,
+            ownerID: tracked.ownerID,
+            ownerName: tracked.ownerName,
+            targetTile: tracked.targetTile,
+            tick: gameAPI.getTicks() || 0
+          }
+        };
+        this.emitEvent(event);
+        console.log("[NukeTracker] Incoming nuke", intercepted ? "intercepted" : "exploded", ":", tracked.type);
       }
     }
     clear() {
@@ -1316,14 +1359,14 @@
         console.log("[GameBridge] Ping received");
       } else {
         console.warn("[GameBridge] Unknown command:", action);
-        this.ws.sendEvent("INFO", `Unknown command: ${action}`, { action, params });
+        this.ws.sendEvent("ERROR", `Unknown command: ${action}`, { action, params });
       }
     }
     handleSetAttackRatio(params) {
       const ratio = params == null ? void 0 : params.ratio;
       if (typeof ratio !== "number" || ratio < 0 || ratio > 1) {
         console.error("[GameBridge] set-attack-ratio command missing or invalid ratio parameter (expected 0-1)");
-        this.ws.sendEvent("INFO", "set-attack-ratio failed: invalid ratio", { params });
+        this.ws.sendEvent("ERROR", "set-attack-ratio failed: invalid ratio", { params });
         return;
       }
       const percentage = Math.round(ratio * 100);
@@ -1340,20 +1383,20 @@
         }, 100);
       } else {
         console.error("[GameBridge] #attack-ratio input not found");
-        this.ws.sendEvent("INFO", "set-attack-ratio failed: input not found", { ratio });
+        this.ws.sendEvent("ERROR", "set-attack-ratio failed: input not found", { ratio });
       }
     }
     handleSendNuke(params) {
       const nukeType = params == null ? void 0 : params.nukeType;
       if (!nukeType) {
         console.error("[GameBridge] send-nuke command missing nukeType parameter");
-        this.ws.sendEvent("INFO", "send-nuke failed: missing nukeType", { params });
+        this.ws.sendEvent("ERROR", "send-nuke failed: missing nukeType", { params });
         return;
       }
       const game = getGameView();
       if (!game) {
         console.error("[GameBridge] Game not available for nuke launch");
-        this.ws.sendEvent("INFO", "send-nuke failed: game not available", { nukeType });
+        this.ws.sendEvent("ERROR", "send-nuke failed: game not available", { nukeType });
         return;
       }
       console.log("[GameBridge] Attempting to launch nuke:", nukeType);
@@ -1396,7 +1439,7 @@
         this.ws.sendEvent(eventType, `${nukeType} launched`, { nukeType, method });
       } else {
         console.error("[GameBridge] Nuke launch API not found");
-        this.ws.sendEvent("INFO", "send-nuke failed: API not found", {
+        this.ws.sendEvent("ERROR", "send-nuke failed: API not found", {
           nukeType,
           availableMethods: Object.keys(game).filter((k) => typeof game[k] === "function").slice(0, 20)
         });

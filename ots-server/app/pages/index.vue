@@ -48,7 +48,7 @@
 
         <!-- Column 3: Events Log -->
         <div class="lg:sticky lg:top-6 lg:self-start">
-          <DashboardEventsList :events="events" />
+          <DashboardEventsList :events="events" @clear-events="clearEvents" />
         </div>
       </section>
     </div>
@@ -58,5 +58,5 @@
 <script setup lang="ts">
 import { useGameSocket } from '../composables/useGameSocket'
 
-const { uiStatus, userscriptStatus, gameStatus, events, activeNukes, activeAlerts, powerOn, troops, attackRatio, sendNukeCommand, sendSetTroopsPercent, togglePower, userscriptHeartbeatId } = useGameSocket()
+const { uiStatus, userscriptStatus, gameStatus, events, activeNukes, activeAlerts, powerOn, troops, attackRatio, sendNukeCommand, sendSetTroopsPercent, togglePower, userscriptHeartbeatId, clearEvents } = useGameSocket()
 </script>

@@ -77,7 +77,7 @@ export function useGameSocket() {
           troops.value = msg.payload.troops
         }
       } else if (msg.type === 'event') {
-        events.value = [msg.payload, ...events.value].slice(0, 100)
+        events.value = [msg.payload, ...events.value]
 
         if (msg.payload.type === 'INFO') {
           const message = msg.payload.message
@@ -284,7 +284,10 @@ export function useGameSocket() {
     })
     console.log('[useGameSocket] Sending set-attack-ratio command:', { percent, ratio })
   }
-
+  const clearEvents = () => {
+    events.value = []
+    console.log('[useGameSocket] Cleared all events')
+  }
   return {
     uiStatus,
     userscriptStatus,
@@ -302,6 +305,7 @@ export function useGameSocket() {
     sendNukeCommand,
     sendSetTroopsPercent,
     togglePower,
+    clearEvents,
     open,
     close
   }

@@ -145,7 +145,7 @@ export class GameBridge {
       console.log('[GameBridge] Ping received')
     } else {
       console.warn('[GameBridge] Unknown command:', action)
-      this.ws.sendEvent('INFO', `Unknown command: ${action}`, { action, params })
+      this.ws.sendEvent('ERROR', `Unknown command: ${action}`, { action, params })
     }
   }
 
@@ -154,7 +154,7 @@ export class GameBridge {
 
     if (typeof ratio !== 'number' || ratio < 0 || ratio > 1) {
       console.error('[GameBridge] set-attack-ratio command missing or invalid ratio parameter (expected 0-1)')
-      this.ws.sendEvent('INFO', 'set-attack-ratio failed: invalid ratio', { params })
+      this.ws.sendEvent('ERROR', 'set-attack-ratio failed: invalid ratio', { params })
       return
     }
 
@@ -180,7 +180,7 @@ export class GameBridge {
       }, 100)
     } else {
       console.error('[GameBridge] #attack-ratio input not found')
-      this.ws.sendEvent('INFO', 'set-attack-ratio failed: input not found', { ratio })
+      this.ws.sendEvent('ERROR', 'set-attack-ratio failed: input not found', { ratio })
     }
   }
 
@@ -189,7 +189,7 @@ export class GameBridge {
 
     if (!nukeType) {
       console.error('[GameBridge] send-nuke command missing nukeType parameter')
-      this.ws.sendEvent('INFO', 'send-nuke failed: missing nukeType', { params })
+      this.ws.sendEvent('ERROR', 'send-nuke failed: missing nukeType', { params })
       return
     }
 
@@ -197,7 +197,7 @@ export class GameBridge {
     const game = getGameView()
     if (!game) {
       console.error('[GameBridge] Game not available for nuke launch')
-      this.ws.sendEvent('INFO', 'send-nuke failed: game not available', { nukeType })
+      this.ws.sendEvent('ERROR', 'send-nuke failed: game not available', { nukeType })
       return
     }
 
@@ -255,7 +255,7 @@ export class GameBridge {
       this.ws.sendEvent(eventType, `${nukeType} launched`, { nukeType, method })
     } else {
       console.error('[GameBridge] Nuke launch API not found')
-      this.ws.sendEvent('INFO', 'send-nuke failed: API not found', {
+      this.ws.sendEvent('ERROR', 'send-nuke failed: API not found', {
         nukeType,
         availableMethods: Object.keys(game).filter(k => typeof (game as any)[k] === 'function').slice(0, 20)
       })

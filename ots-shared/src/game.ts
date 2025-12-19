@@ -10,6 +10,7 @@ export type WsStatus = 'DISCONNECTED' | 'CONNECTING' | 'OPEN' | 'ERROR'
 
 export type GameEventType =
   | 'INFO'
+  | 'ERROR'
   | 'GAME_START'
   | 'GAME_END'
   | 'WIN'
