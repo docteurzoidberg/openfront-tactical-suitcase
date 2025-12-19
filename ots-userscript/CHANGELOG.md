@@ -2,6 +2,29 @@
 
 All notable changes to the OTS Userscript will be documented in this file.
 
+## [0.2.0] - 2025-12-19
+
+### Added
+- Ghost structure targeting mode for nuke launches (atom, hydro, mirv)
+- `send-nuke` command handler activates game's native targeting workflow
+- Click-to-select tile targeting with visual ghost structure feedback
+- Command success/failure event emission for proper server integration
+
+### Fixed
+- Nuke buttons now work identically to keybinds (8/9/0)
+- Proper unit type string handling ("Atom Bomb", "Hydrogen Bomb", "MIRV")
+- Target tile selection now uses game's intended placement mechanism
+
+### Changed
+- Nuke command implementation uses UIState.ghostStructure instead of direct API calls
+- Emits GhostStructureChangedEvent for proper UI synchronization
+- Monitors targeting completion by polling ghostStructure state
+
+### Documentation
+- Added comprehensive ghost structure targeting mode documentation
+- Explained why direct API calls fail for tile-targeted actions
+- Documented UIState access patterns and game integration methods
+
 ## [0.1.0] - 2024-12-19
 
 ### Added

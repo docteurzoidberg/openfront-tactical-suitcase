@@ -1393,55 +1393,87 @@
         this.ws.sendEvent("ERROR", "send-nuke failed: missing nukeType", { params });
         return;
       }
-      const game = getGameView();
-      if (!game) {
-        console.error("[GameBridge] Game not available for nuke launch");
-        this.ws.sendEvent("ERROR", "send-nuke failed: game not available", { nukeType });
+      let unitTypeName;
+      if (nukeType === "atom") {
+        unitTypeName = "Atom Bomb";
+      } else if (nukeType === "hydro") {
+        unitTypeName = "Hydrogen Bomb";
+      } else if (nukeType === "mirv") {
+        unitTypeName = "MIRV";
+      } else {
+        console.error("[GameBridge] Invalid nuke type:", nukeType);
+        this.ws.sendEvent("ERROR", "send-nuke failed: invalid nuke type", { nukeType });
         return;
       }
-      console.log("[GameBridge] Attempting to launch nuke:", nukeType);
-      console.log("[GameBridge] Game object methods:", Object.keys(game));
-      let success = false;
-      let method = "unknown";
-      if (typeof game.sendNuke === "function") {
-        try {
-          game.sendNuke(nukeType);
-          success = true;
-          method = "game.sendNuke()";
-        } catch (e) {
-          console.error("[GameBridge] game.sendNuke() failed:", e);
+      console.log(`[GameBridge] Preparing to launch ${unitTypeName}`);
+      try {
+        const buildMenu = document.querySelector("build-menu");
+        if (!buildMenu || !buildMenu.game || !buildMenu.eventBus) {
+          throw new Error("Build menu, game instance, or event bus not available");
         }
-      } else if (typeof game.launchNuke === "function") {
-        try {
-          game.launchNuke(nukeType);
-          success = true;
-          method = "game.launchNuke()";
-        } catch (e) {
-          console.error("[GameBridge] game.launchNuke() failed:", e);
+        const game = buildMenu.game;
+        const eventBus = buildMenu.eventBus;
+        const myPlayer = game.myPlayer();
+        if (!myPlayer) {
+          throw new Error("No player found - you may not have spawned yet");
         }
-      } else if (typeof game.useNuke === "function") {
-        try {
-          game.useNuke(nukeType);
-          success = true;
-          method = "game.useNuke()";
-        } catch (e) {
-          console.error("[GameBridge] game.useNuke() failed:", e);
-        }
-      }
-      if (success) {
-        console.log(`[GameBridge] Nuke launched successfully via ${method}`);
-        let eventType = "NUKE_LAUNCHED";
-        if (nukeType === "hydro") {
-          eventType = "HYDRO_LAUNCHED";
-        } else if (nukeType === "mirv") {
-          eventType = "MIRV_LAUNCHED";
-        }
-        this.ws.sendEvent(eventType, `${nukeType} launched`, { nukeType, method });
-      } else {
-        console.error("[GameBridge] Nuke launch API not found");
-        this.ws.sendEvent("ERROR", "send-nuke failed: API not found", {
+        console.log("[GameBridge] Getting buildable units for", unitTypeName);
+        myPlayer.actions(null).then((actions) => {
+          const buildableUnit = actions.buildableUnits.find((bu) => bu.type === unitTypeName);
+          if (!buildableUnit) {
+            console.error("[GameBridge] Buildable unit not found for type:", unitTypeName);
+            console.log("[GameBridge] Available units:", actions.buildableUnits.map((bu) => bu.type));
+            this.ws.sendEvent("ERROR", "send-nuke failed: unit not available", { nukeType, unitTypeName });
+            return;
+          }
+          if (!buildableUnit.canBuild) {
+            console.error("[GameBridge] Cannot build unit - no missile silo available or insufficient gold");
+            this.ws.sendEvent("ERROR", "send-nuke failed: cannot build (need missile silo and gold)", { nukeType });
+            return;
+          }
+          console.log("[GameBridge] Found buildable unit:", unitTypeName, "can build from:", buildableUnit.canBuild);
+          const controlPanel = document.querySelector("control-panel");
+          if (!controlPanel || !controlPanel.uiState) {
+            throw new Error("Control panel or UIState not available");
+          }
+          console.log("[GameBridge] \u{1F3AF} Activating ghost structure targeting mode for:", unitTypeName);
+          controlPanel.uiState.ghostStructure = unitTypeName;
+          class GhostStructureChangedEvent {
+            constructor(ghostStructure) {
+              this.ghostStructure = ghostStructure;
+            }
+          }
+          eventBus.emit(new GhostStructureChangedEvent(unitTypeName));
+          console.log("[GameBridge] \u2713 Ghost targeting mode activated - click on the map to select target");
+          this.ws.sendEvent("INFO", `${unitTypeName} targeting mode activated`, {
+            nukeType,
+            unitTypeName,
+            message: "Click on a tile on the map to target the nuke (ghost structure active)",
+            timestamp: Date.now()
+          });
+          const checkLaunchInterval = setInterval(() => {
+            if (controlPanel.uiState.ghostStructure === null) {
+              clearInterval(checkLaunchInterval);
+              console.log("[GameBridge] \u2713 Nuke targeting completed, command sent");
+              this.ws.sendEvent("INFO", `${unitTypeName} launch command completed`, {
+                nukeType,
+                unitTypeName,
+                timestamp: Date.now()
+              });
+            }
+          }, 100);
+        }).catch((err) => {
+          console.error("[GameBridge] Failed to get player actions:", err);
+          this.ws.sendEvent("ERROR", "send-nuke failed: could not get player actions", {
+            nukeType,
+            error: String(err)
+          });
+        });
+      } catch (e) {
+        console.error("[GameBridge] Failed to open build menu:", e);
+        this.ws.sendEvent("ERROR", "send-nuke failed: could not open build menu", {
           nukeType,
-          availableMethods: Object.keys(game).filter((k) => typeof game[k] === "function").slice(0, 20)
+          error: String(e)
         });
       }
     }

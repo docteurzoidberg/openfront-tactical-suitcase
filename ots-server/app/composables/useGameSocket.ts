@@ -272,6 +272,16 @@ export function useGameSocket() {
   }
 
   const sendNukeCommand = (nukeType: NukeType) => {
+    // Log the command being sent
+    events.value = [{
+      type: 'CMD_SENT',
+      timestamp: Date.now(),
+      message: `Nuke command sent: ${nukeType.toUpperCase()}`,
+      data: { action: 'send-nuke', nukeType }
+    }, ...events.value]
+
+    console.log('[useGameSocket] Sending send-nuke command:', { nukeType })
+
     sendMessage({
       type: 'cmd',
       payload: {

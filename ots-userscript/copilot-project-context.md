@@ -81,6 +81,58 @@ The OpenFront.io game stores the attack ratio (troop send percentage) in multipl
 4. 0.2                                // Default fallback
 ```
 
+### Ghost Structure Targeting Mode
+
+OpenFrontIO uses a **ghost structure system** for all unit placement (buildings, nukes, etc.). This is the internal mechanism that powers keybinds (8/9/0 for nukes) and the build menu.
+
+**How It Works**:
+
+1. **Activation**: Set `controlPanel.uiState.ghostStructure` to the unit type name (string)
+2. **UI Feedback**: Game renders a transparent "ghost" of the structure on the map
+3. **User Interaction**: User moves mouse to preview placement location, then clicks to confirm
+4. **Processing**: `StructureIconsLayer.createStructure()` handles the click event
+5. **Cleanup**: Game automatically sets `ghostStructure` back to `null` after placement
+
+**Implementation Example** (from `handleSendNuke` in openfront-bridge.ts):
+
+```typescript
+// Access control panel to get UIState
+const controlPanel = document.querySelector('control-panel') as any
+
+// Get unit type name (STRING, not number ID)
+const unitTypeName = 'Atom Bomb' // or 'Hydrogen Bomb', 'MIRV'
+
+// Activate ghost structure targeting mode (identical to pressing keybind 8/9/0)
+controlPanel.uiState.ghostStructure = unitTypeName
+
+// Emit event to update UI components
+class GhostStructureChangedEvent {
+  constructor(public readonly ghostStructure: string | null) {}
+}
+const eventBus = (window as any).game.eventBus
+eventBus.emit(new GhostStructureChangedEvent(unitTypeName))
+
+// Monitor for completion (ghostStructure returns to null after user clicks)
+const checkInterval = setInterval(() => {
+  if (controlPanel.uiState.ghostStructure === null) {
+    clearInterval(checkInterval)
+    console.log('Target selected, nuke launched')
+  }
+}, 100)
+```
+
+**Key Points**:
+
+- **Unit Type Format**: Must be STRING name (e.g., `"Atom Bomb"`), not numeric ID
+- **Don't Call API Directly**: Avoid calling `buildMenu.sendBuildOrUpgrade()` or emitting `BuildUnitIntentEvent` manually - this bypasses the targeting UI workflow
+- **Let Game Handle Clicks**: Once `ghostStructure` is set, the game's `StructureIconsLayer` automatically processes map clicks
+- **Works for All Buildables**: This pattern works for any buildable unit/structure, not just nukes
+- **Keybinds Reference**: See `OpenFrontIO/src/client/components/UnitDisplay.ts` for how keybinds 8/9/0 implement this
+
+**Why This Approach**:
+
+Direct API calls (like `sendBuildOrUpgrade(x, y)`) skip the targeting workflow and often target the wrong tile (e.g., your capital or nearest existing silo). The ghost structure system is the game's intended mechanism for user-selected tile placement.
+
 ### Game API Access Points
 
 The game exposes its API through DOM elements with custom elements:
