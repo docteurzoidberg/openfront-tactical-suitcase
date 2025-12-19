@@ -175,10 +175,31 @@ const line2 = computed(() => {
 }
 
 .lcd-screen {
-  background: #9acd32; /* Yellow-green backlight color */
-  padding: 8px 12px;
+  background: linear-gradient(180deg, #9db86d 0%, #a8c470 50%, #9db86d 100%);
+  border: 2px solid #4a5c3a;
   border-radius: 4px;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+  padding: 8px 12px;
+  box-shadow: 
+    inset 0 1px 3px rgba(0, 0, 0, 0.3),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+.lcd-screen::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    transparent 50%,
+    rgba(0, 0, 0, 0.05) 100%
+  );
+  pointer-events: none;
+  border-radius: 2px;
 }
 
 .lcd-content {
@@ -188,14 +209,15 @@ const line2 = computed(() => {
 }
 
 .lcd-line {
-  font-family: 'Courier New', 'Courier', monospace;
+  font-family: 'LCD Matrix', 'Courier New', monospace;
   font-size: 18px;
-  font-weight: 600;
-  line-height: 1.4;
-  color: #003366; /* Dark blue text on yellow-green background */
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: 0.5px;
+  color: #2d3d1f;
+  text-shadow: 0 0 2px rgba(45, 61, 31, 0.5);
   white-space: pre;
-  letter-spacing: 0.05em;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+  font-feature-settings: 'tnum';
 }
 
 /* Each character should be monospaced */

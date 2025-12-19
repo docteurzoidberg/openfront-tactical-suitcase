@@ -1,2 +1,10 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
+
+/* LCD Matrix Font for Troops Module */
+@font-face {
+  font-family: 'LCD Matrix';
+  src: url('/fonts/Tims_8x5_LCD_Matrix.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
