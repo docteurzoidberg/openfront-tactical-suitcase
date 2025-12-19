@@ -86,6 +86,7 @@
   // src/hud/main-hud.ts
   var STORAGE_KEY_HUD_POS = "ots-hud-pos";
   var STORAGE_KEY_HUD_SIZE = "ots-hud-size";
+  var STORAGE_KEY_LOG_FILTERS = "ots-hud-log-filters";
   var Hud = class {
     constructor(getWsUrl, setWsUrl, onWsUrlChanged) {
       this.getWsUrl = getWsUrl;
@@ -99,7 +100,18 @@
       this.body = null;
       this.settingsPanel = null;
       this.settingsInput = null;
+      this.filterPanel = null;
+      this.filterCheckboxes = {
+        directions: { send: null, recv: null, info: null },
+        events: { game: null, nukes: null, alerts: null, troops: null, system: null }
+      };
+      this.logFilters = {
+        directions: { send: true, recv: true, info: true },
+        events: { game: true, nukes: true, alerts: true, troops: true, system: true }
+      };
       this.logCounter = 0;
+      this.autoScroll = true;
+      this.autoScrollBtn = null;
     }
     ensure() {
       if (this.closed || this.root) return;
@@ -111,7 +123,7 @@
       root.style.zIndex = "2147483647";
       root.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       root.style.color = "#e5e7eb";
-      root.innerHTML = `<div id="ots-hud-inner" style="width: 380px; height: 260px; max-height: 60vh; background: rgba(15,23,42,0.96); border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.5); border: 1px solid rgba(148,163,184,0.5); display: flex; flex-direction: column; overflow: hidden; position: relative;">
+      root.innerHTML = `<div id="ots-hud-inner" style="width: 320px; height: 260px; max-height: 60vh; background: rgba(15,23,42,0.96); border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.5); border: 1px solid rgba(148,163,184,0.5); display: flex; flex-direction: column; overflow: hidden; position: relative;">
       <div id="ots-hud-header" style="cursor: move; padding: 6px 8px; display: flex; align-items: center; justify-content: space-between; gap: 6px; background: rgba(15,23,42,0.98); border-bottom: 1px solid rgba(30,64,175,0.7);">
         <div style="display:flex;align-items:center;gap:6px;min-width:0;">
           <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border-radius:999px;border:1px solid rgba(148,163,184,0.7);background:rgba(15,23,42,0.9);font-size:9px;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:#e5e7eb;white-space:nowrap;">
@@ -122,7 +134,7 @@
             <span id="ots-hud-game-dot" style="display:inline-flex;width:8px;height:8px;border-radius:999px;background:#f97373;"></span>
             <span>GAME</span>
           </span>
-          <span style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#9ca3af;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;">Openfront Tactical Suitcase link</span>
+          <span style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#9ca3af;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;">OTS LINK</span>
         </div>
         <div style="display:flex;align-items:center;gap:4px;">
           <button id="ots-hud-toggle" style="all:unset;cursor:pointer;font-size:11px;color:#9ca3af;padding:2px 4px;border-radius:4px;border:1px solid rgba(148,163,184,0.6);background:rgba(15,23,42,0.9);">\u2013</button>
@@ -132,6 +144,10 @@
       </div>
       <div id="ots-hud-body" style="display:flex;flex-direction:column;flex:1 1 auto;min-height:0;">
         <div id="ots-hud-log" style="flex:1 1 auto; padding: 4px 6px 6px; overflow-y:auto; overflow-x:hidden; font-size:11px; line-height:1.3; background:rgba(15,23,42,0.98);">
+        </div>
+        <div id="ots-hud-footer" style="padding:4px 8px;display:flex;align-items:center;justify-content:space-between;background:rgba(15,23,42,0.98);border-top:1px solid rgba(30,64,175,0.7);">
+          <button id="ots-hud-filter" style="all:unset;cursor:pointer;font-size:11px;color:#9ca3af;padding:2px 6px;border-radius:4px;border:1px solid rgba(148,163,184,0.6);background:rgba(15,23,42,0.9);">\u2691 Filter</button>
+          <button id="ots-hud-autoscroll" style="all:unset;cursor:pointer;font-size:9px;font-weight:600;color:#6ee7b7;padding:2px 6px;border-radius:999px;border:1px solid rgba(52,211,153,0.6);background:rgba(52,211,153,0.18);white-space:nowrap;letter-spacing:0.05em;">\u2713 Auto</button>
         </div>
       </div>
       <div id="ots-hud-settings-panel" style="position:fixed;top:64px;right:16px;min-width:260px;max-width:320px;display:none;flex-direction:column;gap:6px;padding:8px;border-radius:6px;background:rgba(15,23,42,0.98);border:1px solid rgba(59,130,246,0.6);box-shadow:0 8px 20px rgba(0,0,0,0.5);z-index:2147483647;">
@@ -148,6 +164,50 @@
           <button id="ots-hud-settings-save" style="all:unset;cursor:pointer;font-size:11px;color:#0f172a;padding:3px 8px;border-radius:4px;background:#4ade80;font-weight:600;">Save</button>
         </div>
       </div>
+      <div id="ots-hud-filter-panel" style="position:fixed;top:64px;right:16px;min-width:220px;max-width:280px;display:none;flex-direction:column;gap:8px;padding:10px;border-radius:6px;background:rgba(15,23,42,0.98);border:1px solid rgba(59,130,246,0.6);box-shadow:0 8px 20px rgba(0,0,0,0.5);z-index:2147483647;">
+        <div id="ots-hud-filter-header" style="display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:move;">
+          <span style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#9ca3af;">Log Filters</span>
+          <button id="ots-hud-filter-close" style="all:unset;cursor:pointer;font-size:11px;color:#6b7280;padding:2px 4px;border-radius:4px;">\u2715</button>
+        </div>
+        <div style="border-bottom:1px solid rgba(148,163,184,0.3);padding-bottom:6px;">
+          <div style="font-size:10px;font-weight:600;color:#9ca3af;margin-bottom:6px;letter-spacing:0.05em;">DIRECTION</div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#e5e7eb;cursor:pointer;margin-bottom:4px;">
+            <input type="checkbox" id="ots-hud-filter-send" checked style="cursor:pointer;" />
+            <span style="display:inline-flex;font-size:9px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:1px 4px;border-radius:999px;background:rgba(52,211,153,0.18);color:#6ee7b7;">SEND</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#e5e7eb;cursor:pointer;margin-bottom:4px;">
+            <input type="checkbox" id="ots-hud-filter-recv" checked style="cursor:pointer;" />
+            <span style="display:inline-flex;font-size:9px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:1px 4px;border-radius:999px;background:rgba(59,130,246,0.22);color:#93c5fd;">RECV</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#e5e7eb;cursor:pointer;">
+            <input type="checkbox" id="ots-hud-filter-info" checked style="cursor:pointer;" />
+            <span style="display:inline-flex;font-size:9px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:1px 4px;border-radius:999px;background:rgba(156,163,175,0.25);color:#e5e7eb;">INFO</span>
+          </label>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:600;color:#9ca3af;margin-bottom:6px;letter-spacing:0.05em;">EVENT TYPE</div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#e5e7eb;cursor:pointer;margin-bottom:4px;">
+            <input type="checkbox" id="ots-hud-filter-game" checked style="cursor:pointer;" />
+            <span style="color:#a78bfa;">Game Events</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#e5e7eb;cursor:pointer;margin-bottom:4px;">
+            <input type="checkbox" id="ots-hud-filter-nukes" checked style="cursor:pointer;" />
+            <span style="color:#f87171;">Nuke Events</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#e5e7eb;cursor:pointer;margin-bottom:4px;">
+            <input type="checkbox" id="ots-hud-filter-alerts" checked style="cursor:pointer;" />
+            <span style="color:#fb923c;">Alert Events</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#e5e7eb;cursor:pointer;margin-bottom:4px;">
+            <input type="checkbox" id="ots-hud-filter-troops" checked style="cursor:pointer;" />
+            <span style="color:#34d399;">Troop Events</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#e5e7eb;cursor:pointer;">
+            <input type="checkbox" id="ots-hud-filter-system" checked style="cursor:pointer;" />
+            <span style="color:#94a3b8;">System Events</span>
+          </label>
+        </div>
+      </div>
       <div id="ots-hud-resize" style="position:absolute;right:2px;bottom:2px;width:12px;height:12px;cursor:se-resize;opacity:0.7;">
         <div style="position:absolute;right:1px;bottom:1px;width:10px;height:2px;background:rgba(148,163,184,0.9);transform:rotate(45deg);"></div>
         <div style="position:absolute;right:3px;bottom:3px;width:8px;height:2px;background:rgba(148,163,184,0.7);transform:rotate(45deg);"></div>
@@ -157,12 +217,36 @@
       this.root = root;
       this.logList = root.querySelector("#ots-hud-log");
       this.body = root.querySelector("#ots-hud-body");
+      const footer = root.querySelector("#ots-hud-footer");
       this.wsDot = root.querySelector("#ots-hud-ws-dot");
       this.gameDot = root.querySelector("#ots-hud-game-dot");
       this.settingsPanel = root.querySelector("#ots-hud-settings-panel");
       this.settingsInput = root.querySelector("#ots-hud-settings-ws");
+      this.filterPanel = root.querySelector("#ots-hud-filter-panel");
+      this.autoScrollBtn = root.querySelector("#ots-hud-autoscroll");
+      this.filterCheckboxes.directions.send = root.querySelector("#ots-hud-filter-send");
+      this.filterCheckboxes.directions.recv = root.querySelector("#ots-hud-filter-recv");
+      this.filterCheckboxes.directions.info = root.querySelector("#ots-hud-filter-info");
+      this.filterCheckboxes.events.game = root.querySelector("#ots-hud-filter-game");
+      this.filterCheckboxes.events.nukes = root.querySelector("#ots-hud-filter-nukes");
+      this.filterCheckboxes.events.alerts = root.querySelector("#ots-hud-filter-alerts");
+      this.filterCheckboxes.events.troops = root.querySelector("#ots-hud-filter-troops");
+      this.filterCheckboxes.events.system = root.querySelector("#ots-hud-filter-system");
+      const savedFilters = GM_getValue(STORAGE_KEY_LOG_FILTERS, null);
+      if (savedFilters) {
+        this.logFilters = savedFilters;
+        if (this.filterCheckboxes.directions.send) this.filterCheckboxes.directions.send.checked = savedFilters.directions.send;
+        if (this.filterCheckboxes.directions.recv) this.filterCheckboxes.directions.recv.checked = savedFilters.directions.recv;
+        if (this.filterCheckboxes.directions.info) this.filterCheckboxes.directions.info.checked = savedFilters.directions.info;
+        if (this.filterCheckboxes.events.game) this.filterCheckboxes.events.game.checked = savedFilters.events.game;
+        if (this.filterCheckboxes.events.nukes) this.filterCheckboxes.events.nukes.checked = savedFilters.events.nukes;
+        if (this.filterCheckboxes.events.alerts) this.filterCheckboxes.events.alerts.checked = savedFilters.events.alerts;
+        if (this.filterCheckboxes.events.troops) this.filterCheckboxes.events.troops.checked = savedFilters.events.troops;
+        if (this.filterCheckboxes.events.system) this.filterCheckboxes.events.system.checked = savedFilters.events.system;
+      }
       const header = root.querySelector("#ots-hud-header");
       const settingsHeader = root.querySelector("#ots-hud-settings-header");
+      const filterHeader = root.querySelector("#ots-hud-filter-header");
       const inner = root.querySelector("#ots-hud-inner");
       const savedPos = GM_getValue(STORAGE_KEY_HUD_POS, null);
       if (savedPos && typeof savedPos.left === "number" && typeof savedPos.top === "number") {
@@ -177,6 +261,9 @@
       }
       const resizeHandle = root.querySelector("#ots-hud-resize");
       const toggleBtn = root.querySelector("#ots-hud-toggle");
+      const autoScrollBtn = root.querySelector("#ots-hud-autoscroll");
+      const filterBtn = root.querySelector("#ots-hud-filter");
+      const filterCloseBtn = root.querySelector("#ots-hud-filter-close");
       const settingsBtn = root.querySelector("#ots-hud-settings");
       const settingsCloseBtn = root.querySelector("#ots-hud-settings-close");
       const settingsSaveBtn = root.querySelector("#ots-hud-settings-save");
@@ -191,19 +278,131 @@
         const settingsWindow = new FloatingPanel(this.settingsPanel);
         settingsWindow.attachDrag(settingsHeader);
       }
+      if (this.filterPanel && filterHeader) {
+        const filterWindow = new FloatingPanel(this.filterPanel);
+        filterWindow.attachDrag(filterHeader);
+      }
       setupResize(inner, resizeHandle);
-      let collapsed = false;
+      if (this.logList) {
+        this.logList.addEventListener("scroll", () => {
+          if (!this.logList) return;
+          const isAtBottom = this.logList.scrollHeight - this.logList.scrollTop - this.logList.clientHeight < 50;
+          this.autoScroll = isAtBottom;
+          this.updateAutoScrollButton();
+        });
+      }
+      autoScrollBtn.addEventListener("click", () => {
+        this.autoScroll = true;
+        this.updateAutoScrollButton();
+        this.scrollLogToBottom();
+      });
+      let collapsed = true;
+      let savedHeight = (savedSize == null ? void 0 : savedSize.height) || 260;
+      let savedWidth = (savedSize == null ? void 0 : savedSize.width) || 320;
+      if (this.body) {
+        this.body.style.display = "none";
+        footer.style.display = "none";
+        inner.style.height = "32px";
+        inner.style.width = "250px";
+        toggleBtn.textContent = "+";
+      }
       toggleBtn.addEventListener("click", () => {
         if (!this.body) return;
         collapsed = !collapsed;
         this.body.style.display = collapsed ? "none" : "flex";
+        footer.style.display = collapsed ? "none" : "flex";
         if (collapsed) {
+          const currentHeight = parseInt(inner.style.height || "260");
+          const currentWidth = parseInt(inner.style.width || "320");
+          if (currentHeight > 32) {
+            savedHeight = currentHeight;
+          }
+          if (currentWidth > 250) {
+            savedWidth = currentWidth;
+          }
           inner.style.height = "32px";
+          inner.style.width = "250px";
         } else {
-          inner.style.height = "";
+          const currentTop = parseInt(root.style.top || "8");
+          const currentBottom = currentTop + 32;
+          const expandedBottom = currentTop + savedHeight;
+          const viewportHeight = window.innerHeight;
+          if (expandedBottom > viewportHeight) {
+            const newTop = Math.max(8, viewportHeight - savedHeight - 8);
+            root.style.top = `${newTop}px`;
+            GM_setValue(STORAGE_KEY_HUD_POS, {
+              top: newTop,
+              left: parseInt(root.style.left || "8")
+            });
+          }
+          inner.style.height = `${savedHeight}px`;
+          inner.style.width = `${savedWidth}px`;
         }
         toggleBtn.textContent = collapsed ? "+" : "\u2013";
       });
+      filterBtn.addEventListener("click", () => {
+        if (!this.filterPanel) return;
+        this.filterPanel.style.display = "flex";
+      });
+      filterCloseBtn.addEventListener("click", () => {
+        if (this.filterPanel) this.filterPanel.style.display = "none";
+      });
+      if (this.filterCheckboxes.directions.send) {
+        this.filterCheckboxes.directions.send.addEventListener("change", (e) => {
+          this.logFilters.directions.send = e.target.checked;
+          GM_setValue(STORAGE_KEY_LOG_FILTERS, this.logFilters);
+          this.applyFiltersToLog();
+        });
+      }
+      if (this.filterCheckboxes.directions.recv) {
+        this.filterCheckboxes.directions.recv.addEventListener("change", (e) => {
+          this.logFilters.directions.recv = e.target.checked;
+          GM_setValue(STORAGE_KEY_LOG_FILTERS, this.logFilters);
+          this.applyFiltersToLog();
+        });
+      }
+      if (this.filterCheckboxes.directions.info) {
+        this.filterCheckboxes.directions.info.addEventListener("change", (e) => {
+          this.logFilters.directions.info = e.target.checked;
+          GM_setValue(STORAGE_KEY_LOG_FILTERS, this.logFilters);
+          this.applyFiltersToLog();
+        });
+      }
+      if (this.filterCheckboxes.events.game) {
+        this.filterCheckboxes.events.game.addEventListener("change", (e) => {
+          this.logFilters.events.game = e.target.checked;
+          GM_setValue(STORAGE_KEY_LOG_FILTERS, this.logFilters);
+          this.applyFiltersToLog();
+        });
+      }
+      if (this.filterCheckboxes.events.nukes) {
+        this.filterCheckboxes.events.nukes.addEventListener("change", (e) => {
+          this.logFilters.events.nukes = e.target.checked;
+          GM_setValue(STORAGE_KEY_LOG_FILTERS, this.logFilters);
+          this.applyFiltersToLog();
+        });
+      }
+      if (this.filterCheckboxes.events.alerts) {
+        this.filterCheckboxes.events.alerts.addEventListener("change", (e) => {
+          this.logFilters.events.alerts = e.target.checked;
+          GM_setValue(STORAGE_KEY_LOG_FILTERS, this.logFilters);
+          this.applyFiltersToLog();
+        });
+      }
+      if (this.filterCheckboxes.events.troops) {
+        this.filterCheckboxes.events.troops.addEventListener("change", (e) => {
+          this.logFilters.events.troops = e.target.checked;
+          GM_setValue(STORAGE_KEY_LOG_FILTERS, this.logFilters);
+          this.applyFiltersToLog();
+        });
+      }
+      if (this.filterCheckboxes.events.system) {
+        this.filterCheckboxes.events.system.addEventListener("change", (e) => {
+          this.logFilters.events.system = e.target.checked;
+          GM_setValue(STORAGE_KEY_LOG_FILTERS, this.logFilters);
+          this.applyFiltersToLog();
+        });
+      }
       settingsBtn.addEventListener("click", () => {
         if (!this.settingsPanel || !this.settingsInput) return;
         this.settingsPanel.style.display = "flex";
@@ -249,9 +448,48 @@
       if (!this.gameDot) return;
       this.gameDot.style.background = connected ? "#4ade80" : "#f97373";
     }
-    pushLog(direction, text) {
+    updateAutoScrollButton() {
+      if (!this.autoScrollBtn) return;
+      if (this.autoScroll) {
+        this.autoScrollBtn.textContent = "\u2713 Auto";
+        this.autoScrollBtn.style.color = "#6ee7b7";
+        this.autoScrollBtn.style.background = "rgba(52,211,153,0.18)";
+        this.autoScrollBtn.style.borderColor = "rgba(52,211,153,0.6)";
+      } else {
+        this.autoScrollBtn.textContent = "\u23F8 Paused";
+        this.autoScrollBtn.style.color = "#fbbf24";
+        this.autoScrollBtn.style.background = "rgba(251,191,36,0.18)";
+        this.autoScrollBtn.style.borderColor = "rgba(251,191,36,0.6)";
+      }
+    }
+    scrollLogToBottom() {
+      if (!this.logList) return;
+      this.logList.scrollTop = this.logList.scrollHeight;
+    }
+    getEventCategory(eventType) {
+      if (!eventType) return "system";
+      const gameEvents = ["GAME_START", "GAME_END", "GAME_SPAWNING"];
+      const nukeEvents = ["NUKE_LAUNCHED", "NUKE_EXPLODED", "NUKE_INTERCEPTED"];
+      const alertEvents = ["ALERT_NUKE", "ALERT_HYDRO", "ALERT_MIRV", "ALERT_LAND", "ALERT_NAVAL"];
+      const troopEvents = ["TROOP_UPDATE"];
+      const systemEvents = ["INFO", "ERROR", "HARDWARE_TEST"];
+      if (gameEvents.includes(eventType)) return "game";
+      if (nukeEvents.includes(eventType)) return "nukes";
+      if (alertEvents.includes(eventType)) return "alerts";
+      if (troopEvents.includes(eventType)) return "troops";
+      if (systemEvents.includes(eventType)) return "system";
+      return "system";
+    }
+    pushLog(direction, text, eventType) {
       this.ensure();
       if (!this.logList) return;
+      if (!this.logFilters.directions[direction]) {
+        return;
+      }
+      const eventCategory = this.getEventCategory(eventType);
+      if (!this.logFilters.events[eventCategory]) {
+        return;
+      }
       const entry = {
         id: ++this.logCounter,
         ts: Date.now(),
@@ -262,6 +500,8 @@
       line.style.display = "flex";
       line.style.gap = "4px";
       line.style.marginBottom = "2px";
+      line.setAttribute("data-log-direction", direction);
+      line.setAttribute("data-log-category", eventCategory);
       const dirSpan = document.createElement("span");
       dirSpan.textContent = direction.toUpperCase();
       dirSpan.style.fontSize = "9px";
@@ -290,7 +530,23 @@
       line.appendChild(dirSpan);
       line.appendChild(textSpan);
       this.logList.appendChild(line);
-      this.logList.scrollTop = this.logList.scrollHeight;
+      if (this.autoScroll) {
+        this.scrollLogToBottom();
+      }
+    }
+    applyFiltersToLog() {
+      if (!this.logList) return;
+      const logLines = this.logList.querySelectorAll("[data-log-direction]");
+      logLines.forEach((line) => {
+        const direction = line.getAttribute("data-log-direction");
+        const category = line.getAttribute("data-log-category");
+        const htmlLine = line;
+        if (this.logFilters.directions[direction] && this.logFilters.events[category]) {
+          htmlLine.style.display = "flex";
+        } else {
+          htmlLine.style.display = "none";
+        }
+      });
     }
   };
   function setupResize(container, handle) {
@@ -313,8 +569,7 @@
       if (!resizing) return;
       const dx = ev.clientX - startX;
       const dy = ev.clientY - startY;
-      const newWidth = Math.max(220, startWidth + dx);
-      const newHeight = Math.max(140, startHeight + dy);
+      const newWidth = Math.max(250, startWidth + dx);
       container.style.width = `${newWidth}px`;
       container.style.height = `${newHeight}px`;
       const size = { width: newWidth, height: newHeight };
@@ -393,7 +648,18 @@
         this.scheduleReconnect();
       });
       this.socket.addEventListener("message", (event) => {
-        this.hud.pushLog("recv", typeof event.data === "string" ? event.data : "[binary message]");
+        var _a;
+        let eventType;
+        if (typeof event.data === "string") {
+          try {
+            const parsed = JSON.parse(event.data);
+            if (parsed.type === "event" && ((_a = parsed.payload) == null ? void 0 : _a.type)) {
+              eventType = parsed.payload.type;
+            }
+          } catch (e) {
+          }
+        }
+        this.hud.pushLog("recv", typeof event.data === "string" ? event.data : "[binary message]", eventType);
         this.handleServerMessage(event.data);
       });
     }
@@ -421,13 +687,21 @@
       }, this.reconnectDelay);
     }
     safeSend(msg) {
+      var _a;
       if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
         debugLog("Cannot send, socket not open");
         this.hud.pushLog("info", "Cannot send, socket not open");
         return;
       }
       const json = JSON.stringify(msg);
-      this.hud.pushLog("send", json);
+      let eventType;
+      if (typeof msg === "object" && msg !== null) {
+        const msgObj = msg;
+        if (msgObj.type === "event" && ((_a = msgObj.payload) == null ? void 0 : _a.type)) {
+          eventType = msgObj.payload.type;
+        }
+      }
+      this.hud.pushLog("send", json, eventType);
       this.socket.send(json);
     }
     sendState(state) {

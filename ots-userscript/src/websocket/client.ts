@@ -70,7 +70,20 @@ export class WsClient {
     })
 
     this.socket.addEventListener('message', (event) => {
-      this.hud.pushLog('recv', typeof event.data === 'string' ? event.data : '[binary message]')
+      // Try to extract event type from message for filtering
+      let eventType: GameEventType | undefined
+      if (typeof event.data === 'string') {
+        try {
+          const parsed = JSON.parse(event.data)
+          if (parsed.type === 'event' && parsed.payload?.type) {
+            eventType = parsed.payload.type
+          }
+        } catch {
+          // Not JSON or invalid format, ignore
+        }
+      }
+
+      this.hud.pushLog('recv', typeof event.data === 'string' ? event.data : '[binary message]', eventType)
       this.handleServerMessage(event.data)
     })
   }
@@ -109,7 +122,17 @@ export class WsClient {
       return
     }
     const json = JSON.stringify(msg)
-    this.hud.pushLog('send', json)
+
+    // Extract event type for filtering if it's an event message
+    let eventType: GameEventType | undefined
+    if (typeof msg === 'object' && msg !== null) {
+      const msgObj = msg as any
+      if (msgObj.type === 'event' && msgObj.payload?.type) {
+        eventType = msgObj.payload.type
+      }
+    }
+
+    this.hud.pushLog('send', json, eventType)
     this.socket.send(json)
   }
 
