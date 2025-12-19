@@ -2,12 +2,15 @@
 #include "module_io.h"
 #include "button_handler.h"
 #include "led_controller.h"
+#include "nuke_tracker.h"
 #include "ws_client.h"
+#include "ots_common.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "cJSON.h"
 #include <string.h>
 
-static const char *TAG = "NUKE_MOD";
+static const char *TAG = "OTS_NUKE";
 
 static module_status_t status = {0};
 
@@ -38,17 +41,33 @@ static esp_err_t nuke_module_update(void) {
     return ESP_OK;
 }
 
-// Button to nuke type mapping
+// Button to nuke type mapping - all buttons use unified NUKE_LAUNCHED event
 typedef struct {
     game_event_type_t event_type;
     const char *nuke_type;
+    nuke_type_t tracker_type;
 } button_mapping_t;
 
 static const button_mapping_t button_map[] = {
-    {GAME_EVENT_NUKE_LAUNCHED, "atom"},
-    {GAME_EVENT_HYDRO_LAUNCHED, "hydro"},
-    {GAME_EVENT_MIRV_LAUNCHED, "mirv"}
+    {GAME_EVENT_NUKE_LAUNCHED, "atom", NUKE_TYPE_ATOM},
+    {GAME_EVENT_NUKE_LAUNCHED, "hydro", NUKE_TYPE_HYDRO},
+    {GAME_EVENT_NUKE_LAUNCHED, "mirv", NUKE_TYPE_MIRV}
 };
+
+// Helper to update LED state based on active outgoing nuke count
+static void update_nuke_button_led_state(uint8_t led_index, nuke_type_t nuke_type) {
+    uint8_t count = nuke_tracker_get_active_count(nuke_type, NUKE_DIR_OUTGOING);
+    
+    if (count > 0) {
+        // At least one nuke in flight - turn LED on (solid)
+        module_io_set_nuke_led(led_index, true);
+        ESP_LOGD(TAG, "LED %d ON (%d nukes in flight)", led_index, count);
+    } else {
+        // No nukes in flight - turn LED off
+        module_io_set_nuke_led(led_index, false);
+        ESP_LOGD(TAG, "LED %d OFF (all resolved)", led_index);
+    }
+}
 
 // Handle events
 static bool nuke_module_handle_event(const internal_event_t *event) {
@@ -80,20 +99,115 @@ static bool nuke_module_handle_event(const internal_event_t *event) {
         return true;
     }
     
-    // Handle nuke launch events (for LED feedback)
-    if (event->type == GAME_EVENT_NUKE_LAUNCHED || 
-        event->type == GAME_EVENT_HYDRO_LAUNCHED ||
-        event->type == GAME_EVENT_MIRV_LAUNCHED) {
+    // Handle nuke launch events (for LED feedback) - track and turn on LED
+    // Now all nukes use unified NUKE_LAUNCHED event with nukeType in data
+    if (event->type == GAME_EVENT_NUKE_LAUNCHED) {
         
+        // Parse nuke type from event data to determine LED and tracker type
+        // Expected JSON: {"nukeType": "atom"|"hydro"|"mirv", ...}
         uint8_t led_index = 0;
-        if (event->type == GAME_EVENT_NUKE_LAUNCHED) led_index = 0;
-        else if (event->type == GAME_EVENT_HYDRO_LAUNCHED) led_index = 1;
-        else if (event->type == GAME_EVENT_MIRV_LAUNCHED) led_index = 2;
+        nuke_type_t nuke_type = NUKE_TYPE_ATOM;
         
-        ESP_LOGI(TAG, "Nuke launched: %s (LED %d)", event_type_to_string(event->type), led_index);
+        // Simple string search for nuke type in data
+        if (event->data && strstr(event->data, "\"nukeType\":\"hydro\"") != NULL) {
+            led_index = 1;
+            nuke_type = NUKE_TYPE_HYDRO;
+        } else if (event->data && strstr(event->data, "\"nukeType\":\"mirv\"") != NULL) {
+            led_index = 2;
+            nuke_type = NUKE_TYPE_MIRV;
+        } else {
+            // Default to atom or if nukeType is "atom"
+            led_index = 0;
+            nuke_type = NUKE_TYPE_ATOM;
+        }
         
-        // Blink the corresponding LED for 10 seconds
-        led_controller_nuke_blink(led_index, 10000);
+        uint32_t unit_id = ots_parse_unit_id(event->data);
+        ESP_LOGI(TAG, "Nuke launched: %s (LED %d, unit=%lu)", 
+                event_type_to_string(event->type), led_index, (unsigned long)unit_id);
+        
+        if (unit_id > 0) {
+            // Register outgoing nuke in tracker
+            nuke_tracker_register_launch(unit_id, nuke_type, NUKE_DIR_OUTGOING);
+            // Update LED state
+            update_nuke_button_led_state(led_index, nuke_type);
+        }
+        
+        return true;
+    }
+    
+    // Handle explosion/interception events - resolve nuke and update LED
+    if (event->type == GAME_EVENT_NUKE_EXPLODED || 
+        event->type == GAME_EVENT_NUKE_INTERCEPTED) {
+        
+        bool exploded = (event->type == GAME_EVENT_NUKE_EXPLODED);
+        uint32_t unit_id = ots_parse_unit_id(event->data);
+        
+        ESP_LOGI(TAG, "Nuke %s (unit=%lu)", 
+                exploded ? "exploded" : "intercepted",
+                (unsigned long)unit_id);
+        
+        if (unit_id > 0) {
+            // Try to resolve the nuke (might be incoming or outgoing)
+            nuke_tracker_resolve_nuke(unit_id, exploded);
+            
+            // Update all button LED states
+            update_nuke_button_led_state(0, NUKE_TYPE_ATOM);
+            update_nuke_button_led_state(1, NUKE_TYPE_HYDRO);
+            update_nuke_button_led_state(2, NUKE_TYPE_MIRV);
+        }
+        
+        return true;
+    }
+    
+    // Handle WebSocket disconnect - visual feedback
+    if (event->type == INTERNAL_EVENT_WS_DISCONNECTED) {
+        ESP_LOGW(TAG, "WebSocket disconnected - showing visual feedback");
+        
+        // If any nukes are active, blink them rapidly to show connection loss
+        for (int i = 0; i < 3; i++) {
+            nuke_type_t nuke_type = (nuke_type_t)i;
+            uint8_t count = nuke_tracker_get_active_count(nuke_type, NUKE_DIR_OUTGOING);
+            if (count > 0) {
+                // Fast blink (200ms) to indicate disconnect state
+                led_command_t cmd = {
+                    .type = LED_TYPE_NUKE,
+                    .index = i,
+                    .effect = LED_EFFECT_BLINK,
+                    .duration_ms = 0,  // Infinite until reconnect
+                    .blink_rate_ms = 200  // Fast blink
+                };
+                
+                if (led_controller_send_command(&cmd)) {
+                    ESP_LOGI(TAG, "Nuke LED %d fast blinking (connection lost, %d active)", i, count);
+                }
+            }
+        }
+        
+        return true;
+    }
+    
+    // Handle WebSocket reconnect - restore normal LED state
+    if (event->type == INTERNAL_EVENT_WS_CONNECTED) {
+        ESP_LOGI(TAG, "WebSocket reconnected - restoring LED state");
+        
+        // Restore normal LED state based on active nukes
+        for (int i = 0; i < 3; i++) {
+            update_nuke_button_led_state(i, (nuke_type_t)i);
+        }
+        
+        return true;
+    }
+    
+    // Handle game end - clear all tracking
+    if (event->type == GAME_EVENT_GAME_END) {
+        
+        ESP_LOGI(TAG, "Game ended - clearing nuke tracking");
+        nuke_tracker_clear_all();
+        
+        // Turn off all LEDs
+        for (int i = 0; i < 3; i++) {
+            module_io_set_nuke_led(i, false);
+        }
         
         return true;
     }

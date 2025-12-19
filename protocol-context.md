@@ -304,9 +304,9 @@ Emitted when the player loses.
 ### Nuke Module Events
 
 #### `NUKE_LAUNCHED`
-Emitted when an atomic bomb is launched.
+Emitted when an atomic bomb is launched by the player.
 
-**Flow**: Hardware Button → Firmware → Server → Userscript → Game → Server → Hardware LED
+**Flow**: Hardware Button → Firmware → Server → Userscript → Game → Userscript → Server → Hardware LED
 
 ```json
 {
@@ -314,21 +314,43 @@ Emitted when an atomic bomb is launched.
   "payload": {
     "type": "NUKE_LAUNCHED",
     "timestamp": 1234567890,
-    "message": "Atomic bomb launched"
+    "message": "Atomic bomb launched",
+    "data": {
+      "nukeType": "Atom Bomb",
+      "nukeUnitID": 12345,
+      "targetTile": 54321,
+      "targetPlayerID": "player-abc",
+      "tick": 950,
+      "coordinates": {
+        "x": 123,
+        "y": 456
+      }
+    }
   }
 }
 ```
 
+**Data fields**:
+- `nukeType`: Game unit type name ("Atom Bomb", "Hydrogen Bomb", "MIRV")
+- `nukeUnitID`: Unique unit ID of the launched nuke (required for tracking)
+- `targetTile`: Game tile ID being targeted
+- `targetPlayerID`: ID of the target player
+- `tick`: Game tick when nuke was launched
+- `coordinates`: Map coordinates of target tile
+
 **Hardware behavior**:
 1. Button press detected on ATOM button
-2. Firmware sends `NUKE_LAUNCHED` event to server
+2. Firmware sends `NUKE_LAUNCHED` event to server (without unitID)
 3. Server forwards to userscript
-4. Userscript calls game nuke method
-5. Server echoes event back to firmware
-6. Firmware triggers ATOM LED blink for 10 seconds (500ms interval)
+4. Userscript detects launch in game and sends event WITH nukeUnitID
+5. Firmware receives event and:
+   - Registers nuke in tracker with unitID
+   - Turns LED ON (solid, not blinking)
+   - LED stays ON until nuke explodes/intercepted
+6. Multiple simultaneous nukes → LED stays ON until ALL resolved
 
 #### `HYDRO_LAUNCHED`
-Emitted when a hydrogen bomb is launched.
+Emitted when a hydrogen bomb is launched by the player.
 
 ```json
 {
@@ -336,15 +358,28 @@ Emitted when a hydrogen bomb is launched.
   "payload": {
     "type": "HYDRO_LAUNCHED",
     "timestamp": 1234567890,
-    "message": "Hydrogen bomb launched"
+    "message": "Hydrogen bomb launched",
+    "data": {
+      "nukeType": "Hydrogen Bomb",
+      "nukeUnitID": 12346,
+      "targetTile": 54322,
+      "targetPlayerID": "player-def",
+      "tick": 955,
+      "coordinates": {
+        "x": 124,
+        "y": 457
+      }
+    }
   }
 }
 ```
 
+**Data fields**: Same as `NUKE_LAUNCHED` (see above).
+
 **Hardware behavior**: Same as `NUKE_LAUNCHED` but for HYDRO button/LED.
 
 #### `MIRV_LAUNCHED`
-Emitted when a MIRV is launched.
+Emitted when a MIRV is launched by the player.
 
 ```json
 {
@@ -352,10 +387,23 @@ Emitted when a MIRV is launched.
   "payload": {
     "type": "MIRV_LAUNCHED",
     "timestamp": 1234567890,
-    "message": "MIRV launched"
+    "message": "MIRV launched",
+    "data": {
+      "nukeType": "MIRV",
+      "nukeUnitID": 12347,
+      "targetTile": 54323,
+      "targetPlayerID": "player-ghi",
+      "tick": 960,
+      "coordinates": {
+        "x": 125,
+        "y": 458
+      }
+    }
   }
 }
 ```
+
+**Data fields**: Same as `NUKE_LAUNCHED` (see above).
 
 **Hardware behavior**: Same as `NUKE_LAUNCHED` but for MIRV button/LED.
 
@@ -407,11 +455,13 @@ Incoming atomic bomb threat detected.
 - `coordinates`: Map coordinates of target tile
 
 **Hardware behavior**:
-1. Receive `ALERT_ATOM` event
-2. Activate ATOM alert LED with pulse animation
-3. Activate WARNING LED (fast blink when any alert active)
-4. Auto-expire after 10 seconds
-5. WARNING LED remains active if other alerts still active
+1. Receive `ALERT_ATOM` event with nukeUnitID
+2. Register incoming nuke in tracker
+3. Turn ATOM alert LED ON (solid)
+4. Activate WARNING LED when any alert active
+5. LED stays ON until ALL atom nukes resolve (explode/intercept)
+6. Multiple simultaneous nukes → LED stays ON until last one resolves
+7. WARNING LED turns OFF when all nuke alerts cleared
 
 #### `ALERT_HYDRO`
 Incoming hydrogen bomb threat detected.
@@ -442,7 +492,7 @@ Incoming hydrogen bomb threat detected.
 
 **Data fields**: Same as `ALERT_ATOM` (see above).
 
-**Hardware behavior**: Same as `ALERT_ATOM` but for HYDRO alert LED (10 seconds).
+**Hardware behavior**: Same as `ALERT_ATOM` but for HYDRO alert LED (15 seconds).
 
 #### `ALERT_MIRV`
 Incoming MIRV threat detected.
@@ -473,7 +523,7 @@ Incoming MIRV threat detected.
 
 **Data fields**: Same as `ALERT_ATOM` (see above).
 
-**Hardware behavior**: Same as `ALERT_ATOM` but for MIRV alert LED (10 seconds).
+**Hardware behavior**: Same as `ALERT_ATOM` but for MIRV alert LED (15 seconds).
 
 #### `ALERT_LAND`
 Land invasion detected.
@@ -587,7 +637,17 @@ Emitted when a tracked nuclear weapon successfully reaches its target.
 }
 ```
 
-**Note**: This event is informational only and does not trigger hardware module actions.
+**Hardware behavior**:
+1. Receive explosion event with unitID
+2. Look up nuke in tracker by unitID
+3. Remove from tracker and update LED state
+4. Alert LED turns OFF only when ALL nukes of that type resolved
+5. Nuke module button LED turns OFF only when ALL outgoing nukes of that type resolved
+
+**Note**: This event is sent for BOTH incoming and outgoing nukes. The firmware uses the `unitID` field to:
+- Track individual nukes in flight
+- Determine when to turn LEDs off (when count reaches 0)
+- Support multiple simultaneous nukes of the same type
 
 #### `NUKE_INTERCEPTED`
 Emitted when a tracked nuclear weapon is destroyed before reaching its target.
@@ -613,7 +673,7 @@ Emitted when a tracked nuclear weapon is destroyed before reaching its target.
 }
 ```
 
-**Note**: This event is informational only and does not trigger hardware module actions.
+**Hardware behavior**: Same as `NUKE_EXPLODED` (see above).
 
 ### Hardware Testing
 
@@ -789,7 +849,7 @@ This section defines the complete protocol behavior for each hardware module.
 
 ### Nuke Module (16U)
 
-**Purpose**: Launch nuclear weapons via physical buttons with LED confirmation.
+**Purpose**: Launch nuclear weapons via physical buttons with LED confirmation showing in-flight status.
 
 **Hardware Components**:
 - 3x Buttons: ATOM, HYDRO, MIRV (Board 0, Pins 1-3, INPUT_PULLUP active-low)
@@ -811,17 +871,22 @@ This section defines the complete protocol behavior for each hardware module.
 }
 ```
 
-**Incoming (Event → LED Blink)**:
-1. Receive launch event from server (game confirmation)
-2. Activate corresponding LED
-3. Blink pattern: 500ms ON / 500ms OFF
-4. Duration: 10 seconds
-5. Auto-off after timeout
+**Incoming (Event → LED State Tracking)**:
+1. Receive launch event from server with nukeUnitID
+2. Register nuke in tracker (max 32 simultaneous nukes)
+3. Turn LED ON (solid, not blinking)
+4. Track all in-flight nukes of that type
+5. On NUKE_EXPLODED/NUKE_INTERCEPTED:
+   - Remove specific nuke from tracker by unitID
+   - Turn LED OFF only when count reaches 0
+6. Multiple simultaneous nukes → LED stays ON until ALL resolved
 
 **Important**:
-- LEDs are event-driven (only respond to server events, not local presses)
+- LEDs show real-time in-flight nuke count
+- LEDs are event-driven (only respond to server events)
 - No cooldown restriction (rapid fire allowed)
-- Multiple LEDs can blink simultaneously
+- Supports multiple simultaneous nukes per type
+- LED state persists across multiple launches
 
 **Pin Mapping** (MCP23017 Board 0):
 ```cpp
@@ -838,7 +903,7 @@ LED_MIRV  = {0, 10}
 
 ### Alert Module (16U)
 
-**Purpose**: Visual threat notification system for incoming attacks.
+**Purpose**: Visual threat notification system for incoming attacks with real-time tracking.
 
 **Hardware Components**:
 - 1x WARNING LED (large, 16x16, red)
@@ -846,7 +911,7 @@ LED_MIRV  = {0, 10}
 
 **Protocol Behavior**:
 
-**Incoming (Event → LED Activation)**:
+**Incoming (Event → LED State Tracking)**:
 Receives alert events from server (game-generated threats):
 
 ```json
@@ -855,28 +920,35 @@ Receives alert events from server (game-generated threats):
   "payload": {
     "type": "ALERT_ATOM",  // or ALERT_HYDRO, ALERT_MIRV, ALERT_LAND, ALERT_NAVAL
     "timestamp": 1234567890,
-    "message": "Incoming nuclear strike detected!"
+    "message": "Incoming nuclear strike detected!",
+    "data": {
+      "nukeUnitID": 12345  // Required for nuke tracking
+    }
   }
 }
 ```
 
-**LED Behavior**:
-1. Activate corresponding threat LED
-2. Activate WARNING LED (auto-managed)
-3. Blink pattern:
-   - Threat LEDs: 500ms ON / 500ms OFF
-   - WARNING LED: 300ms ON / 300ms OFF (faster)
-4. Duration:
-   - Nuke alerts (ATOM/HYDRO/MIRV): 10 seconds
-   - Invasion alerts (LAND/NAVAL): 15 seconds
-5. Auto-expire after timeout
-6. WARNING LED remains active while ANY threat LED is active
+**LED Behavior (Nuclear Threats)**:
+1. Receive alert event with nukeUnitID
+2. Register incoming nuke in tracker (max 32 simultaneous)
+3. Turn threat LED ON (solid)
+4. Track all incoming nukes of that type
+5. On NUKE_EXPLODED/NUKE_INTERCEPTED:
+   - Remove specific nuke from tracker by unitID
+   - Turn LED OFF only when count reaches 0
+6. Multiple simultaneous nukes → LED stays ON until ALL resolved
+7. WARNING LED turns ON when any threat LED active
+
+**LED Behavior (Land/Naval Invasions)**:
+- These use 15-second timeout (not tracked by nuke tracker)
+- Simpler alerts that auto-expire after duration
 
 **Important**:
 - Output-only module (no commands sent)
-- Multiple alerts can be active simultaneously
-- WARNING LED is computed (on when any other alert active)
-- Each alert has independent timeout
+- Nuclear threats tracked individually by unitID
+- Multiple simultaneous threats supported
+- WARNING LED is computed (on when any threat LED active)
+- Nuke LEDs stay on until ALL nukes of that type resolved
 
 **Pin Mapping** (MCP23017 Board 1):
 ```cpp
@@ -964,10 +1036,10 @@ ADC_ADDRESS = 0x48  // ADS1115 ADC
 
 ### Alert Module
 ```cpp
-// Alert durations
-#define ALERT_DURATION_ATOM   10000  // 10 seconds
-#define ALERT_DURATION_HYDRO  10000  // 10 seconds
-#define ALERT_DURATION_MIRV   10000  // 10 seconds
+// Alert durations (all alerts use 15 seconds for consistency)
+#define ALERT_DURATION_ATOM   15000  // 15 seconds
+#define ALERT_DURATION_HYDRO  15000  // 15 seconds
+#define ALERT_DURATION_MIRV   15000  // 15 seconds
 #define ALERT_DURATION_LAND   15000  // 15 seconds
 #define ALERT_DURATION_NAVAL  15000  // 15 seconds
 

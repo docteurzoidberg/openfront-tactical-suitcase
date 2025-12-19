@@ -19,6 +19,7 @@ export class GameBridge {
   private troopMonitor: TroopMonitor
   private gameConnected = false
   private inGame = false
+  private inSpawning = false
   private gameAPI = createGameAPI()
 
   constructor(
@@ -84,21 +85,45 @@ export class GameBridge {
       const myPlayerID = gameAPI.getMyPlayerID()
       if (!myPlayerID) {
         // Not in a game yet or player not loaded
-        if (this.inGame) {
-          // Game ended
+        if (this.inGame || this.inSpawning) {
+          // Game ended - check if won or lost
           this.inGame = false
-          this.ws.sendEvent('GAME_END', 'Game ended')
-          console.log('[GameBridge] Game ended, clearing trackers')
+          this.inSpawning = false
+
+          const didWin = gameAPI.didPlayerWin()
+          if (didWin === true) {
+            this.ws.sendEvent('GAME_END', 'Victory!', { victory: true })
+            console.log('[GameBridge] Game ended - VICTORY!')
+          } else if (didWin === false) {
+            this.ws.sendEvent('GAME_END', 'Defeat', { victory: false })
+            console.log('[GameBridge] Game ended - DEFEAT')
+          } else {
+            // Couldn't determine outcome
+            this.ws.sendEvent('GAME_END', 'Game ended', { victory: null })
+            console.log('[GameBridge] Game ended (outcome unknown)')
+          }
         }
         this.clearTrackers()
         return
       }
 
-      // Detect game start
-      if (!this.inGame) {
+      // Check if game has truly started (spawn countdown ended)
+      const gameStarted = gameAPI.isGameStarted()
+
+      // Detect spawning phase (player exists but game hasn't started)
+      if (!this.inSpawning && !this.inGame && gameStarted === false) {
+        this.inSpawning = true
+        this.ws.sendEvent('GAME_SPAWNING', 'Spawn countdown active', { spawning: true })
+        console.log('[GameBridge] Spawning phase - countdown active')
+        this.clearTrackers() // Clear any stale state
+      }
+
+      // Detect game truly starting (spawn countdown ended)
+      if (gameStarted === true && !this.inGame) {
         this.inGame = true
-        this.ws.sendEvent('GAME_START', 'Game started')
-        console.log('[GameBridge] Game started')
+        this.inSpawning = false
+        this.ws.sendEvent('GAME_START', 'Game started - countdown ended')
+        console.log('[GameBridge] Game started - spawn countdown ended')
         this.clearTrackers() // Clear any stale state
 
         // Start troop monitoring when game starts

@@ -3,9 +3,11 @@
 #include "event_dispatcher.h"
 #include "esp_websocket_client.h"
 #include "esp_log.h"
+#include "esp_timer.h"
+#include "cJSON.h"
 #include <string.h>
 
-static const char *TAG = "WS_TRANSPORT";
+static const char *TAG = "OTS_WS_CLIENT";
 
 static esp_websocket_client_handle_t client = NULL;
 static bool is_connected = false;
@@ -79,11 +81,51 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base,
             else if (msg.type == WS_MSG_COMMAND) {
                 ESP_LOGI(TAG, "Command received: %s", msg.payload.command.action);
                 
-                // Handle send-nuke command by posting as event
+                // Handle send-nuke command by parsing params and triggering button action
                 if (strcmp(msg.payload.command.action, "send-nuke") == 0) {
-                    // Parse params to get nuke type
-                    // For now, post a simple event - can be enhanced
-                    ESP_LOGI(TAG, "Nuke command: %s", msg.payload.command.params);
+                    ESP_LOGI(TAG, "Nuke command params: %s", msg.payload.command.params);
+                    
+                    // Parse nukeType from params JSON: {"nukeType":"atom"}
+                    cJSON *params_json = cJSON_Parse(msg.payload.command.params);
+                    if (params_json) {
+                        cJSON *nuke_type = cJSON_GetObjectItem(params_json, "nukeType");
+                        if (nuke_type && cJSON_IsString(nuke_type)) {
+                            uint8_t button_index = 0;
+                            game_event_type_t event_type = GAME_EVENT_NUKE_LAUNCHED;
+                            
+                            // Map nuke type to button index - all use unified NUKE_LAUNCHED event
+                            if (strcmp(nuke_type->valuestring, "atom") == 0) {
+                                button_index = 0;
+                                event_type = GAME_EVENT_NUKE_LAUNCHED;
+                            } else if (strcmp(nuke_type->valuestring, "hydro") == 0) {
+                                button_index = 1;
+                                event_type = GAME_EVENT_NUKE_LAUNCHED;
+                            } else if (strcmp(nuke_type->valuestring, "mirv") == 0) {
+                                button_index = 2;
+                                event_type = GAME_EVENT_NUKE_LAUNCHED;
+                            } else {
+                                ESP_LOGW(TAG, "Unknown nuke type: %s", nuke_type->valuestring);
+                                cJSON_Delete(params_json);
+                                break;
+                            }
+                            
+                            ESP_LOGI(TAG, "Triggering nuke button %d (%s)", button_index, nuke_type->valuestring);
+                            
+                            // Post button press event (simulates physical button press)
+                            internal_event_t button_event = {
+                                .type = INTERNAL_EVENT_BUTTON_PRESSED,
+                                .source = EVENT_SOURCE_WEBSOCKET,
+                                .timestamp = esp_timer_get_time() / 1000,
+                                .data = {button_index}
+                            };
+                            event_dispatcher_post(&button_event);
+                        } else {
+                            ESP_LOGW(TAG, "send-nuke command missing nukeType parameter");
+                        }
+                        cJSON_Delete(params_json);
+                    } else {
+                        ESP_LOGW(TAG, "Failed to parse send-nuke params JSON");
+                    }
                 }
             }
         }

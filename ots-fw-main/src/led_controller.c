@@ -5,7 +5,7 @@
 #include "freertos/task.h"
 #include "freertos/timers.h"
 
-static const char *TAG = "LED_CTRL";
+static const char *TAG = "OTS_LED_CTRL";
 
 #define LED_COMMAND_QUEUE_SIZE 16
 #define LED_TASK_STACK_SIZE 3072

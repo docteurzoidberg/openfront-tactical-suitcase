@@ -6,7 +6,7 @@
 #include "esp_timer.h"
 #include <string.h>
 
-static const char *TAG = "EVENT_DISP";
+static const char *TAG = "OTS_EVENTS";
 
 #define EVENT_QUEUE_SIZE 32
 #define EVENT_TASK_STACK_SIZE 4096

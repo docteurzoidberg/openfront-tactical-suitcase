@@ -2,7 +2,7 @@
 #include "esp_log.h"
 #include <string.h>
 
-static const char *TAG = "MOD_MGR";
+static const char *TAG = "OTS_MOD_MGR";
 
 #define MAX_MODULES 8
 

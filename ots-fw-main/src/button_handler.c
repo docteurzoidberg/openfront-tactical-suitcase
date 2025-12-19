@@ -5,7 +5,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 
-static const char *TAG = "BTN_HANDLER";
+static const char *TAG = "OTS_BUTTONS";
 
 #define BUTTON_EVENT_QUEUE_SIZE 8
 #define BUTTON_COUNT 3

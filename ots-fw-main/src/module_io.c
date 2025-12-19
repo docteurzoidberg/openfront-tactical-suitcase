@@ -2,7 +2,7 @@
 #include "esp_log.h"
 #include "esp_err.h"
 
-static const char *TAG = "MODULE_IO";
+static const char *TAG = "OTS_MODULE_IO";
 
 static bool button_states[3] = {false, false, false};  // Debounced button states
 static uint32_t button_press_times[3] = {0, 0, 0};
@@ -37,6 +37,13 @@ esp_err_t module_io_init(void) {
     
     ESP_LOGI(TAG, "Module I/O initialized (Board 0=INPUT, Board 1=OUTPUT)");
     return ESP_OK;
+}
+
+esp_err_t module_io_reinit(void) {
+    ESP_LOGI(TAG, "Reinitializing module I/O after recovery...");
+    
+    // Reconfigure boards - same logic as init
+    return module_io_init();
 }
 
 bool module_io_read_nuke_button(uint8_t button, bool *pressed) {

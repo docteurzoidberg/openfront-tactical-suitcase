@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2025-12-19 (Game End Screen)
+- **Victory/Defeat display on LCD**
+  - Dedicated game end screen in `system_status_module`
+  - Shows "VICTORY!" or "DEFEAT" based on game outcome
+  - Displays for 5 seconds after game ends
+  - Responds to `GAME_EVENT_WIN` and `GAME_EVENT_LOOSE` events
+  - Automatic return to system status after timeout
+- **Userscript game outcome detection**
+  - Added `didPlayerWin()` method to GameAPI
+  - Checks `myPlayer.eliminated()` and `game.gameOver()` state
+  - Sends specific `WIN` or `LOOSE` events instead of generic `GAME_END`
+  - Falls back to `GAME_END` if outcome cannot be determined
+
+### Added - 2025-12-19 (I/O Expander Error Recovery & WebSocket Disconnect Feedback)
+- **Comprehensive error recovery system for MCP23017 I/O expanders**
+  - Retry logic with exponential backoff (5 attempts, 100ms → 5000ms)
+  - Health monitoring with error tracking (error count, consecutive errors, recovery count)
+  - Automatic recovery via periodic health checks (every 10 seconds)
+  - Board reinitalization API (`io_expander_reinit_board()`)
+  - Manual recovery API (`io_expander_attempt_recovery()`)
+  - Recovery callback system for notification (`io_expander_set_recovery_callback()`)
+  - Health status queries (`io_expander_get_health()`, `io_expander_health_check()`)
+  - Error counter reset (`io_expander_reset_errors()`)
+  - Boards marked unhealthy after 3 consecutive errors
+  - Integrated into I/O task loop with automatic recovery attempts
+  - Module I/O reconfiguration after recovery (`module_io_reinit()`)
+  - Detailed logging for debugging and monitoring
+
+- **Visual feedback for WebSocket connection state during gameplay**
+  - Nuke module: Fast blink (200ms) on active nuke LEDs when WebSocket disconnects
+  - Alert module: Fast blink (100ms) on warning LED when disconnected with active threats
+  - Alert module: Slow blink (500ms) on warning LED when disconnected without threats
+  - Automatic LED state restoration on WebSocket reconnection
+  - Clear visual distinction between connected (solid/normal) and disconnected (fast blink) states
+
+- **Smart LCD display system with dedicated status module**
+  - **NEW MODULE**: `system_status_module` handles all non-game LCD screens:
+    - Splash screen on boot: "OTS Firmware / Booting..."
+    - Waiting for connection: "Waiting for / Connection..."
+    - Lobby screen: "Connected! / Waiting Game..."
+  - **REFACTORED**: `troops_module` simplified to only handle in-game troop display
+    - Shows troop counts only during active gameplay (IN_GAME phase)
+    - Slider monitoring disabled when not in game
+    - Clean separation: system status module owns LCD during boot/lobby, troops module during game
+  - Automatic LCD control handoff between modules based on game phase
+  - Clear user feedback about connection and game state at all times
+  - Helps players identify connection issues vs. actual game state
+
 ### Changed - 2025-12-17 (Phase 4.5: Button Handling Encapsulation)
 - **Refactored button handling for proper module encapsulation**
   - Added `INTERNAL_EVENT_BUTTON_PRESSED` internal event type

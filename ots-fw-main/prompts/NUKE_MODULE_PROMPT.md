@@ -37,20 +37,24 @@ All buttons are connected via MCP23017 I/O expander boards using the `ModuleIO` 
 | **HYDRO LED** | Hydrogen bomb launch indicator | Board 0, Pin 9 | Blinks when HYDRO nuke launched |
 | **MIRV LED** | MIRV launch indicator | Board 0, Pin 10 | Blinks when MIRV launched |
 
-### Current Pin Mapping (in `module_io.h`)
+### Current Pin Mapping (in `nuke_module.h`)
 
-```cpp
-namespace NukeModule {
-  // Button inputs
-  constexpr PinMap BTN_ATOM  = {0, 1};   // Board 0, Pin 1
-  constexpr PinMap BTN_HYDRO = {0, 2};   // Board 0, Pin 2
-  constexpr PinMap BTN_MIRV  = {0, 3};   // Board 0, Pin 3
-  
-  // LED outputs
-  constexpr PinMap LED_ATOM  = {0, 8};   // Board 0, Pin 8
-  constexpr PinMap LED_HYDRO = {0, 9};   // Board 0, Pin 9
-  constexpr PinMap LED_MIRV  = {0, 10};  // Board 0, Pin 10
-}
+```c
+// Nuke Module - Button Inputs (Board 0 - INPUT pins)
+#define NUKE_BTN_ATOM_BOARD  0
+#define NUKE_BTN_ATOM_PIN    1
+#define NUKE_BTN_HYDRO_BOARD 0
+#define NUKE_BTN_HYDRO_PIN   2
+#define NUKE_BTN_MIRV_BOARD  0
+#define NUKE_BTN_MIRV_PIN    3
+
+// Nuke Module - LED Outputs (Board 1 - OUTPUT pins)
+#define NUKE_LED_ATOM_BOARD  1
+#define NUKE_LED_ATOM_PIN    8
+#define NUKE_LED_HYDRO_BOARD 1
+#define NUKE_LED_HYDRO_PIN   9
+#define NUKE_LED_MIRV_BOARD  1
+#define NUKE_LED_MIRV_PIN    10
 ```
 
 ## Functional Behavior
@@ -321,17 +325,21 @@ Define in firmware code or configuration header:
 Pin mappings in `include/module_io.h`:
 
 ```cpp
-namespace NukeModule {
-  // Inputs (active-low with internal pull-ups)
-  constexpr PinMap BTN_ATOM  = {0, 1};
-  constexpr PinMap BTN_HYDRO = {0, 2};
-  constexpr PinMap BTN_MIRV  = {0, 3};
-  
-  // Outputs
-  constexpr PinMap LED_ATOM  = {0, 8};
-  constexpr PinMap LED_HYDRO = {0, 9};
-  constexpr PinMap LED_MIRV  = {0, 10};
-}
+// Nuke Module - Button Inputs (Board 0 - INPUT pins)
+#define NUKE_BTN_ATOM_BOARD  0
+#define NUKE_BTN_ATOM_PIN    1
+#define NUKE_BTN_HYDRO_BOARD 0
+#define NUKE_BTN_HYDRO_PIN   2
+#define NUKE_BTN_MIRV_BOARD  0
+#define NUKE_BTN_MIRV_PIN    3
+
+// Nuke Module - LED Outputs (Board 1 - OUTPUT pins)
+#define NUKE_LED_ATOM_BOARD  1
+#define NUKE_LED_ATOM_PIN    8
+#define NUKE_LED_HYDRO_BOARD 1
+#define NUKE_LED_HYDRO_PIN   9
+#define NUKE_LED_MIRV_BOARD  1
+#define NUKE_LED_MIRV_PIN    10
 ```
 
 ## Implementation Checklist

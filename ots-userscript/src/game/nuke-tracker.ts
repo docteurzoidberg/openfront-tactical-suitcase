@@ -140,20 +140,20 @@ export class NukeTracker {
 
     if (tracked.isOutgoing) {
       // Player launched this nuke - report as outgoing launch
-      let eventType: 'NUKE_LAUNCHED' | 'HYDRO_LAUNCHED' | 'MIRV_LAUNCHED' = 'NUKE_LAUNCHED'
-
+      // Determine nuke type for data
+      let nukeTypeShort: 'atom' | 'hydro' | 'mirv' = 'atom'
       if (tracked.type.includes('Hydrogen')) {
-        eventType = 'HYDRO_LAUNCHED'
+        nukeTypeShort = 'hydro'
       } else if (tracked.type.includes('MIRV')) {
-        eventType = 'MIRV_LAUNCHED'
+        nukeTypeShort = 'mirv'
       }
 
       const event: GameEvent = {
-        type: eventType,
+        type: 'NUKE_LAUNCHED',
         timestamp: Date.now(),
         message: `${tracked.type} launched`,
         data: {
-          nukeType: tracked.type,
+          nukeType: nukeTypeShort,
           nukeUnitID: tracked.unitID,
           targetTile: tracked.targetTile,
           targetPlayerID: tracked.targetPlayerID,
@@ -165,7 +165,7 @@ export class NukeTracker {
       console.log('[NukeTracker] Player launched:', tracked.type, 'at', coordinates)
     } else {
       // Incoming nuke - report as alert
-      let eventType: 'ALERT_ATOM' | 'ALERT_HYDRO' | 'ALERT_MIRV' = 'ALERT_ATOM'
+      let eventType: 'ALERT_NUKE' | 'ALERT_HYDRO' | 'ALERT_MIRV' = 'ALERT_NUKE'
       let message = 'Incoming nuclear strike detected!'
 
       if (tracked.type.includes('Hydrogen')) {

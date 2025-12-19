@@ -56,6 +56,10 @@ const attackRatio = ref<number | null>(null)  // Attack ratio percentage (0-100)
 // Game phase tracking - null means userscript not connected
 const gamePhase = ref<GamePhase | null>(null)
 
+// Game end screen timeout (5 seconds like firmware)
+let gameEndTimer: NodeJS.Timeout | null = null
+const GAME_END_DISPLAY_TIME_MS = 5000
+
 export function useGameSocket() {
   const { status, data, send, open, close } = useWebSocket(WS_URL, {
     autoReconnect: {
@@ -108,7 +112,17 @@ export function useGameSocket() {
         }
 
         // Handle game state events
-        if (msg.payload.type === 'GAME_START') {
+        if (msg.payload.type === 'GAME_SPAWNING') {
+          gamePhase.value = 'spawning'
+          // Clear all alerts and nukes when entering spawn phase
+          Object.keys(activeAlerts.value).forEach(key => {
+            activeAlerts.value[key as keyof typeof activeAlerts.value] = false
+          })
+          trackedNukes.value.clear()
+          // Clear all timers
+          alertTimers.forEach(timer => clearTimeout(timer))
+          alertTimers.clear()
+        } else if (msg.payload.type === 'GAME_START') {
           gamePhase.value = 'in-game'
           // Clear all alerts and nukes on game start
           Object.keys(activeAlerts.value).forEach(key => {
@@ -119,11 +133,27 @@ export function useGameSocket() {
           alertTimers.forEach(timer => clearTimeout(timer))
           alertTimers.clear()
         } else if (msg.payload.type === 'GAME_END') {
-          gamePhase.value = 'lobby'
-        } else if (msg.payload.type === 'WIN') {
-          gamePhase.value = 'game-won'
-        } else if (msg.payload.type === 'LOOSE') {
-          gamePhase.value = 'game-lost'
+          // Parse victory status from event data
+          const victory = (msg.payload.data as any)?.victory
+
+          if (victory === true) {
+            // Show victory screen for 5 seconds, then return to lobby
+            gamePhase.value = 'game-won'
+            if (gameEndTimer) clearTimeout(gameEndTimer)
+            gameEndTimer = setTimeout(() => {
+              gamePhase.value = 'lobby'
+            }, GAME_END_DISPLAY_TIME_MS)
+          } else if (victory === false) {
+            // Show defeat screen for 5 seconds, then return to lobby
+            gamePhase.value = 'game-lost'
+            if (gameEndTimer) clearTimeout(gameEndTimer)
+            gameEndTimer = setTimeout(() => {
+              gamePhase.value = 'lobby'
+            }, GAME_END_DISPLAY_TIME_MS)
+          } else {
+            // Unknown outcome, just return to lobby
+            gamePhase.value = 'lobby'
+          }
         }
 
         // Handle troop update events
@@ -142,13 +172,11 @@ export function useGameSocket() {
         }
 
         // Handle nuke launch events (outgoing nukes launched by player)
-        if (msg.payload.type === 'NUKE_LAUNCHED' || msg.payload.type === 'HYDRO_LAUNCHED' || msg.payload.type === 'MIRV_LAUNCHED') {
+        if (msg.payload.type === 'NUKE_LAUNCHED') {
           const data = msg.payload.data as any
-          if (data?.nukeUnitID) {
-            let nukeType: 'atom' | 'hydro' | 'mirv' = 'atom'
-            if (msg.payload.type === 'HYDRO_LAUNCHED') nukeType = 'hydro'
-            else if (msg.payload.type === 'MIRV_LAUNCHED') nukeType = 'mirv'
-
+          if (data?.nukeUnitID && data?.nukeType) {
+            // nukeType comes from event data now
+            const nukeType: 'atom' | 'hydro' | 'mirv' = data.nukeType
             trackNukeLaunch(data.nukeUnitID, nukeType)
           }
         }
@@ -163,7 +191,7 @@ export function useGameSocket() {
         }
 
         // Handle alert events
-        if (msg.payload.type === 'ALERT_ATOM') {
+        if (msg.payload.type === 'ALERT_NUKE') {
           startAlert('atom')
         } else if (msg.payload.type === 'ALERT_HYDRO') {
           startAlert('hydro')

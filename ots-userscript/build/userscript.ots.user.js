@@ -670,6 +670,40 @@
         } catch (e) {
           return null;
         }
+      },
+      isGameStarted() {
+        try {
+          const game = getGame();
+          if (!game) return null;
+          if (typeof game.started === "function") {
+            return game.started();
+          }
+          if (typeof game.ticks === "function") {
+            const ticks = game.ticks();
+            return ticks !== null && ticks > 0;
+          }
+          return null;
+        } catch (error) {
+          console.error("[GameAPI] Error checking game started:", error);
+          return null;
+        }
+      },
+      didPlayerWin() {
+        try {
+          const game = window.game;
+          if (!game) return null;
+          const myPlayer = game.myPlayer();
+          if (!myPlayer) return null;
+          const gameOver = game.gameOver();
+          if (!gameOver) return null;
+          if (myPlayer.eliminated()) {
+            return false;
+          }
+          return true;
+        } catch (error) {
+          console.error("[GameAPI] Error checking win status:", error);
+          return null;
+        }
       }
     };
   }
@@ -778,18 +812,18 @@
         y: gameAPI.getY(tracked.targetTile)
       };
       if (tracked.isOutgoing) {
-        let eventType = "NUKE_LAUNCHED";
+        let nukeTypeShort = "atom";
         if (tracked.type.includes("Hydrogen")) {
-          eventType = "HYDRO_LAUNCHED";
+          nukeTypeShort = "hydro";
         } else if (tracked.type.includes("MIRV")) {
-          eventType = "MIRV_LAUNCHED";
+          nukeTypeShort = "mirv";
         }
         const event = {
-          type: eventType,
+          type: "NUKE_LAUNCHED",
           timestamp: Date.now(),
           message: `${tracked.type} launched`,
           data: {
-            nukeType: tracked.type,
+            nukeType: nukeTypeShort,
             nukeUnitID: tracked.unitID,
             targetTile: tracked.targetTile,
             targetPlayerID: tracked.targetPlayerID,
@@ -800,7 +834,7 @@
         this.emitEvent(event);
         console.log("[NukeTracker] Player launched:", tracked.type, "at", coordinates);
       } else {
-        let eventType = "ALERT_ATOM";
+        let eventType = "ALERT_NUKE";
         let message = "Incoming nuclear strike detected!";
         if (tracked.type.includes("Hydrogen")) {
           eventType = "ALERT_HYDRO";
@@ -1267,6 +1301,7 @@
       this.pollInterval = null;
       this.gameConnected = false;
       this.inGame = false;
+      this.inSpawning = false;
       this.gameAPI = createGameAPI();
       this.nukeTracker = new NukeTracker();
       this.boatTracker = new BoatTracker();
@@ -1313,18 +1348,36 @@
         }
         const myPlayerID = gameAPI.getMyPlayerID();
         if (!myPlayerID) {
-          if (this.inGame) {
+          if (this.inGame || this.inSpawning) {
             this.inGame = false;
-            this.ws.sendEvent("GAME_END", "Game ended");
-            console.log("[GameBridge] Game ended, clearing trackers");
+            this.inSpawning = false;
+            const didWin = gameAPI.didPlayerWin();
+            if (didWin === true) {
+              this.ws.sendEvent("GAME_END", "Victory!", { victory: true });
+              console.log("[GameBridge] Game ended - VICTORY!");
+            } else if (didWin === false) {
+              this.ws.sendEvent("GAME_END", "Defeat", { victory: false });
+              console.log("[GameBridge] Game ended - DEFEAT");
+            } else {
+              this.ws.sendEvent("GAME_END", "Game ended", { victory: null });
+              console.log("[GameBridge] Game ended (outcome unknown)");
+            }
           }
           this.clearTrackers();
           return;
         }
-        if (!this.inGame) {
+        const gameStarted = gameAPI.isGameStarted();
+        if (!this.inSpawning && !this.inGame && gameStarted === false) {
+          this.inSpawning = true;
+          this.ws.sendEvent("GAME_SPAWNING", "Spawn countdown active", { spawning: true });
+          console.log("[GameBridge] Spawning phase - countdown active");
+          this.clearTrackers();
+        }
+        if (gameStarted === true && !this.inGame) {
           this.inGame = true;
-          this.ws.sendEvent("GAME_START", "Game started");
-          console.log("[GameBridge] Game started");
+          this.inSpawning = false;
+          this.ws.sendEvent("GAME_START", "Game started - countdown ended");
+          console.log("[GameBridge] Game started - spawn countdown ended");
           this.clearTrackers();
           this.troopMonitor.start();
         }

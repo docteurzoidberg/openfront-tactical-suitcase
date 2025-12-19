@@ -8,7 +8,7 @@
 #include "freertos/task.h"
 #include <string.h>
 
-static const char *TAG = "OTA_MGR";
+static const char *TAG = "OTS_OTA";
 
 static httpd_handle_t ota_server = NULL;
 static bool ota_in_progress = false;

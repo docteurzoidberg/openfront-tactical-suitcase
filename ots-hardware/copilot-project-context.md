@@ -41,13 +41,26 @@ The device uses a modular design where functionality is split across separate da
 
 1. **Spec First**: Copy `module-template.md` to `modules/<module-name>.md`
 2. **Define Module**: Fill out overview, components, communication, game state mapping
-3. **Implement Firmware**: Create C++ code in `ots-fw-main/src/modules/`
-4. **Implement UI**: Create Vue component in `ots-server/app/components/hardware/`
-5. **Add Types**: Update `ots-shared/src/` with command/event types
-6. **Test with Emulator**: Use ots-server emulator mode to test without hardware
-7. **Build Hardware**: Assemble physical module and integrate
+3. **Implement Firmware**: Create C code in `ots-fw-main/src/` (`.c` and `.h` files)
+4. **Add to Build**: Update `ots-fw-main/src/CMakeLists.txt` SRCS list
+5. **Implement UI**: Create Vue component in `ots-server/app/components/hardware/`
+6. **Add Types**: Update `ots-shared/src/` with command/event types
+7. **Test with Emulator**: Use ots-server emulator mode to test without hardware
+8. **Build Hardware**: Assemble physical module and integrate
 
 ## Module Naming Conventions
+
+- **Spec file**: `modules/module-name.md` (kebab-case)
+- **Firmware class**: Not applicable (C, not C++)
+- **Firmware files**: `module_name.h` / `module_name.c` (snake_case)
+- **Vue component**: `ModuleName.vue` (PascalCase)
+- **TypeScript types**: `ModuleNameCommand`, `ModuleNameEvent` (PascalCase)
+
+---
+
+**Important**: When evolving hardware specs, update this directory first, then update firmware and UI code to match.
+
+## Current Modules
 
 - **Spec file**: `modules/module-name.md` (kebab-case)
 - **Firmware class**: `ModuleNameModule` (PascalCase)

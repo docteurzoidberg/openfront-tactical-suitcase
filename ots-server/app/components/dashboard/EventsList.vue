@@ -139,7 +139,7 @@
               Action: <span class="font-mono text-slate-200">{{ (event.data as any).action }}</span>
             </span>
           </template>
-          <template v-else-if="event.type === 'ALERT_ATOM' && event.data && typeof event.data === 'object'">
+          <template v-else-if="event.type === 'ALERT_NUKE' && event.data && typeof event.data === 'object'">
             <span class="font-semibold text-red-400">⚠️ ATOMIC BOMB INCOMING!</span>
             <br />
             <span class="text-slate-400">
@@ -231,8 +231,8 @@ interface EventFilter {
 }
 
 const eventFilters = ref<EventFilter[]>([
-  { types: ['ALERT_ATOM', 'ALERT_HYDRO', 'ALERT_MIRV', 'ALERT_LAND', 'ALERT_NAVAL'], label: 'Incoming Threats', enabled: true, color: 'bg-red-500' },
-  { types: ['NUKE_LAUNCHED', 'HYDRO_LAUNCHED', 'MIRV_LAUNCHED', 'NUKE_EXPLODED', 'NUKE_INTERCEPTED'], label: 'Nukes Sent', enabled: true, color: 'bg-orange-500' },
+  { types: ['ALERT_NUKE', 'ALERT_HYDRO', 'ALERT_MIRV', 'ALERT_LAND', 'ALERT_NAVAL'], label: 'Incoming Threats', enabled: true, color: 'bg-red-500' },
+  { types: ['NUKE_LAUNCHED', 'NUKE_EXPLODED', 'NUKE_INTERCEPTED'], label: 'Nukes Sent', enabled: true, color: 'bg-orange-500' },
   { types: ['CMD_SENT'], label: 'Commands', enabled: true, color: 'bg-blue-500' },
   { types: ['TROOP_UPDATE'], label: 'Troop Updates', enabled: true, color: 'bg-purple-500' },
   { types: ['GAME_START', 'GAME_END', 'WIN', 'LOOSE'], label: 'Game Events', enabled: true, color: 'bg-emerald-500' },
@@ -393,7 +393,7 @@ watch(
 
 const eventBadgeClass = (type: GameEventType) => {
   switch (type) {
-    case 'ALERT_ATOM':
+    case 'ALERT_NUKE':
     case 'ALERT_HYDRO':
     case 'ALERT_MIRV':
       return 'bg-red-500/20 text-red-300'

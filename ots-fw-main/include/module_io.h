@@ -60,6 +60,14 @@ typedef struct {
 esp_err_t module_io_init(void);
 
 /**
+ * @brief Reinitialize module I/O after recovery
+ * Reconfigures pin modes and resets LED states
+ * 
+ * @return ESP_OK on success
+ */
+esp_err_t module_io_reinit(void);
+
+/**
  * @brief Read nuke button state
  * 
  * @param button 0=atom, 1=hydro, 2=mirv

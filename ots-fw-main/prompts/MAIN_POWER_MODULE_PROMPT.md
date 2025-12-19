@@ -56,9 +56,9 @@ The module has two LED indicators:
 ### Current Pin Mapping (in `module_io.h`)
 
 ```cpp
-namespace MainModule {
-  constexpr PinMap LED_LINK = {0, 0};  // Board 0, Pin 0 - Link status indicator
-}
+// Main Power Module - LED Output (Board 1 - OUTPUT pin)
+#define MAIN_LED_LINK_BOARD 1
+#define MAIN_LED_LINK_PIN   7
 ```
 
 ## Functional Behavior
@@ -291,9 +291,9 @@ MCP23017 (Board 0, Pin 0) ----[Resistor]----[LINK LED]----[GND]
 Defined in `include/module_io.h`:
 
 ```cpp
-namespace MainModule {
-  constexpr PinMap LED_LINK = {0, 0};  // Board 0, Pin 0
-}
+// Main Power Module - LED Output (Board 1 - OUTPUT pin)
+#define MAIN_LED_LINK_BOARD 1
+#define MAIN_LED_LINK_PIN   7
 ```
 
 ### ModuleIO Structure

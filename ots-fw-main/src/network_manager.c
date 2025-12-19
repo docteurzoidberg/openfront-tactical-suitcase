@@ -8,7 +8,7 @@
 #include "mdns.h"
 #include <string.h>
 
-static const char *TAG = "NET_MGR";
+static const char *TAG = "OTS_NETWORK";
 
 static bool is_connected = false;
 static bool has_ip = false;

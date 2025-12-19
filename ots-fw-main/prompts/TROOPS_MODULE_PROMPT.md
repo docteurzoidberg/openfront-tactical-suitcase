@@ -7,8 +7,9 @@ You are implementing the **Troops Module** for the OTS (OpenFront Tactical Stati
 ## Module Overview
 
 - **Size**: 16U (full-height module)
-- **Display**: 2×16 character I2C LCD
-- **Input**: Potentiometer slider via I2C ADC (ADS1115)
+- **Display**: 2×16 character I2C LCD (HD44780 via PCF8574 backpack)
+- **Input**: Potentiometer slider via I2C ADC (**ADS1015** 12-bit)
+- **I2C Bus**: Shared with MCP23017 expanders (GPIO8 SDA, GPIO9 SCL)
 - **Protocol**: WebSocket JSON messages (see `/protocol-context.md`)
 
 ## Hardware Components
@@ -27,15 +28,16 @@ You are implementing the **Troops Module** for the OTS (OpenFront Tactical Stati
 - **Voltage**: 5V (regulated on I2C backpack)
 
 ### ADC (for slider)
-- **Model**: ADS1115 (16-bit I2C ADC)
-- **I2C Address**: 0x48
-- **ESP-IDF Driver**: Use built-in `i2c.h` driver
-  - Implement ADS1115 register read/write via I2C transactions
+- **Model**: ADS1015 (12-bit I2C ADC)
+- **I2C Address**: 0x48 (default)
+- **ESP-IDF Driver**: Native I2C master driver (`driver/i2c.h`)
+  - Implement ADS1015 register read/write via I2C transactions
   - Configure single-ended input on AIN0 (channel 0)
-  - Set gain to ±4.096V range (GAIN_ONE)
-  - Use continuous conversion or single-shot mode
-- **Connection**: Shared I2C bus
-- **Input**: Potentiometer slider on channel A0
+  - Set gain to ±4.096V range (PGA setting)
+  - Single-shot conversion mode (1600 SPS)
+  - 12-bit resolution: 0-4095 range
+- **Connection**: Shared I2C bus with MCP23017 expanders
+- **Input**: Potentiometer slider on channel AIN0
 
 ## Display Format
 
@@ -52,17 +54,17 @@ Format: `{current} / {max}` with intelligent unit scaling
 Format: `{percent}% ({calculated})` where calculated = current × (percent/100)
 
 ### Unit Scaling Logic
-```cpp
-String formatTroops(uint32_t troops) {
-  if (troops >= 1000000000) {
-    return String(troops / 1000000000.0, 1) + "B";
-  } else if (troops >= 1000000) {
-    return String(troops / 1000000.0, 1) + "M";
-  } else if (troops >= 1000) {
-    return String(troops / 1000.0, 1) + "K";
-  } else {
-    return String(troops);
-  }
+```c
+void troops_format_count(uint32_t troops, char* buffer, size_t buffer_size) {
+    if (troops >= 1000000000) {
+        snprintf(buffer, buffer_size, "%.1fB", troops / 1000000000.0);
+    } else if (troops >= 1000000) {
+        snprintf(buffer, buffer_size, "%.1fM", troops / 1000000.0);
+    } else if (troops >= 1000) {
+        snprintf(buffer, buffer_size, "%.1fK", troops / 1000.0);
+    } else {
+        snprintf(buffer, buffer_size, "%lu", (unsigned long)troops);
+    }
 }
 ```
 
@@ -110,189 +112,226 @@ When slider position changes by ≥1%, send command:
 
 **Implementation**:
 1. Poll ADC every 100ms
-2. Convert ADC value (0-32767) to percentage (0-100)
-3. Compare with `lastSentPercent`
-4. If `abs(newPercent - lastSentPercent) >= 1`:
-   - Send command via WebSocket
-   - Update `lastSentPercent`
-   - Refresh LCD Line 2
+2. Convert ADC value (0-4095 for 12-bit ADS1015) to percentage (0-100)
+3. Compare with `last_sent_percent`
+4. If `abs(new_percent - last_sent_percent) >= 1`:
+   - Send command via WebSocket using cJSON
+   - Update `last_sent_percent`
+   - Set `display_dirty = true`
 
 ## Module State Structure
 
-```cpp
-struct TroopsModuleState {
-  // From game state
-  uint32_t currentTroops;
-  uint32_t maxTroops;
-  
-  // From slider
-  uint8_t sliderPercent;      // 0-100
-  uint8_t lastSentPercent;    // For change detection
-  
-  // Timing
-  uint32_t lastSliderRead;    // Debounce timestamp (millis)
-  
-  // Display cache (optional, for efficiency)
-  String lastLine1;
-  String lastLine2;
-  bool displayDirty;
-};
+```c
+typedef struct {
+    uint32_t current_troops;        // Current troop count from server
+    uint32_t max_troops;            // Maximum troop count from server
+    uint8_t slider_percent;         // Current slider position (0-100)
+    uint8_t last_sent_percent;      // Last percent value sent to server
+    uint64_t last_slider_read;      // Timestamp of last slider read (ms)
+    bool display_dirty;             // LCD needs update
+    bool initialized;               // Module initialization complete
+} troops_module_state_t;
 ```
 
 ## Implementation Tasks
 
 ### 1. Module Initialization
 
-```cpp
-void troops_module_init() {
-  // Initialize I2C bus (if not already initialized by main)
-  // i2c_config_t conf = { ... };
-  // i2c_param_config(I2C_NUM_0, &conf);
-  // i2c_driver_install(I2C_NUM_0, conf.mode, 0, 0, 0);
-  
-  // Initialize LCD (HD44780 via PCF8574)
-  lcd_init(0x27);  // Custom function to init HD44780 via I2C
-  lcd_backlight(true);
-  lcd_clear();
-  
-  // Initialize ADS1115 ADC
-  ads1115_init(0x48);  // Custom function to configure ADS1115
-  ads1115_set_gain(ADS1115_GAIN_ONE);  // ±4.096V range
-  ads1115_set_mode(ADS1115_MODE_CONTINUOUS);  // Continuous conversion
-  
-  // Initialize state
-  troopsState.currentTroops = 0;
-  troopsState.maxTroops = 0;
-  troopsState.sliderPercent = 0;
-  troopsState.lastSentPercent = 0;
-  troopsState.lastSliderRead = 0;
-  troopsState.displayDirty = true;
-  
-  // Show startup message
-  lcd_set_cursor(0, 0);
-  lcd_write_string("  TROOPS MODULE ");
-  lcd_set_cursor(0, 1);
-  lcd_write_string("  Initializing  ");
-  vTaskDelay(pdMS_TO_TICKS(1000));
-  lcd_clear();
+Implements `hardware_module_t` interface:
+
+```c
+static esp_err_t troops_init(void) {
+    ESP_LOGI(TAG, "Initializing troops module...");
+    
+    // I2C bus already initialized by main (shared with MCP23017)
+    
+    // Initialize ADS1015 ADC at 0x48
+    esp_err_t ret = ads1015_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize ADS1015");
+        return ret;
+    }
+    
+    // Initialize LCD at 0x27 (HD44780 via PCF8574)
+    ret = lcd_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize LCD");
+        return ret;
+    }
+    
+    // Show startup message
+    lcd_set_cursor(0, 0);
+    lcd_write_string(" TROOPS MODULE  ");
+    lcd_set_cursor(0, 1);
+    lcd_write_string(" Initializing.. ");
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    lcd_clear();
+    
+    module_state.initialized = true;
+    module_state.display_dirty = true;
+    
+    return ESP_OK;
 }
 ```
 
-### 2. State Update Handler
+### 2. Event Handler (hardware_module_t interface)
 
-```cpp
-void troops_module_handle_state(const JsonObject& payload) {
-  // Check if troops data exists
-  if (!payload.containsKey("troops")) return;
-  
-  JsonObject troops = payload["troops"];
-  
-  // Update state
-  troopsState.currentTroops = troops["current"];
-  troopsState.maxTroops = troops["max"];
-  troopsState.displayDirty = true;
-  
-  // Update display
-  troops_module_update_display();
+```c
+static void troops_handle_event(game_event_type_t event_type, const char* event_data_json) {
+    if (!module_state.initialized) return;
+    
+    // Parse event data for troop updates using cJSON
+    if (event_data_json && strlen(event_data_json) > 0) {
+        cJSON* root = cJSON_Parse(event_data_json);
+        if (root) {
+            // Check for troops data in state message
+            cJSON* troops = cJSON_GetObjectItem(root, "troops");
+            if (troops) {
+                cJSON* current = cJSON_GetObjectItem(troops, "current");
+                cJSON* max = cJSON_GetObjectItem(troops, "max");
+                
+                if (current && cJSON_IsNumber(current)) {
+                    module_state.current_troops = (uint32_t)current->valueint;
+                }
+                if (max && cJSON_IsNumber(max)) {
+                    module_state.max_troops = (uint32_t)max->valueint;
+                }
+                
+                module_state.display_dirty = true;
+            }
+            cJSON_Delete(root);
+        }
+    }
 }
 ```
 
 ### 3. Slider Polling
 
-```cpp
-void troops_module_poll_slider() {
-  uint32_t now = millis();
-  
-  // Debounce (100ms interval)
-  if (now - troopsState.lastSliderRead < 100) return;
-  troopsState.lastSliderRead = now;
-  
-  // Read ADC
-  int16_t adc = ads1115_read_adc(ADS1115_CHANNEL_0);  // Channel A0
-  if (adc < 0) adc = 0;
-  
-  // Map to percentage (0-100)
-  uint8_t newPercent = map(adc, 0, 32767, 0, 100);
-  newPercent = constrain(newPercent, 0, 100);
-  
-  // Update state
-  troopsState.sliderPercent = newPercent;
-  
-  // Check for ≥1% change
-  if (abs(newPercent - troopsState.lastSentPercent) >= 1) {
-    troops_module_send_command(newPercent);
-    troopsState.lastSentPercent = newPercent;
-    troopsState.displayDirty = true;
-  }
-  
-  // Update display if needed
-  if (troopsState.displayDirty) {
-    troops_module_update_display();
-  }
+```c
+static void poll_slider(void) {
+    uint64_t now = esp_timer_get_time() / 1000;  // Convert to ms
+    
+    // Debounce: only read every 100ms
+    if (now - module_state.last_slider_read < TROOPS_SLIDER_POLL_MS) {
+        return;
+    }
+    module_state.last_slider_read = now;
+    
+    // Read ADC
+    int16_t adc_value = ads1015_read_adc(ADS1015_CHANNEL_AIN0);
+    if (adc_value < 0) {
+        ESP_LOGW(TAG, "Failed to read ADC");
+        return;
+    }
+    
+    // Map to percentage (ADS1015 is 12-bit: 0-4095)
+    uint8_t new_percent = (adc_value * 100) / 4095;
+    if (new_percent > 100) new_percent = 100;
+    
+    // Update state
+    module_state.slider_percent = new_percent;
+    
+    // Check for ≥1% change
+    int diff = abs((int)new_percent - (int)module_state.last_sent_percent);
+    if (diff >= TROOPS_CHANGE_THRESHOLD) {
+        send_percent_command(new_percent);
+        module_state.last_sent_percent = new_percent;
+        module_state.display_dirty = true;
+    }
 }
 ```
 
 ### 4. Display Update
 
-```cpp
-void troops_module_update_display() {
-  if (!troopsState.displayDirty) return;
-  
-  // Line 1: Current / Max
-  String line1 = formatTroops(troopsState.currentTroops) + " / " + 
-                 formatTroops(troopsState.maxTroops);
-  
-  // Center or right-align (pad to 16 chars)
-  while (line1.length() < 16) {
-    line1 = " " + line1;  // Right-align
-  }
-  
-  lcd_set_cursor(0, 0);
-  lcd_write_string(line1);
-  
-  // Line 2: Percent% (Calculated)
-  uint32_t calculated = (troopsState.currentTroops * troopsState.sliderPercent) / 100;
-  char line2[17];
-  snprintf(line2, sizeof(line2), "%-16s", 
-           (String(troopsState.sliderPercent) + "% (" + formatTroops(calculated) + ")").c_str());
-  
-  lcd_set_cursor(0, 1);
-  lcd.print(line2);
-  
-  troopsState.displayDirty = false;
+```c
+static void update_display(void) {
+    if (!module_state.display_dirty) return;
+    
+    char line1[LCD_COLS + 1];
+    char line2[LCD_COLS + 1];
+    char current_str[8], max_str[8], calc_str[8];
+    
+    // Format troop counts
+    troops_format_count(module_state.current_troops, current_str, sizeof(current_str));
+    troops_format_count(module_state.max_troops, max_str, sizeof(max_str));
+    
+    // Line 1: "120K / 1.1M" (right-aligned)
+    snprintf(line1, sizeof(line1), "%s / %s", current_str, max_str);
+    int padding = LCD_COLS - strlen(line1);
+    if (padding > 0) {
+        memmove(line1 + padding, line1, strlen(line1) + 1);
+        memset(line1, ' ', padding);
+    }
+    
+    // Line 2: "50% (60K)" (left-aligned)
+    uint32_t calculated = ((uint64_t)module_state.current_troops * module_state.slider_percent) / 100;
+    troops_format_count(calculated, calc_str, sizeof(calc_str));
+    snprintf(line2, sizeof(line2), "%d%% (%s)", module_state.slider_percent, calc_str);
+    
+    // Write to LCD
+    lcd_set_cursor(0, 0);
+    lcd_write_string(line1);
+    lcd_set_cursor(0, 1);
+    lcd_write_string(line2);
+    
+    module_state.display_dirty = false;
 }
 ```
 
 ### 5. Command Sender
 
-```cpp
-void troops_module_send_command(uint8_t percent) {
-  // Build JSON command
-  StaticJsonDocument<256> doc;
-  doc["type"] = "cmd";
-  JsonObject payload = doc.createNestedObject("payload");
-  payload["action"] = "set-troops-percent";
-  JsonObject params = payload.createNestedObject("params");
-  params["percent"] = percent;
-  
-  // Send via WebSocket
-  String output;
-  serializeJson(doc, output);
-  ws_send(output.c_str());
-  
-  // Debug log
-  Serial.printf("[Troops] Sent: set-troops-percent %d%%\n", percent);
+```c
+static void send_percent_command(uint8_t percent) {
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "type", "cmd");
+    
+    cJSON* payload = cJSON_CreateObject();
+    cJSON_AddStringToObject(payload, "action", "set-troops-percent");
+    
+    cJSON* params = cJSON_CreateObject();
+    cJSON_AddNumberToObject(params, "percent", percent);
+    
+    cJSON_AddItemToObject(payload, "params", params);
+    cJSON_AddItemToObject(root, "payload", payload);
+    
+    char* json_str = cJSON_PrintUnformatted(root);
+    if (json_str) {
+        ws_client_send_text(json_str);
+        ESP_LOGI(TAG, "Sent troops percent: %d%%", percent);
+        free(json_str);
+    }
+    
+    cJSON_Delete(root);
 }
 ```
 
-### 6. Main Loop Integration
+### 6. Module Update (hardware_module_t interface)
 
-```cpp
-void loop() {
-  // ... existing code ...
-  
-  // Poll troops module slider
-  troops_module_poll_slider();
+```c
+static void troops_update(void) {
+    if (!module_state.initialized) return;
+    
+    // Poll slider for changes
+    poll_slider();
+    
+    // Update display if needed
+    if (module_state.display_dirty) {
+        update_display();
+    }
+}
+```
+
+### 7. Module Registration
+
+In `main.c`:
+```c
+#include "troops_module.h"
+
+void app_main(void) {
+    // ... existing initialization ...
+    
+    // Register hardware modules
+    module_manager_register(troops_module_get());
   
   // ... rest of loop ...
 }
@@ -325,7 +364,7 @@ void ws_handle_message(const char* data) {
 ### I2C Bus Test
 - [ ] I2C master driver initialized successfully
 - [ ] LCD (PCF8574) detected at 0x27 (or 0x3F) via i2c_master_write
-- [ ] ADC (ADS1115) detected at 0x48 via i2c_master_write
+- [ ] ADC (ADS1015) detected at 0x48 via i2c_master_write
 - [ ] No I2C bus errors in ESP-IDF logs (ESP_ERROR_CHECK)
 
 ### Display Test
@@ -336,7 +375,7 @@ void ws_handle_message(const char* data) {
 
 ### Slider Test
 - [ ] ADC reads ~0 at 0% position
-- [ ] ADC reads ~32767 at 100% position
+- [ ] ADC reads ~4095 at 100% position (12-bit ADS1015)
 - [ ] Slider values map correctly to 0-100%
 - [ ] Commands sent only on ≥1% change
 
@@ -387,7 +426,7 @@ dependencies:
 **Implementation Notes**:
 1. Use ESP-IDF I2C master driver for all I2C communication
 2. Implement PCF8574 bit-banging for HD44780 control
-3. Implement ADS1115 register read/write functions
+3. Implement ADS1015 register read/write functions
 4. Use ESP-IDF FreeRTOS APIs (`vTaskDelay`, `xTaskGetTickCount`)
 
 ## ESP-IDF Implementation Guide
@@ -434,12 +473,12 @@ void pcf8574_write(uint8_t addr, uint8_t data) {
 }
 ```
 
-### ADS1115 I2C Functions
-```cpp
-#define ADS1115_REG_CONFIG 0x01
-#define ADS1115_REG_CONVERSION 0x00
+### ADS1015 I2C Functions
+```c
+#define ADS1015_REG_CONFIG 0x01
+#define ADS1015_REG_CONVERSION 0x00
 
-int16_t ads1115_read_adc(uint8_t channel) {
+int16_t ads1015_read_adc(uint8_t channel) {
     // Write config register
     uint16_t config = 0xC383 | (channel << 12);  // Single-shot, channel select
     // Implement I2C write + read sequence

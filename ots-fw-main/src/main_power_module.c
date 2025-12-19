@@ -4,7 +4,7 @@
 #include "esp_log.h"
 #include <string.h>
 
-static const char *TAG = "POWER_MOD";
+static const char *TAG = "OTS_POWER";
 
 static module_status_t status = {0};
 

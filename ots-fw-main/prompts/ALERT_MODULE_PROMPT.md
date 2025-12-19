@@ -31,17 +31,22 @@ All LEDs are controlled via MCP23017 I/O expander boards using the `ModuleIO` ab
 
 **Note:** LEDs can be distributed across one or multiple MCP23017 boards. Pin assignments are defined in `include/module_io.h` using the `PinMap` structure.
 
-### Current Pin Mapping (in `module_io.h`)
+### Current Pin Mapping (in `alert_module.h`)
 
-```cpp
-namespace AlertModule {
-  constexpr PinMap LED_WARNING = {1, 0};  // Board 1, Pin 0
-  constexpr PinMap LED_ATOM    = {1, 1};  // Board 1, Pin 1
-  constexpr PinMap LED_HYDRO   = {1, 2};  // Board 1, Pin 2
-  constexpr PinMap LED_MIRV    = {1, 3};  // Board 1, Pin 3
-  constexpr PinMap LED_LAND    = {1, 4};  // Board 1, Pin 4
-  constexpr PinMap LED_NAVAL   = {1, 5};  // Board 1, Pin 5
-}
+```c
+// Alert Module - LED Outputs (Board 1 - OUTPUT pins)
+#define ALERT_LED_WARNING_BOARD 1
+#define ALERT_LED_WARNING_PIN   0
+#define ALERT_LED_ATOM_BOARD    1
+#define ALERT_LED_ATOM_PIN      1
+#define ALERT_LED_HYDRO_BOARD   1
+#define ALERT_LED_HYDRO_PIN     2
+#define ALERT_LED_MIRV_BOARD    1
+#define ALERT_LED_MIRV_PIN      3
+#define ALERT_LED_LAND_BOARD    1
+#define ALERT_LED_LAND_PIN      4
+#define ALERT_LED_NAVAL_BOARD   1
+#define ALERT_LED_NAVAL_PIN     5
 ```
 
 ## Functional Behavior
@@ -241,20 +246,24 @@ Define in firmware code or configuration:
 Update pin mappings in `include/module_io.h` to match physical wiring:
 
 ```cpp
-namespace AlertModule {
-  // Example: All LEDs on Board 1
-  constexpr PinMap LED_WARNING = {1, 0};
-  constexpr PinMap LED_ATOM    = {1, 1};
-  constexpr PinMap LED_HYDRO   = {1, 2};
-  constexpr PinMap LED_MIRV    = {1, 3};
-  constexpr PinMap LED_LAND    = {1, 4};
-  constexpr PinMap LED_NAVAL   = {1, 5};
-  
-  // Or spread across multiple boards:
-  // constexpr PinMap LED_WARNING = {0, 15};
-  // constexpr PinMap LED_ATOM    = {1, 0};
-  // etc.
-}
+// Alert Module - LED Outputs (Board 1 - OUTPUT pins)
+#define ALERT_LED_WARNING_BOARD 1
+#define ALERT_LED_WARNING_PIN   0
+#define ALERT_LED_ATOM_BOARD    1
+#define ALERT_LED_ATOM_PIN      1
+#define ALERT_LED_HYDRO_BOARD   1
+#define ALERT_LED_HYDRO_PIN     2
+#define ALERT_LED_MIRV_BOARD    1
+#define ALERT_LED_MIRV_PIN      3
+#define ALERT_LED_LAND_BOARD    1
+#define ALERT_LED_LAND_PIN      4
+#define ALERT_LED_NAVAL_BOARD   1
+#define ALERT_LED_NAVAL_PIN     5
+
+// Or spread across multiple boards:
+// #define ALERT_LED_WARNING_BOARD 0
+// #define ALERT_LED_WARNING_PIN   15
+// etc.
 ```
 
 ## Implementation Checklist

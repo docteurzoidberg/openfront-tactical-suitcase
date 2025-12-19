@@ -20,6 +20,10 @@ export interface GameAPI {
   getMaxTroops(): number | null
   getAttackRatio(): number
   getTroopsToSend(): number | null
+  // Game state
+  isGameStarted(): boolean | null
+  // Game result
+  didPlayerWin(): boolean | null
 }
 
 /**
@@ -207,6 +211,54 @@ export function createGameAPI(): GameAPI {
         const attackRatio = this.getAttackRatio()
         return Math.floor(currentTroops * attackRatio)
       } catch {
+        return null
+      }
+    },
+
+    isGameStarted(): boolean | null {
+      try {
+        const game = getGame()
+        if (!game) return null
+
+        // Check if game has a started() method
+        if (typeof game.started === 'function') {
+          return game.started()
+        }
+
+        // Fallback: check if ticks > 0 (game is running)
+        if (typeof game.ticks === 'function') {
+          const ticks = game.ticks()
+          return ticks !== null && ticks > 0
+        }
+
+        return null
+      } catch (error) {
+        console.error('[GameAPI] Error checking game started:', error)
+        return null
+      }
+    },
+
+    didPlayerWin(): boolean | null {
+      try {
+        const game = (window as any).game
+        if (!game) return null
+
+        const myPlayer = game.myPlayer()
+        if (!myPlayer) return null
+
+        // Check if game is over
+        const gameOver = game.gameOver()
+        if (!gameOver) return null
+
+        // If player is eliminated, they lost
+        if (myPlayer.eliminated()) {
+          return false
+        }
+
+        // If game is over and player is not eliminated, they won
+        return true
+      } catch (error) {
+        console.error('[GameAPI] Error checking win status:', error)
         return null
       }
     }

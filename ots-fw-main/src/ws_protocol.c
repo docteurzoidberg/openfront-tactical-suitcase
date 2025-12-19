@@ -4,7 +4,7 @@
 #include "cJSON.h"
 #include <string.h>
 
-static const char *TAG = "WS_PROTO";
+static const char *TAG = "OTS_WS_PROTO";
 
 esp_err_t ws_protocol_init(void) {
     ESP_LOGI(TAG, "WebSocket protocol handler initialized");

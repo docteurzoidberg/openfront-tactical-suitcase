@@ -21,7 +21,7 @@ This firmware:
 
 - Platform: **ESP32-S3** dev board
 - Framework: **ESP-IDF** (native Espressif framework)
-- Build System: **CMake** + ESP-IDF components
+- Build System: **PlatformIO** (preferred) or **CMake** + ESP-IDF components
 - Language: **C** for firmware logic
 - Connectivity: Wi-Fi + WebSocket **client** to game server
 - I/O Expansion: **MCP23017** I2C I/O expanders (2 boards)
@@ -30,10 +30,72 @@ This firmware:
   - Addresses: 0x20 (inputs), 0x21 (outputs)
 - OTA Updates: HTTP server on port 3232 with dual-partition support
 
+## Building the Firmware
+
+### Using PlatformIO (Recommended)
+
+PlatformIO provides a simpler build experience with automatic dependency management.
+
+**Build firmware:**
+```bash
+cd ots-fw-main
+pio run
+```
+
+**Clean build:**
+```bash
+pio run -t clean
+pio run
+```
+
+**Upload to device:**
+```bash
+pio run -t upload
+```
+
+**Monitor serial output:**
+```bash
+pio device monitor
+```
+
+**Build and upload:**
+```bash
+pio run -t upload && pio device monitor
+```
+
+**Configuration:**
+- Edit `platformio.ini` for board settings
+- Configure WiFi credentials in `include/config.h`
+- Build output: `.pio/build/esp32-s3-dev/firmware.bin`
+
+### Using ESP-IDF (Alternative)
+
+For advanced ESP-IDF features or direct toolchain access.
+
+**Build firmware:**
+```bash
+idf.py build
+```
+
+**Flash and monitor:**
+```bash
+idf.py flash monitor
+```
+
+**Configuration:**
+```bash
+idf.py menuconfig
+```
+
+**Build output:**
+- Firmware: `build/ots-fw-main.bin`
+- Bootloader: `build/bootloader/bootloader.bin`
+- Partitions: `build/partitions.bin`
+
 ## Responsibilities
 
 - Connect to Wi-Fi using configured credentials with automatic reconnection.
-- Host a WebSocket server for the OTS backend to connect to.
+- Act as a **WebSocket client** connecting TO `ots-server` game backend.
 - Implement the same **message envelope** (`type`, `payload`) as described in `protocol-context.md`.
 - Keep the **game state** and **event notifications** consistent with the `ots-server` simulator and `ots-userscript`.
 - React to incoming `state` and `event` messages by updating hardware (LEDs, outputs).
@@ -69,11 +131,16 @@ ots-fw-main/
     button_handler.c       # Button debouncing and event posting
     io_task.c              # Dedicated I/O scanning task
     
+    # I2C Device Drivers (Shared)
+    lcd_driver.c           # HD44780 LCD via PCF8574 I2C backpack (0x27)
+    adc_driver.c           # ADS1015 12-bit ADC (0x48)
+    
     # Hardware Modules
     module_manager.c       # Hardware module registration
     nuke_module.c          # Nuke module (3 buttons + 3 LEDs) - handles button->nuke logic
     alert_module.c         # Alert module (6 LEDs)
     main_power_module.c    # Main power module (link LED + connection status)
+    troops_module.c        # Troops module (LCD + slider) - troop count display and deployment control
     
     CMakeLists.txt         # Component registration
   include/
@@ -81,12 +148,17 @@ ots-fw-main/
     protocol.h             # Game event types
     game_state.h           # Game phase definitions
     
+    # I2C Device Drivers
+    lcd_driver.h           # LCD driver interface
+    adc_driver.h           # ADC driver interface
+    
     # Hardware interfaces
     hardware_module.h      # Base module interface
     module_manager.h       # Module coordination
     nuke_module.h          # Nuke module interface
     alert_module.h         # Alert module interface
     main_power_module.h    # Main power interface
+    troops_module.h        # Troops module interface
     
   prompts/               # AI assistant prompts for modules
   CHANGELOG.md
@@ -220,12 +292,38 @@ Outputs (Board 1):
 - `GAME_EVENT_GAME_START`: Turns on warning LED
 - `GAME_EVENT_GAME_END/WIN/LOOSE`: Turns off all alerts
 
+### Troops Module (troops_module.c)
+
+**Hardware:**
+
+- **LCD Display**: 16x2 I2C LCD (HD44780 via PCF8574 backpack) at 0x27
+  - Uses shared `lcd_driver.c/h` for hardware abstraction
+- **ADC**: ADS1015 12-bit I2C ADC at 0x48, reading slider on AIN0 channel
+  - Uses shared `adc_driver.c/h` for hardware abstraction
+- **I2C Bus**: Shared with MCP23017 expanders (GPIO8 SDA, GPIO9 SCL)
+
+**Event Handling:**
+- Receives troop count updates (current/max) from server via game state events
+- Parses JSON data: `{"troops": {"current": 120000, "max": 1100000}}`
+- Sends `set-troops-percent` commands when slider changes ≥1%
+- Polls slider every 100ms via ADS1015 ADC
+
+**Display Format:**
+- Line 1: `"120K / 1.1M"` (current / max with K/M/B scaling, right-aligned)
+- Line 2: `"50% (60K)"` (slider percent + calculated troops, left-aligned)
+
+**Architecture:**
+- Module focuses on business logic (protocol, display formatting, state management)
+- Hardware drivers (`lcd_driver`, `adc_driver`) provide shared I2C device abstraction
+- Clean separation allows other modules to reuse LCD/ADC drivers if needed
+
 ## Implementation Notes
 
 ### Architecture Principles
 - **Modular Design**: Each physical PCB = one software module with standardized interface
 - **Event-Driven**: All module communication via event dispatcher
 - **Separation of Concerns**: Network, protocol, I/O, and modules are independent
+- **Shared Drivers**: I2C device drivers (LCD, ADC) abstracted for reuse across modules
 - **FreeRTOS Tasks**: Dedicated tasks for LED control, I/O scanning, event dispatching
 
 ### Hardware Configuration
@@ -308,6 +406,15 @@ See `OTA_GUIDE.md` for detailed instructions and troubleshooting.
 5. Update `ots-server` and `ots-userscript` implementations
 6. Test end-to-end event flow
 
+### LCD Display Changes
+
+1. Update display logic in `src/system_status_module.c` or `src/troops_module.c`
+2. Update `/ots-hardware/DISPLAY_SCREENS_SPEC.md` with new screen definitions
+3. Include exact text formatting, spacing, and character positions
+4. Document state transitions and event triggers
+5. Update `ots-server` emulator to match firmware behavior
+6. Test display on physical hardware and verify spec accuracy
+
 ### Adding Hardware Modules
 
 1. Create `module_name.h` with pin definitions
@@ -322,5 +429,6 @@ See `OTA_GUIDE.md` for detailed instructions and troubleshooting.
 - Update `CHANGELOG.md` with version and date
 - Update this context file for architecture changes
 - Update module prompt files if interfaces change
-- Test compilation with `idf.py build`
+- Test compilation with `pio run` (or `idf.py build` for ESP-IDF)
 - Test OTA update procedure
+- Verify firmware size fits in partition (max ~2MB per partition)

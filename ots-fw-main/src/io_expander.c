@@ -4,9 +4,10 @@
 #include "driver/i2c_master.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_timer.h"
 #include <string.h>
 
-static const char *TAG = "IO_EXPANDER";
+static const char *TAG = "OTS_IO_EXP";
 
 // MCP23017 Register addresses
 #define MCP23017_IODIRA   0x00
@@ -22,12 +23,19 @@ typedef struct {
     i2c_master_dev_handle_t handle;
     uint8_t address;
     bool initialized;
+    io_expander_health_t health;
 } mcp23017_board_t;
 
 static mcp23017_board_t boards[MAX_MCP_BOARDS];
 static uint8_t board_count = 0;
 static bool io_initialized = false;
 static i2c_master_bus_handle_t i2c_bus = NULL;
+static io_expander_recovery_callback_t recovery_callback = NULL;
+
+// Forward declarations
+static void record_error(uint8_t board);
+static void record_success(uint8_t board);
+static esp_err_t init_single_board(uint8_t board_idx, uint8_t address);
 
 // Write single register
 static esp_err_t mcp23017_write_reg(i2c_master_dev_handle_t handle, uint8_t reg, uint8_t value) {
@@ -42,13 +50,94 @@ static esp_err_t mcp23017_read_reg(i2c_master_dev_handle_t handle, uint8_t reg, 
     return i2c_master_receive(handle, value, 1, 1000 / portTICK_PERIOD_MS);
 }
 
+// Record error for a board
+static void record_error(uint8_t board) {
+    if (board >= MAX_MCP_BOARDS) return;
+    
+    boards[board].health.error_count++;
+    boards[board].health.consecutive_errors++;
+    boards[board].health.last_error_time = esp_timer_get_time() / 1000;
+    
+    if (boards[board].health.consecutive_errors >= IO_EXPANDER_MAX_CONSECUTIVE_ERRORS) {
+        boards[board].health.healthy = false;
+        ESP_LOGW(TAG, "Board #%d marked unhealthy (%lu consecutive errors)",
+                 board, (unsigned long)boards[board].health.consecutive_errors);
+    }
+}
+
+// Record successful operation
+static void record_success(uint8_t board) {
+    if (board >= MAX_MCP_BOARDS) return;
+    
+    bool was_unhealthy = !boards[board].health.healthy;
+    
+    boards[board].health.consecutive_errors = 0;
+    boards[board].health.healthy = true;
+    
+    if (was_unhealthy) {
+        boards[board].health.recovery_count++;
+        ESP_LOGI(TAG, "Board #%d recovered (recovery count: %lu)",
+                 board, (unsigned long)boards[board].health.recovery_count);
+        
+        if (recovery_callback) {
+            recovery_callback(board, true);
+        }
+    }
+}
+
+// Initialize a single board with retry logic
+static esp_err_t init_single_board(uint8_t board_idx, uint8_t address) {
+    esp_err_t ret = ESP_FAIL;
+    uint32_t retry_delay = IO_EXPANDER_INITIAL_RETRY_DELAY_MS;
+    
+    for (int retry = 0; retry < IO_EXPANDER_MAX_RETRIES; retry++) {
+        if (retry > 0) {
+            ESP_LOGW(TAG, "Retry #%d for board 0x%02X (delay: %lums)",
+                     retry, address, (unsigned long)retry_delay);
+            vTaskDelay(pdMS_TO_TICKS(retry_delay));
+            
+            // Exponential backoff
+            retry_delay *= 2;
+            if (retry_delay > IO_EXPANDER_MAX_RETRY_DELAY_MS) {
+                retry_delay = IO_EXPANDER_MAX_RETRY_DELAY_MS;
+            }
+        }
+        
+        i2c_device_config_t dev_config = {
+            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+            .device_address = address,
+            .scl_speed_hz = 100000,
+        };
+        
+        ret = i2c_master_bus_add_device(i2c_bus, &dev_config, &boards[board_idx].handle);
+        if (ret == ESP_OK) {
+            // Test communication with a read
+            uint8_t test_value;
+            ret = mcp23017_read_reg(boards[board_idx].handle, MCP23017_IODIRA, &test_value);
+            if (ret == ESP_OK) {
+                ESP_LOGI(TAG, "Board #%d initialized at 0x%02X (attempt %d)",
+                         board_idx, address, retry + 1);
+                return ESP_OK;
+            }
+            
+            // Failed read, remove device
+            i2c_master_bus_rm_device(boards[board_idx].handle);
+            boards[board_idx].handle = NULL;
+        }
+    }
+    
+    ESP_LOGE(TAG, "Board #%d at 0x%02X failed after %d retries",
+             board_idx, address, IO_EXPANDER_MAX_RETRIES);
+    return ret;
+}
+
 bool io_expander_begin(const uint8_t *addresses, uint8_t count) {
     if (!addresses || count == 0 || count > MAX_MCP_BOARDS) {
         ESP_LOGE(TAG, "Invalid parameters (count=%d, max=%d)", count, MAX_MCP_BOARDS);
         return false;
     }
 
-    ESP_LOGI(TAG, "Initializing %d MCP23017(s)...", count);
+    ESP_LOGI(TAG, "Initializing %d MCP23017(s) with error recovery...", count);
 
     // Initialize I2C bus
     i2c_master_bus_config_t bus_config = {
@@ -66,30 +155,30 @@ bool io_expander_begin(const uint8_t *addresses, uint8_t count) {
         return false;
     }
 
+    // Initialize board structures
+    memset(boards, 0, sizeof(boards));
     board_count = 0;
     bool all_success = true;
 
-    // Initialize each board
+    // Initialize each board with retry logic
     for (uint8_t i = 0; i < count; i++) {
         uint8_t addr = addresses[i];
-
-        i2c_device_config_t dev_config = {
-            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-            .device_address = addr,
-            .scl_speed_hz = 100000,
-        };
-
-        ret = i2c_master_bus_add_device(i2c_bus, &dev_config, &boards[i].handle);
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "Board #%d failed at 0x%02X: %s", i, addr, esp_err_to_name(ret));
-            all_success = false;
-            continue;
-        }
-
+        
         boards[i].address = addr;
-        boards[i].initialized = true;
-        board_count++;
-        ESP_LOGI(TAG, "Board #%d ready at 0x%02X", i, addr);
+        boards[i].health.initialized = false;
+        boards[i].health.healthy = false;
+        boards[i].health.last_health_check = esp_timer_get_time() / 1000;
+        
+        ret = init_single_board(i, addr);
+        if (ret == ESP_OK) {
+            boards[i].initialized = true;
+            boards[i].health.initialized = true;
+            boards[i].health.healthy = true;
+            board_count++;
+        } else {
+            ESP_LOGE(TAG, "Board #%d at 0x%02X failed to initialize", i, addr);
+            all_success = false;
+        }
     }
 
     if (board_count == 0) {
@@ -99,7 +188,12 @@ bool io_expander_begin(const uint8_t *addresses, uint8_t count) {
     }
 
     io_initialized = true;
-    ESP_LOGI(TAG, "Ready: %d/%d board(s)", board_count, count);
+    ESP_LOGI(TAG, "Ready: %d/%d board(s) initialized successfully", board_count, count);
+    
+    if (!all_success) {
+        ESP_LOGW(TAG, "Some boards failed - recovery available via io_expander_attempt_recovery()");
+    }
+    
     return all_success;
 }
 
@@ -162,6 +256,7 @@ bool io_expander_digital_write(uint8_t board, uint8_t pin, uint8_t value) {
 
     esp_err_t ret = mcp23017_read_reg(boards[board].handle, reg, &current);
     if (ret != ESP_OK) {
+        record_error(board);
         return false;
     }
 
@@ -172,7 +267,13 @@ bool io_expander_digital_write(uint8_t board, uint8_t pin, uint8_t value) {
     }
 
     ret = mcp23017_write_reg(boards[board].handle, reg, current);
-    return (ret == ESP_OK);
+    if (ret != ESP_OK) {
+        record_error(board);
+        return false;
+    }
+    
+    record_success(board);
+    return true;
 }
 
 bool io_expander_digital_read(uint8_t board, uint8_t pin, uint8_t *value) {
@@ -189,10 +290,12 @@ bool io_expander_digital_read(uint8_t board, uint8_t pin, uint8_t *value) {
 
     esp_err_t ret = mcp23017_read_reg(boards[board].handle, reg, &current);
     if (ret != ESP_OK) {
+        record_error(board);
         return false;
     }
 
     *value = (current & (1 << bit)) ? 1 : 0;
+    record_success(board);
     return true;
 }
 
@@ -202,4 +305,146 @@ bool io_expander_is_initialized(void) {
 
 uint8_t io_expander_get_board_count(void) {
     return board_count;
+}
+
+esp_err_t io_expander_reinit_board(uint8_t board) {
+    if (board >= MAX_MCP_BOARDS) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    ESP_LOGI(TAG, "Attempting to reinitialize board #%d (0x%02X)...",
+             board, boards[board].address);
+    
+    // Remove old device if exists
+    if (boards[board].handle) {
+        i2c_master_bus_rm_device(boards[board].handle);
+        boards[board].handle = NULL;
+    }
+    
+    boards[board].initialized = false;
+    boards[board].health.healthy = false;
+    
+    // Attempt reinit with retry logic
+    esp_err_t ret = init_single_board(board, boards[board].address);
+    if (ret == ESP_OK) {
+        boards[board].initialized = true;
+        boards[board].health.initialized = true;
+        boards[board].health.healthy = true;
+        boards[board].health.consecutive_errors = 0;
+        boards[board].health.recovery_count++;
+        
+        if (recovery_callback) {
+            recovery_callback(board, true);
+        }
+        
+        ESP_LOGI(TAG, "Board #%d successfully reinitialized", board);
+        return ESP_OK;
+    }
+    
+    ESP_LOGE(TAG, "Failed to reinitialize board #%d", board);
+    return ret;
+}
+
+bool io_expander_health_check(void) {
+    if (!io_initialized) {
+        return false;
+    }
+    
+    bool all_healthy = true;
+    uint64_t now = esp_timer_get_time() / 1000;
+    
+    for (uint8_t i = 0; i < board_count; i++) {
+        if (!boards[i].initialized) {
+            all_healthy = false;
+            continue;
+        }
+        
+        // Skip if checked recently
+        if (now - boards[i].health.last_health_check < IO_EXPANDER_HEALTH_CHECK_INTERVAL_MS) {
+            if (!boards[i].health.healthy) {
+                all_healthy = false;
+            }
+            continue;
+        }
+        
+        boards[i].health.last_health_check = now;
+        
+        // Test read from IODIRA register
+        uint8_t test_value;
+        esp_err_t ret = mcp23017_read_reg(boards[i].handle, MCP23017_IODIRA, &test_value);
+        
+        if (ret == ESP_OK) {
+            record_success(i);
+        } else {
+            record_error(i);
+            all_healthy = false;
+            ESP_LOGW(TAG, "Health check failed for board #%d (0x%02X)",
+                     i, boards[i].address);
+        }
+    }
+    
+    return all_healthy;
+}
+
+bool io_expander_get_health(uint8_t board, io_expander_health_t *status) {
+    if (board >= MAX_MCP_BOARDS || !status) {
+        return false;
+    }
+    
+    if (!boards[board].initialized) {
+        memset(status, 0, sizeof(io_expander_health_t));
+        return false;
+    }
+    
+    memcpy(status, &boards[board].health, sizeof(io_expander_health_t));
+    return true;
+}
+
+void io_expander_set_recovery_callback(io_expander_recovery_callback_t callback) {
+    recovery_callback = callback;
+    ESP_LOGI(TAG, "Recovery callback %s", callback ? "registered" : "cleared");
+}
+
+uint8_t io_expander_attempt_recovery(void) {
+    if (!io_initialized) {
+        return 0;
+    }
+    
+    uint8_t recovered = 0;
+    
+    ESP_LOGI(TAG, "Attempting recovery for unhealthy boards...");
+    
+    for (uint8_t i = 0; i < MAX_MCP_BOARDS; i++) {
+        if (!boards[i].initialized || boards[i].health.healthy) {
+            continue;
+        }
+        
+        ESP_LOGI(TAG, "Recovering board #%d (errors: %lu, consecutive: %lu)",
+                 i, (unsigned long)boards[i].health.error_count,
+                 (unsigned long)boards[i].health.consecutive_errors);
+        
+        if (io_expander_reinit_board(i) == ESP_OK) {
+            recovered++;
+        }
+    }
+    
+    if (recovered > 0) {
+        ESP_LOGI(TAG, "Recovered %d board(s)", recovered);
+    } else {
+        ESP_LOGW(TAG, "No boards recovered");
+    }
+    
+    return recovered;
+}
+
+void io_expander_reset_errors(uint8_t board) {
+    if (board >= MAX_MCP_BOARDS) {
+        return;
+    }
+    
+    boards[board].health.error_count = 0;
+    boards[board].health.consecutive_errors = 0;
+    boards[board].health.healthy = true;
+    
+    ESP_LOGI(TAG, "Error counters reset for board #%d", board);
 }

@@ -144,12 +144,12 @@ Source: https://github.com/openfrontio/OpenFrontIO/tree/main/src/client/graphics
 
 ## WebSocket Behavior
 
-- Default WebSocket URL: `ws://localhost:3000/ws-script`.
+- Default WebSocket URL: `ws://localhost:3000/ws`.
 - The effective URL is loaded from the Tampermonkey storage key `ots-ws-url` (via `GM_getValue`); if missing or empty, it falls back to the default.
 - On connect:
   - HUD status badge shows `CONNECTING` then `OPEN` when connected.
-  - Sends an `INFO` event `userscript-connected` with the current page URL.
-  - Sends an initial demo `GameState` payload.
+  - Sends handshake message: `{"type": "handshake", "clientType": "userscript"}`
+  - Sends periodic `INFO` events (heartbeats) to indicate connection status.
 - On close/error:
   - HUD status shows `DISCONNECTED` or `ERROR`.
   - Exponential backoff auto-reconnect (starting at 2s, up to ~15s).

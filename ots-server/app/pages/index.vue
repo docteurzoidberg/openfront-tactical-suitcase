@@ -24,6 +24,7 @@
             :powered="powerOn"
             :troops="troops"
             :attack-ratio="attackRatio"
+            :game-phase="gamePhase"
             @set-troops-percent="sendSetTroopsPercent"
           />
         </div>
@@ -58,5 +59,5 @@
 <script setup lang="ts">
 import { useGameSocket } from '../composables/useGameSocket'
 
-const { uiStatus, userscriptStatus, gameStatus, events, activeNukes, activeAlerts, powerOn, troops, attackRatio, sendNukeCommand, sendSetTroopsPercent, togglePower, userscriptHeartbeatId, clearEvents } = useGameSocket()
+const { uiStatus, userscriptStatus, gameStatus, gamePhase, events, activeNukes, activeAlerts, powerOn, troops, attackRatio, sendNukeCommand, sendSetTroopsPercent, togglePower, userscriptHeartbeatId, clearEvents } = useGameSocket()
 </script>

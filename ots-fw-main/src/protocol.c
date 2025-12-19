@@ -4,16 +4,13 @@
 const char* event_type_to_string(game_event_type_t type) {
     switch (type) {
         case GAME_EVENT_INFO: return "INFO";
+        case GAME_EVENT_GAME_SPAWNING: return "GAME_SPAWNING";
         case GAME_EVENT_GAME_START: return "GAME_START";
         case GAME_EVENT_GAME_END: return "GAME_END";
-        case GAME_EVENT_WIN: return "WIN";
-        case GAME_EVENT_LOOSE: return "LOOSE";
         case GAME_EVENT_NUKE_LAUNCHED: return "NUKE_LAUNCHED";
-        case GAME_EVENT_HYDRO_LAUNCHED: return "HYDRO_LAUNCHED";
-        case GAME_EVENT_MIRV_LAUNCHED: return "MIRV_LAUNCHED";
         case GAME_EVENT_NUKE_EXPLODED: return "NUKE_EXPLODED";
         case GAME_EVENT_NUKE_INTERCEPTED: return "NUKE_INTERCEPTED";
-        case GAME_EVENT_ALERT_ATOM: return "ALERT_ATOM";
+        case GAME_EVENT_ALERT_NUKE: return "ALERT_NUKE";
         case GAME_EVENT_ALERT_HYDRO: return "ALERT_HYDRO";
         case GAME_EVENT_ALERT_MIRV: return "ALERT_MIRV";
         case GAME_EVENT_ALERT_LAND: return "ALERT_LAND";
@@ -33,14 +30,11 @@ game_event_type_t string_to_event_type(const char *str) {
     if (!str) return GAME_EVENT_INVALID;
     
     if (strcmp(str, "INFO") == 0) return GAME_EVENT_INFO;
+    if (strcmp(str, "GAME_SPAWNING") == 0) return GAME_EVENT_GAME_SPAWNING;
     if (strcmp(str, "GAME_START") == 0) return GAME_EVENT_GAME_START;
     if (strcmp(str, "GAME_END") == 0) return GAME_EVENT_GAME_END;
-    if (strcmp(str, "WIN") == 0) return GAME_EVENT_WIN;
-    if (strcmp(str, "LOOSE") == 0) return GAME_EVENT_LOOSE;
     if (strcmp(str, "NUKE_LAUNCHED") == 0) return GAME_EVENT_NUKE_LAUNCHED;
-    if (strcmp(str, "HYDRO_LAUNCHED") == 0) return GAME_EVENT_HYDRO_LAUNCHED;
-    if (strcmp(str, "MIRV_LAUNCHED") == 0) return GAME_EVENT_MIRV_LAUNCHED;
-    if (strcmp(str, "ALERT_ATOM") == 0) return GAME_EVENT_ALERT_ATOM;
+    if (strcmp(str, "ALERT_NUKE") == 0) return GAME_EVENT_ALERT_NUKE;
     if (strcmp(str, "ALERT_HYDRO") == 0) return GAME_EVENT_ALERT_HYDRO;
     if (strcmp(str, "ALERT_MIRV") == 0) return GAME_EVENT_ALERT_MIRV;
     if (strcmp(str, "ALERT_LAND") == 0) return GAME_EVENT_ALERT_LAND;
@@ -49,10 +43,10 @@ game_event_type_t string_to_event_type(const char *str) {
     if (strcmp(str, "NUKE_EXPLODED") == 0) return GAME_EVENT_NUKE_EXPLODED;
     if (strcmp(str, "NUKE_INTERCEPTED") == 0) return GAME_EVENT_NUKE_INTERCEPTED;
     
-    // Handle nuke type shortcuts (for send-nuke command)
+    // Handle nuke type shortcuts (for send-nuke command) - all map to NUKE_LAUNCHED
     if (strcmp(str, "atom") == 0) return GAME_EVENT_NUKE_LAUNCHED;
-    if (strcmp(str, "hydro") == 0) return GAME_EVENT_HYDRO_LAUNCHED;
-    if (strcmp(str, "mirv") == 0) return GAME_EVENT_MIRV_LAUNCHED;
+    if (strcmp(str, "hydro") == 0) return GAME_EVENT_NUKE_LAUNCHED;
+    if (strcmp(str, "mirv") == 0) return GAME_EVENT_NUKE_LAUNCHED;
     
     return GAME_EVENT_INVALID;
 }

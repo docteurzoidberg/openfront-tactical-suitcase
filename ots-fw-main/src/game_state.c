@@ -2,7 +2,7 @@
 #include "led_controller.h"
 #include "esp_log.h"
 
-static const char *TAG = "GAME_STATE";
+static const char *TAG = "OTS_GAME_STATE";
 
 static game_phase_t current_phase = GAME_PHASE_LOBBY;
 static game_state_change_callback_t state_change_callback = NULL;
@@ -31,6 +31,10 @@ void game_state_update(game_event_type_t event_type) {
     game_phase_t new_phase = current_phase;
     
     switch (event_type) {
+        case GAME_EVENT_GAME_SPAWNING:
+            new_phase = GAME_PHASE_SPAWNING;
+            break;
+            
         case GAME_EVENT_GAME_START:
             new_phase = GAME_PHASE_IN_GAME;
             
@@ -46,15 +50,12 @@ void game_state_update(game_event_type_t event_type) {
             break;
             
         case GAME_EVENT_GAME_END:
+            // Parse victory status from event data
+            // Expected JSON: {"victory": true/false/null}
+            // We'll use GAME_PHASE_ENDED as default if victory unknown
             new_phase = GAME_PHASE_ENDED;
-            break;
-            
-        case GAME_EVENT_WIN:
-            new_phase = GAME_PHASE_WON;
-            break;
-            
-        case GAME_EVENT_LOOSE:
-            new_phase = GAME_PHASE_LOST;
+            // Note: Victory status parsing should be implemented in event handler
+            // For now, default to ENDED (can be enhanced later with JSON parsing)
             break;
             
         default:
