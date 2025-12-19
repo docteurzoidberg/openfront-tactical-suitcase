@@ -652,33 +652,14 @@
         }
       },
       getAttackRatio() {
-        try {
-          const attackRatioInput = document.getElementById("attack-ratio");
-          if (attackRatioInput && attackRatioInput.value) {
-            const percentage = Number(attackRatioInput.value);
-            if (!isNaN(percentage) && percentage >= 1 && percentage <= 100) {
-              const ratio = percentage / 100;
-              console.log("[GameAPI] getAttackRatio: from DOM input#attack-ratio =", percentage, "% =", ratio);
-              return ratio;
-            }
+        const controlPanel = document.querySelector("control-panel");
+        if (controlPanel && controlPanel.uiState && typeof controlPanel.uiState.attackRatio === "number") {
+          const ratio = controlPanel.uiState.attackRatio;
+          if (ratio >= 0 && ratio <= 1) {
+            return ratio;
           }
-        } catch (e) {
-          console.error("[GameAPI] getAttackRatio: error reading from DOM:", e);
         }
-        try {
-          const saved = localStorage.getItem("settings.attackRatio");
-          if (saved) {
-            const ratio = Number(saved);
-            if (!isNaN(ratio) && ratio >= 0 && ratio <= 1) {
-              console.log("[GameAPI] getAttackRatio: from localStorage =", ratio);
-              return ratio;
-            }
-          }
-        } catch (e) {
-          console.error("[GameAPI] getAttackRatio: error reading localStorage:", e);
-        }
-        console.log("[GameAPI] getAttackRatio: using default 0.2");
-        return 0.2;
+        throw new Error("Unable to access attackRatio from UIState");
       },
       getTroopsToSend() {
         try {

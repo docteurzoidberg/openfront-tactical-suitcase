@@ -2,10 +2,17 @@
 
 This file documents the `ots-userscript` subproject. It is a TypeScript-based Tampermonkey userscript that bridges a game web page to the local OTS dashboard via WebSockets.
 
+## Game Source Code
+
+- **Official Repository**: https://github.com/openfrontio/OpenFrontIO/
+- **Local Clone**: Available at `../OpenFrontIO` (relative to workspace root)
+- **Game Type**: Real-time multiplayer territory control game (OpenFront.io)
+
 ## Purpose
 
-- Inject a userscript into the game page (e.g. `https://example-game.com/*`).
+- Inject a userscript into the game page (OpenFront.io at `https://openfront.io/*`).
 - Connect to the local OTS server over WebSocket and stream game state and events.
+- Monitor and report real-time troop data (current/max/ratio) to hardware modules.
 - Provide an in-page HUD for:
   - WebSocket connection status.
   - A rolling log of sent/received/info messages.
@@ -39,6 +46,49 @@ This produces `build/userscript.ots.user.js` with a Tampermonkey header. Install
 - Drag-and-dropping the `.user.js` file into the browser/Tampermonkey UI.
 
 The `@match` rule in the header is currently set to `https://openfront.io/*`.
+
+## Game Integration Notes
+
+### Attack Ratio Access Methods
+
+The OpenFront.io game stores the attack ratio (troop send percentage) in multiple places:
+
+1. **UIState Object** (BEST - Live game state)
+   - Accessible via `document.querySelector('control-panel').uiState.attackRatio`
+   - Returns ratio as decimal (0.0 - 1.0)
+   - Updated in real-time when player changes slider
+   - Defined in: `src/client/graphics/UIState.ts`
+
+2. **DOM Input Element** (BACKUP - Current UI value)
+   - Element ID: `#attack-ratio`
+   - Input type: range (1-100)
+   - Returns percentage (1-100), must divide by 100
+   - Located in: `src/client/graphics/layers/ControlPanel.ts`
+
+3. **localStorage** (FALLBACK - Persisted setting)
+   - Key: `settings.attackRatio`
+   - Stores ratio as decimal string (e.g., "0.2")
+   - Default value: "0.2" (20%)
+   - Persisted across sessions
+
+### Recommended Access Pattern
+
+```typescript
+// Priority order:
+1. controlPanel.uiState.attackRatio  // Live game state
+2. input#attack-ratio.value / 100    // Current UI value
+3. localStorage.settings.attackRatio // Saved setting
+4. 0.2                                // Default fallback
+```
+
+### Game API Access Points
+
+The game exposes its API through DOM elements with custom elements:
+- `events-display` → `.game` property → GameView instance
+- `control-panel` → `.uiState` property → UIState instance
+- Game methods: `myPlayer()`, `config()`, `troops()`, `maxTroops()`, etc.
+
+Source: https://github.com/openfrontio/OpenFrontIO/tree/main/src/client/graphics/
 
 ## WebSocket Behavior
 
