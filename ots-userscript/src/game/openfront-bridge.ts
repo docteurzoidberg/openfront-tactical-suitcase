@@ -6,6 +6,7 @@ import { createGameAPI, getGameView } from './game-api'
 import { NukeTracker } from './nuke-tracker'
 import { BoatTracker } from './boat-tracker'
 import { LandAttackTracker } from './land-tracker'
+import { TroopMonitor } from './troop-monitor'
 
 const CONTROL_PANEL_SELECTOR = 'control-panel'
 const POLL_INTERVAL_MS = 100
@@ -15,8 +16,10 @@ export class GameBridge {
   private nukeTracker: NukeTracker
   private boatTracker: BoatTracker
   private landTracker: LandAttackTracker
+  private troopMonitor: TroopMonitor
   private gameConnected = false
   private inGame = false
+  private gameAPI = createGameAPI()
 
   constructor(
     private ws: WsClient,
@@ -25,6 +28,7 @@ export class GameBridge {
     this.nukeTracker = new NukeTracker()
     this.boatTracker = new BoatTracker()
     this.landTracker = new LandAttackTracker()
+    this.troopMonitor = new TroopMonitor(this.gameAPI, this.ws)
 
     // Register event callbacks
     this.nukeTracker.onEvent((event) => this.handleTrackerEvent(event))
@@ -96,6 +100,9 @@ export class GameBridge {
         this.ws.sendEvent('GAME_START', 'Game started')
         console.log('[GameBridge] Game started')
         this.clearTrackers() // Clear any stale state
+
+        // Start troop monitoring when game starts
+        this.troopMonitor.start()
       }
 
       try {
@@ -123,6 +130,7 @@ export class GameBridge {
     this.nukeTracker.clear()
     this.boatTracker.clear()
     this.landTracker.clear()
+    this.troopMonitor.stop()
   }
 
   handleCommand(action: string, params?: unknown) {
@@ -130,12 +138,49 @@ export class GameBridge {
 
     if (action === 'send-nuke') {
       this.handleSendNuke(params)
+    } else if (action === 'set-attack-ratio') {
+      this.handleSetAttackRatio(params)
     } else if (action === 'ping') {
       // Ping is already handled by WsClient, but we can log it
       console.log('[GameBridge] Ping received')
     } else {
       console.warn('[GameBridge] Unknown command:', action)
       this.ws.sendEvent('INFO', `Unknown command: ${action}`, { action, params })
+    }
+  }
+
+  private handleSetAttackRatio(params?: unknown) {
+    const ratio = (params as any)?.ratio
+
+    if (typeof ratio !== 'number' || ratio < 0 || ratio > 1) {
+      console.error('[GameBridge] set-attack-ratio command missing or invalid ratio parameter (expected 0-1)')
+      this.ws.sendEvent('INFO', 'set-attack-ratio failed: invalid ratio', { params })
+      return
+    }
+
+    // Convert ratio (0-1) to percentage (1-100)
+    const percentage = Math.round(ratio * 100)
+    console.log(`[GameBridge] Setting attack ratio to ${ratio} (${percentage}%)`)
+
+    // Update the DOM input element
+    const attackRatioInput = document.getElementById('attack-ratio') as HTMLInputElement | null
+    if (attackRatioInput) {
+      attackRatioInput.value = percentage.toString()
+
+      // Trigger input and change events to notify the game
+      attackRatioInput.dispatchEvent(new Event('input', { bubbles: true }))
+      attackRatioInput.dispatchEvent(new Event('change', { bubbles: true }))
+
+      console.log('[GameBridge] ✓ Attack ratio slider updated to', percentage, '%')
+      this.ws.sendEvent('INFO', 'Attack ratio updated', { ratio, percentage })
+
+      // Force troop monitor to check and send update
+      setTimeout(() => {
+        this.troopMonitor['checkForChanges'](true)
+      }, 100)
+    } else {
+      console.error('[GameBridge] #attack-ratio input not found')
+      this.ws.sendEvent('INFO', 'set-attack-ratio failed: input not found', { ratio })
     }
   }
 

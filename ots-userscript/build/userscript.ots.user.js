@@ -325,6 +325,25 @@
     });
   }
 
+  // ../ots-shared/src/game.ts
+  var PROTOCOL_CONSTANTS = {
+    // WebSocket configuration
+    DEFAULT_WS_URL: "ws://localhost:3000/ws",
+    DEFAULT_WS_PORT: 3e3,
+    // Client types for handshake
+    CLIENT_TYPE_UI: "ui",
+    CLIENT_TYPE_USERSCRIPT: "userscript",
+    CLIENT_TYPE_FIRMWARE: "firmware",
+    // Standard INFO event messages
+    INFO_MESSAGE_USERSCRIPT_CONNECTED: "userscript-connected",
+    INFO_MESSAGE_USERSCRIPT_DISCONNECTED: "userscript-disconnected",
+    INFO_MESSAGE_NUKE_SENT: "Nuke sent",
+    // Heartbeat configuration
+    HEARTBEAT_INTERVAL_MS: 5e3,
+    RECONNECT_DELAY_MS: 2e3,
+    RECONNECT_MAX_DELAY_MS: 15e3
+  };
+
   // src/websocket/client.ts
   function debugLog(...args) {
     console.log("[OTS Userscript]", ...args);
@@ -357,7 +376,7 @@
         this.hud.pushLog("info", "WebSocket connected");
         this.reconnectDelay = 2e3;
         this.safeSend({ type: "handshake", clientType: "userscript" });
-        this.sendInfo("userscript-connected", { url: window.location.href });
+        this.sendInfo(PROTOCOL_CONSTANTS.INFO_MESSAGE_USERSCRIPT_CONNECTED, { url: window.location.href });
         this.startHeartbeat();
       });
       this.socket.addEventListener("close", (ev) => {
@@ -606,6 +625,67 @@
           const game = getGame();
           if (!game || typeof game.playerBySmallID !== "function") return null;
           return game.playerBySmallID(smallID);
+        } catch (e) {
+          return null;
+        }
+      },
+      getCurrentTroops() {
+        try {
+          const myPlayer = this.getMyPlayer();
+          if (!myPlayer || typeof myPlayer.troops !== "function") return null;
+          return myPlayer.troops();
+        } catch (e) {
+          return null;
+        }
+      },
+      getMaxTroops() {
+        try {
+          const game = getGame();
+          const myPlayer = this.getMyPlayer();
+          if (!game || !myPlayer) return null;
+          if (typeof game.config !== "function") return null;
+          const config = game.config();
+          if (!config || typeof config.maxTroops !== "function") return null;
+          return config.maxTroops(myPlayer);
+        } catch (e) {
+          return null;
+        }
+      },
+      getAttackRatio() {
+        try {
+          const attackRatioInput = document.getElementById("attack-ratio");
+          if (attackRatioInput && attackRatioInput.value) {
+            const percentage = Number(attackRatioInput.value);
+            if (!isNaN(percentage) && percentage >= 1 && percentage <= 100) {
+              const ratio = percentage / 100;
+              console.log("[GameAPI] getAttackRatio: from DOM input#attack-ratio =", percentage, "% =", ratio);
+              return ratio;
+            }
+          }
+        } catch (e) {
+          console.error("[GameAPI] getAttackRatio: error reading from DOM:", e);
+        }
+        try {
+          const saved = localStorage.getItem("settings.attackRatio");
+          if (saved) {
+            const ratio = Number(saved);
+            if (!isNaN(ratio) && ratio >= 0 && ratio <= 1) {
+              console.log("[GameAPI] getAttackRatio: from localStorage =", ratio);
+              return ratio;
+            }
+          }
+        } catch (e) {
+          console.error("[GameAPI] getAttackRatio: error reading localStorage:", e);
+        }
+        console.log("[GameAPI] getAttackRatio: using default 0.2");
+        return 0.2;
+      },
+      getTroopsToSend() {
+        try {
+          const currentTroops = this.getCurrentTroops();
+          if (currentTroops === null) return null;
+          const attackRatio = this.getAttackRatio();
+          return Math.floor(currentTroops * attackRatio);
         } catch (e) {
           return null;
         }
@@ -1017,6 +1097,142 @@
     }
   };
 
+  // src/game/troop-monitor.ts
+  var TroopMonitor = class {
+    constructor(gameAPI, ws) {
+      this.gameAPI = gameAPI;
+      this.ws = ws;
+      this.pollInterval = null;
+      this.lastCurrentTroops = null;
+      this.lastMaxTroops = null;
+      this.lastAttackRatio = null;
+      this.lastTroopsToSend = null;
+      // Track localStorage for attack ratio changes
+      this.storageListener = null;
+    }
+    /**
+     * Start monitoring for changes
+     * Polls at game tick rate (100ms) but only sends when values actually change
+     */
+    start() {
+      if (this.pollInterval) return;
+      console.log("[TroopMonitor] Starting change detection");
+      this.pollInterval = window.setInterval(() => {
+        this.checkForChanges();
+      }, 100);
+      this.storageListener = (event) => {
+        if (event.key === "settings.attackRatio" && event.newValue !== event.oldValue) {
+          console.log("[TroopMonitor] Attack ratio changed via localStorage");
+          this.checkForChanges(true);
+        }
+      };
+      window.addEventListener("storage", this.storageListener);
+      this.interceptAttackRatioChanges();
+      this.checkForChanges(true);
+    }
+    /**
+     * Stop monitoring
+     */
+    stop() {
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval);
+        this.pollInterval = null;
+      }
+      if (this.storageListener) {
+        window.removeEventListener("storage", this.storageListener);
+        this.storageListener = null;
+      }
+      console.log("[TroopMonitor] Stopped");
+    }
+    /**
+     * Check if any values have changed and send update if they have
+     */
+    checkForChanges(forceRatioUpdate = false) {
+      if (!this.gameAPI.isValid()) {
+        if (this.lastCurrentTroops !== null || this.lastMaxTroops !== null) {
+          this.lastCurrentTroops = null;
+          this.lastMaxTroops = null;
+          this.lastAttackRatio = null;
+          this.lastTroopsToSend = null;
+        }
+        return;
+      }
+      const currentTroops = this.gameAPI.getCurrentTroops();
+      const maxTroops = this.gameAPI.getMaxTroops();
+      const attackRatio = this.gameAPI.getAttackRatio();
+      const troopsToSend = this.gameAPI.getTroopsToSend();
+      const troopsChanged = currentTroops !== this.lastCurrentTroops;
+      const maxChanged = maxTroops !== this.lastMaxTroops;
+      const ratioChanged = attackRatio !== this.lastAttackRatio || forceRatioUpdate;
+      const toSendChanged = troopsToSend !== this.lastTroopsToSend;
+      if (troopsChanged || maxChanged || ratioChanged || toSendChanged) {
+        const changes = [];
+        if (troopsChanged) changes.push(`troops: ${this.lastCurrentTroops} \u2192 ${currentTroops}`);
+        if (maxChanged) changes.push(`max: ${this.lastMaxTroops} \u2192 ${maxTroops}`);
+        if (ratioChanged) changes.push(`ratio: ${this.lastAttackRatio} \u2192 ${attackRatio}`);
+        if (toSendChanged) changes.push(`toSend: ${this.lastTroopsToSend} \u2192 ${troopsToSend}`);
+        console.log("[TroopMonitor] Changes detected:", changes.join(", "));
+        this.lastCurrentTroops = currentTroops;
+        this.lastMaxTroops = maxTroops;
+        this.lastAttackRatio = attackRatio;
+        this.lastTroopsToSend = troopsToSend;
+        this.sendUpdate();
+      }
+    }
+    /**
+     * Send current troop data to WebSocket
+     */
+    sendUpdate() {
+      const data = {
+        currentTroops: this.lastCurrentTroops !== null ? Math.floor(this.lastCurrentTroops / 10) : null,
+        maxTroops: this.lastMaxTroops !== null ? Math.floor(this.lastMaxTroops / 10) : null,
+        attackRatio: this.lastAttackRatio,
+        attackRatioPercent: this.lastAttackRatio !== null ? Math.round(this.lastAttackRatio * 100) : null,
+        troopsToSend: this.lastTroopsToSend !== null ? Math.floor(this.lastTroopsToSend / 10) : null,
+        timestamp: Date.now()
+      };
+      this.ws.sendEvent("TROOP_UPDATE", "Troop data changed", data);
+      console.log("[TroopMonitor] Sent update:", data);
+    }
+    /**
+     * Watch DOM input element for attack ratio changes
+     */
+    interceptAttackRatioChanges() {
+      const self = this;
+      const attachInputListener = () => {
+        const attackRatioInput = document.getElementById("attack-ratio");
+        if (attackRatioInput) {
+          console.log("[TroopMonitor] Found #attack-ratio input, attaching listeners");
+          attackRatioInput.addEventListener("input", (event) => {
+            const target = event.target;
+            console.log("[TroopMonitor] \u2713 Attack ratio input changed:", target.value, "%");
+            self.checkForChanges(true);
+          });
+          attackRatioInput.addEventListener("change", (event) => {
+            const target = event.target;
+            console.log("[TroopMonitor] \u2713 Attack ratio change completed:", target.value, "%");
+            self.checkForChanges(true);
+          });
+        } else {
+          setTimeout(attachInputListener, 500);
+        }
+      };
+      attachInputListener();
+    }
+    /**
+     * Get current troop data snapshot
+     */
+    getCurrentData() {
+      return {
+        currentTroops: this.lastCurrentTroops,
+        maxTroops: this.lastMaxTroops,
+        attackRatio: this.lastAttackRatio,
+        attackRatioPercent: this.lastAttackRatio !== null ? Math.round(this.lastAttackRatio * 100) : null,
+        troopsToSend: this.lastTroopsToSend
+      };
+    }
+  };
+
   // src/game/openfront-bridge.ts
   var CONTROL_PANEL_SELECTOR = "control-panel";
   var POLL_INTERVAL_MS = 100;
@@ -1027,9 +1243,11 @@
       this.pollInterval = null;
       this.gameConnected = false;
       this.inGame = false;
+      this.gameAPI = createGameAPI();
       this.nukeTracker = new NukeTracker();
       this.boatTracker = new BoatTracker();
       this.landTracker = new LandAttackTracker();
+      this.troopMonitor = new TroopMonitor(this.gameAPI, this.ws);
       this.nukeTracker.onEvent((event) => this.handleTrackerEvent(event));
       this.boatTracker.onEvent((event) => this.handleTrackerEvent(event));
       this.landTracker.onEvent((event) => this.handleTrackerEvent(event));
@@ -1084,6 +1302,7 @@
           this.ws.sendEvent("GAME_START", "Game started");
           console.log("[GameBridge] Game started");
           this.clearTrackers();
+          this.troopMonitor.start();
         }
         try {
           this.nukeTracker.detectLaunches(gameAPI, myPlayerID);
@@ -1104,16 +1323,43 @@
       this.nukeTracker.clear();
       this.boatTracker.clear();
       this.landTracker.clear();
+      this.troopMonitor.stop();
     }
     handleCommand(action, params) {
       console.log("[GameBridge] Received command:", action, params);
       if (action === "send-nuke") {
         this.handleSendNuke(params);
+      } else if (action === "set-attack-ratio") {
+        this.handleSetAttackRatio(params);
       } else if (action === "ping") {
         console.log("[GameBridge] Ping received");
       } else {
         console.warn("[GameBridge] Unknown command:", action);
         this.ws.sendEvent("INFO", `Unknown command: ${action}`, { action, params });
+      }
+    }
+    handleSetAttackRatio(params) {
+      const ratio = params == null ? void 0 : params.ratio;
+      if (typeof ratio !== "number" || ratio < 0 || ratio > 1) {
+        console.error("[GameBridge] set-attack-ratio command missing or invalid ratio parameter (expected 0-1)");
+        this.ws.sendEvent("INFO", "set-attack-ratio failed: invalid ratio", { params });
+        return;
+      }
+      const percentage = Math.round(ratio * 100);
+      console.log(`[GameBridge] Setting attack ratio to ${ratio} (${percentage}%)`);
+      const attackRatioInput = document.getElementById("attack-ratio");
+      if (attackRatioInput) {
+        attackRatioInput.value = percentage.toString();
+        attackRatioInput.dispatchEvent(new Event("input", { bubbles: true }));
+        attackRatioInput.dispatchEvent(new Event("change", { bubbles: true }));
+        console.log("[GameBridge] \u2713 Attack ratio slider updated to", percentage, "%");
+        this.ws.sendEvent("INFO", "Attack ratio updated", { ratio, percentage });
+        setTimeout(() => {
+          this.troopMonitor["checkForChanges"](true);
+        }, 100);
+      } else {
+        console.error("[GameBridge] #attack-ratio input not found");
+        this.ws.sendEvent("INFO", "set-attack-ratio failed: input not found", { ratio });
       }
     }
     handleSendNuke(params) {
@@ -1187,7 +1433,7 @@
   };
 
   // src/storage/config.ts
-  var DEFAULT_WS_URL = "ws://localhost:3000/ws";
+  var DEFAULT_WS_URL = PROTOCOL_CONSTANTS.DEFAULT_WS_URL;
   var STORAGE_KEY_WS_URL = "ots-ws-url";
   function loadWsUrl() {
     const saved = GM_getValue(STORAGE_KEY_WS_URL, null);

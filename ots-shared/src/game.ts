@@ -24,6 +24,7 @@ export type GameEventType =
   | 'ALERT_MIRV'
   | 'ALERT_LAND'
   | 'ALERT_NAVAL'
+  | 'TROOP_UPDATE'
   | 'HARDWARE_TEST'
 
 // ============================================================================

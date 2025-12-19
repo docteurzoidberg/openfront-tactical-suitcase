@@ -15,6 +15,11 @@ export interface GameAPI {
   getOwner(tile: number): any | null
   getUnit(unitId: number): any | null
   getPlayerBySmallID(smallID: number): any | null
+  // Troop information
+  getCurrentTroops(): number | null
+  getMaxTroops(): number | null
+  getAttackRatio(): number
+  getTroopsToSend(): number | null
 }
 
 /**
@@ -150,6 +155,79 @@ export function createGameAPI(): GameAPI {
         const game = getGame()
         if (!game || typeof game.playerBySmallID !== 'function') return null
         return game.playerBySmallID(smallID)
+      } catch {
+        return null
+      }
+    },
+
+    getCurrentTroops(): number | null {
+      try {
+        const myPlayer = this.getMyPlayer()
+        if (!myPlayer || typeof myPlayer.troops !== 'function') return null
+        return myPlayer.troops()
+      } catch {
+        return null
+      }
+    },
+
+    getMaxTroops(): number | null {
+      try {
+        const game = getGame()
+        const myPlayer = this.getMyPlayer()
+        if (!game || !myPlayer) return null
+        if (typeof game.config !== 'function') return null
+
+        const config = game.config()
+        if (!config || typeof config.maxTroops !== 'function') return null
+
+        return config.maxTroops(myPlayer)
+      } catch {
+        return null
+      }
+    },
+
+    getAttackRatio(): number {
+      try {
+        // Try to get from DOM input slider (current value)
+        const attackRatioInput = document.getElementById('attack-ratio') as HTMLInputElement | null
+        if (attackRatioInput && attackRatioInput.value) {
+          const percentage = Number(attackRatioInput.value)
+          if (!isNaN(percentage) && percentage >= 1 && percentage <= 100) {
+            const ratio = percentage / 100
+            console.log('[GameAPI] getAttackRatio: from DOM input#attack-ratio =', percentage, '% =', ratio)
+            return ratio
+          }
+        }
+      } catch (e) {
+        console.error('[GameAPI] getAttackRatio: error reading from DOM:', e)
+      }
+
+      // Fallback to localStorage (saved setting)
+      try {
+        const saved = localStorage.getItem('settings.attackRatio')
+        if (saved) {
+          const ratio = Number(saved)
+          if (!isNaN(ratio) && ratio >= 0 && ratio <= 1) {
+            console.log('[GameAPI] getAttackRatio: from localStorage =', ratio)
+            return ratio
+          }
+        }
+      } catch (e) {
+        console.error('[GameAPI] getAttackRatio: error reading localStorage:', e)
+      }
+
+      // Default to 20%
+      console.log('[GameAPI] getAttackRatio: using default 0.2')
+      return 0.2
+    },
+
+    getTroopsToSend(): number | null {
+      try {
+        const currentTroops = this.getCurrentTroops()
+        if (currentTroops === null) return null
+
+        const attackRatio = this.getAttackRatio()
+        return Math.floor(currentTroops * attackRatio)
       } catch {
         return null
       }

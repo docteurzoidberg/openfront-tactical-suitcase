@@ -45,6 +45,7 @@ const alertTimers = new Map<string, NodeJS.Timeout>()
 
 // Troops state
 const troops = ref<TroopsData | null>(null)
+const attackRatio = ref<number | null>(null)  // Attack ratio percentage (0-100)
 
 // Game phase tracking - null means userscript not connected
 const gamePhase = ref<GamePhase | null>(null)
@@ -129,6 +130,21 @@ export function useGameSocket() {
           gamePhase.value = 'game-won'
         } else if (msg.payload.type === 'LOOSE') {
           gamePhase.value = 'game-lost'
+        }
+
+        // Handle troop update events
+        if (msg.payload.type === 'TROOP_UPDATE') {
+          const data = msg.payload.data as any
+          if (data && typeof data.currentTroops === 'number' && typeof data.maxTroops === 'number') {
+            troops.value = {
+              current: data.currentTroops,
+              max: data.maxTroops
+            }
+            // Update attack ratio if provided (convert from 0-1 to 0-100)
+            if (typeof data.attackRatioPercent === 'number') {
+              attackRatio.value = data.attackRatioPercent
+            }
+          }
         }
 
         // Handle alert events
@@ -257,13 +273,16 @@ export function useGameSocket() {
   }
 
   const sendSetTroopsPercent = (percent: number) => {
+    // Convert percentage (0-100) to ratio (0-1) for userscript
+    const ratio = percent / 100
     sendMessage({
       type: 'cmd',
       payload: {
-        action: 'set-troops-percent',
-        params: { percent }
+        action: 'set-attack-ratio',
+        params: { ratio }
       }
     })
+    console.log('[useGameSocket] Sending set-attack-ratio command:', { percent, ratio })
   }
 
   return {
@@ -278,6 +297,7 @@ export function useGameSocket() {
     activeAlerts,
     powerOn,
     troops,
+    attackRatio,
     send: sendMessage,
     sendNukeCommand,
     sendSetTroopsPercent,

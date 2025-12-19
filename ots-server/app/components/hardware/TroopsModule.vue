@@ -55,6 +55,7 @@ interface Props {
   connected: boolean
   powered: boolean
   troops: TroopsData | null
+  attackRatio?: number | null  // Attack ratio from game (0-100)
 }
 
 const props = defineProps<Props>()
@@ -116,9 +117,21 @@ function handleSliderChange(event: Event) {
   }, 100)
 }
 
+// Sync slider with attack ratio from game
+watch(() => props.attackRatio, (newRatio) => {
+  if (newRatio !== null && newRatio !== undefined) {
+    const rounded = Math.round(newRatio)
+    // Only update if different to avoid unnecessary updates
+    if (sliderValue.value !== rounded) {
+      sliderValue.value = rounded
+      console.log('[TroopsModule] Synced slider with game ratio:', rounded)
+    }
+  }
+}, { immediate: true })
+
 // Reset slider when troops data becomes available
 watch(() => props.troops, (newTroops) => {
-  if (newTroops && sliderValue.value === 0) {
+  if (newTroops && sliderValue.value === 0 && !props.attackRatio) {
     // Could optionally set to a default value
   }
 })
