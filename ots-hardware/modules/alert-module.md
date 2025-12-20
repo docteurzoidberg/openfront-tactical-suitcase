@@ -254,7 +254,7 @@ struct AlertModuleState {
 - Multiple alerts can be active simultaneously
 - WARNING LED automatically managed based on active alerts
 - Blink durations configurable per alert type
-- Uses WebSocket protocol defined in `/protocol-context.md`
+- Uses WebSocket protocol defined in `/prompts/protocol-context.md`
 - Module uses MCP23017 Board 1
 - All timing is non-blocking using millis()
 

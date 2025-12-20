@@ -6,13 +6,13 @@
 
 Goals:
 - Act as a **WebSocket client** connecting to `ots-server` game backend
-- Use the **same protocol** as defined in `protocol-context.md`
+- Use the **same protocol** as defined in `prompts/protocol-context.md`
 - Provide modular hardware abstraction mirroring physical PCB modules
 - Support event-driven architecture with clean separation of concerns
 
 This firmware:
 - Maintains a stable WebSocket connection to the game server
-- Sends and receives messages conforming to `protocol-context.md`
+- Sends and receives messages conforming to `prompts/protocol-context.md`
 - Uses hardware modules (Alert, Nuke, Main Power) with standardized interfaces
 - Implements event dispatcher for flexible event routing
 - Supports Over-The-Air (OTA) updates via HTTP
@@ -96,7 +96,7 @@ idf.py menuconfig
 
 - Connect to Wi-Fi using configured credentials with automatic reconnection.
 - Act as a **WebSocket client** connecting TO `ots-server` game backend.
-- Implement the same **message envelope** (`type`, `payload`) as described in `protocol-context.md`.
+- Implement the same **message envelope** (`type`, `payload`) as described in `prompts/protocol-context.md`.
 - Keep the **game state** and **event notifications** consistent with the `ots-server` simulator and `ots-userscript`.
 - React to incoming `state` and `event` messages by updating hardware (LEDs, outputs).
 - Monitor hardware inputs (buttons, sensors) and send `cmd` messages to the server.
@@ -167,15 +167,15 @@ ots-fw-main/
 
 ## Synchronization with `ots-server` and `ots-userscript`
 
-- The **authoritative specification** is `protocol-context.md` at repo root
-- Event types defined in `protocol.h` must stay in sync with protocol-context.md:
+- The **authoritative specification** is `prompts/protocol-context.md` at repo root
+- Event types defined in `protocol.h` must stay in sync with prompts/protocol-context.md:
   - Game events: `GAME_START`, `GAME_END`, `WIN`, `LOOSE`
   - Nuke events: `NUKE_LAUNCHED`, `HYDRO_LAUNCHED`, `MIRV_LAUNCHED`, `NUKE_EXPLODED`, `NUKE_INTERCEPTED`
   - Alert events: `ALERT_ATOM`, `ALERT_HYDRO`, `ALERT_MIRV`, `ALERT_LAND`, `ALERT_NAVAL`
   - Internal events: `INTERNAL_EVENT_NETWORK_CONNECTED`, `INTERNAL_EVENT_WS_CONNECTED`, etc.
 - Game phases in `game_state.h` must match ots-shared: `LOBBY`, `SPAWNING`, `IN_GAME`, `WON`, `LOST`, `ENDED`
 - When adding new events:
-  1. Update `protocol-context.md`
+  1. Update `prompts/protocol-context.md`
   2. Add to `protocol.h` enum
   3. Update `protocol.c` string conversions
   4. Add handlers in appropriate hardware modules
@@ -399,7 +399,7 @@ See `OTA_GUIDE.md` for detailed instructions and troubleshooting.
 
 ### Protocol Changes
 
-1. Update `protocol-context.md` at repo root
+1. Update `prompts/protocol-context.md` at repo root
 2. Update event types in `include/protocol.h`
 3. Add string conversions in `src/protocol.c`
 4. Update handlers in relevant modules

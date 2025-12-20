@@ -64,7 +64,7 @@ This server also acts as a **hardware emulator** during development: when real h
   - Commands from UI are broadcast to all peers
   - Sends connection/disconnection INFO events for userscript status
 - `../../ots-shared/src/game.ts`
-  - Shared TypeScript types (kept in sync with `/protocol-context.md`)
+  - Shared TypeScript types (kept in sync with `/prompts/protocol-context.md`)
   - Includes `NukeType`, `SendNukeCommand`, `NukeSentEventData` for hardware module
 
 ## WebSocket & Status Semantics
@@ -93,7 +93,7 @@ This server also acts as a **hardware emulator** during development: when real h
 
 ## Messages & Types
 
-Messages follow the shared `IncomingMessage` / `OutgoingMessage` types defined in `/protocol-context.md`:
+Messages follow the shared `IncomingMessage` / `OutgoingMessage` types defined in `/prompts/protocol-context.md`:
 
 - `type: 'event'` – carries a `GameEvent` with:
   - `type: GameEventType` - All event types defined in protocol:
@@ -159,7 +159,7 @@ When the UI receives a nuke launched event (NUKE_LAUNCHED, HYDRO_LAUNCHED, or MI
   - Follow unit scaling rules (K/M/B) and text alignment (right/left)
   - Match screen transitions and event-to-screen mappings
 - Keep shared types in `ots-shared` as the single source of truth
-- Protocol definitions live in `/protocol-context.md` - update there first
+- Protocol definitions live in `/prompts/protocol-context.md` - update there first
 - When adding new hardware modules:
   1. Define in `/ots-hardware/modules/<module-name>.md`
   2. Add types to `ots-shared/src/game.ts`

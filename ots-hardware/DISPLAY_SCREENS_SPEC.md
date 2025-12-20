@@ -517,6 +517,6 @@ The HD44780 LCD uses standard ASCII for most characters:
 - `ots-fw-main/include/lcd_driver.h`
 
 **Related Documentation**:
-- `/protocol-context.md` - WebSocket protocol
+- `/prompts/protocol-context.md` - WebSocket protocol
 - `ots-fw-main/GAME_END_SCREEN.md` - Game end screen feature
 - `ots-server/copilot-project-context.md` - Server implementation guide

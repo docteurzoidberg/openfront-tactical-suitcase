@@ -225,7 +225,7 @@ I (17345) system_status: Game end screen timeout, returning to status
 
 ## Protocol Reference
 
-**Event Types** (from `protocol-context.md`):
+**Event Types** (from `prompts/protocol-context.md`):
 - `GAME_EVENT_WIN` (firmware) / `WIN` (WebSocket): Player won
 - `GAME_EVENT_LOOSE` (firmware) / `LOOSE` (WebSocket): Player lost
 - `GAME_EVENT_GAME_END` (firmware) / `GAME_END` (WebSocket): Game ended (outcome unknown)

@@ -4,7 +4,7 @@
 
 ## Purpose
 
-This folder provides the **TypeScript implementation** of types defined in `/protocol-context.md`. It serves as the single source of truth for TypeScript projects to prevent type duplication.
+This folder provides the **TypeScript implementation** of types defined in `/prompts/protocol-context.md`. It serves as the single source of truth for TypeScript projects to prevent type duplication.
 
 ## Architecture
 
@@ -34,7 +34,7 @@ import type { GameEvent, GameState, IncomingMessage } from '../../../ots-shared/
 
 When updating protocol:
 
-1. **Update source of truth**: `/protocol-context.md` (root)
+1. **Update source of truth**: `/prompts/protocol-context.md` (root)
 2. **Update TypeScript types**: `ots-shared/src/game.ts` (this folder)
 3. **Update firmware types**: `ots-fw-main/include/protocol.h` (C)
 

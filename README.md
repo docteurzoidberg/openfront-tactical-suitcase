@@ -80,7 +80,7 @@ Dashboard UI + Future Hardware
 
 ## Documentation
 
-- **Protocol**: See `protocol-context.md` for complete WebSocket protocol specification
+- **Protocol**: See `prompts/protocol-context.md` for complete WebSocket protocol specification
 - **Context**: See `copilot-project-context.md` for project architecture and conventions
 - **Hardware**: See `ots-hardware/` for module specifications
 

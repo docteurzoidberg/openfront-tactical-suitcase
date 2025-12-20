@@ -11,12 +11,12 @@ OpenFront Tactical Suitcase (OTS) is a multi-component system bridging OpenFront
 
 ## Architecture & Protocol
 
-### Single Source of Truth: `/protocol-context.md`
+### Single Source of Truth: `/prompts/protocol-context.md`
 
 **ALL protocol changes MUST start here.** This 1000+ line document defines WebSocket message envelopes, event types, and data structures for all components.
 
 **Protocol change workflow:**
-1. Update `/protocol-context.md` first
+1. Update `/prompts/protocol-context.md` first
 2. Update TypeScript: `ots-shared/src/game.ts` 
 3. Update C firmware: `ots-fw-main/include/protocol.h`
 4. Update implementations in server/userscript/firmware
@@ -117,7 +117,7 @@ Must update `src/CMakeLists.txt` SRCS list when adding `.c` files.
 
 ### Adding New Event Types
 
-1. Define in `/protocol-context.md` with JSON examples
+1. Define in `/prompts/protocol-context.md` with JSON examples
 2. Add to TypeScript enum in `ots-shared/src/game.ts`
 3. Add to C enum in `ots-fw-main/include/protocol.h`
 4. Add string conversion in `ots-fw-main/src/protocol.c`
@@ -137,15 +137,41 @@ Must update `src/CMakeLists.txt` SRCS list when adding `.c` files.
 
 **Before making breaking changes:**
 - Verify impact across all 3 implementations (shared/server/firmware)
-- Update protocol-context.md version/changelog section
+- Update prompts/protocol-context.md version/changelog section
 - Consider backward compatibility for OTA firmware updates
 - Test WebSocket message flow end-to-end
+
+### Release Management
+
+**Creating releases** (see `/prompts/RELEASE.md` for full guide):
+
+1. Use `./release.sh` at repo root for unified versioning
+2. Tag format: `YYYY-MM-DD.N` (date-based with auto-increment)
+3. Single tag applies to all projects (userscript, firmware, server)
+4. Release script handles: version updates → builds → git commit → tag
+5. Update `prompts/weekly_announces.md` for Discord changelog
+
+**Quick commands:**
+```bash
+./release.sh -u -p -m "Release description"  # Full automated release
+./release.sh -l                               # List existing releases
+./release.sh -u -m "Fix" userscript          # Userscript-only release
+```
+
+**Version locations:**
+- Userscript: `package.json`, `src/main.user.ts` (VERSION constant)
+- Firmware: `include/config.h` (OTS_FIRMWARE_VERSION macro)
+- Server: `package.json` (displayed in dashboard header)
 
 ## Repository Structure
 
 ```
 ots/
-  protocol-context.md              # SOURCE OF TRUTH for WebSocket messages
+  release.sh                       # Automated release script
+  prompts/
+    protocol-context.md            # SOURCE OF TRUTH for WebSocket messages
+    RELEASE.md                     # Release process and version management guide
+    weekly_announces.md            # Discord changelog history
   .github/
     copilot-instructions.md        # This file - workspace-level guidance
   
@@ -190,7 +216,8 @@ ots/
 
 ## Key Files & Patterns
 
-- **Protocol**: `/protocol-context.md` (1155 lines, complete specification)
+- **Protocol**: `/prompts/protocol-context.md` (1155 lines, complete specification)
+- **Release Process**: `/prompts/RELEASE.md` (Complete guide to version management and tagging)
 - **Component context**: Per-component `copilot-project-context.md` for detailed implementation guides
 - **Shared types**: `ots-shared/src/game.ts` (TypeScript protocol implementation)
 - **Firmware protocol**: `ots-fw-main/include/protocol.h` (C implementation)
@@ -204,7 +231,7 @@ ots/
 ❌ **Don't** use timer-based LED control - use state-based tracking with unitIDs  
 ❌ **Don't** modify protocol without updating all 3 implementations  
 ❌ **Don't** add firmware `.c` files without updating CMakeLists.txt  
-❌ **Don't** use generic `data?: unknown` - specify exact data shape in protocol-context.md
+❌ **Don't** use generic `data?: unknown` - specify exact data shape in prompts/protocol-context.md
 
 ## Technologies & Conventions
 

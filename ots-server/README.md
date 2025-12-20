@@ -103,7 +103,7 @@ The dashboard displays all events from the game:
 
 ## Protocol
 
-All WebSocket messages follow the protocol defined in `/protocol-context.md`.
+All WebSocket messages follow the protocol defined in `/prompts/protocol-context.md`.
 
 See `ots-shared/src/game.ts` for TypeScript type definitions.
 
