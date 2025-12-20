@@ -88,9 +88,7 @@ Represents a single event in the game.
 GameEventType =
   | "INFO"
   | "GAME_START"
-  | "GAME_END"
-  | "WIN"
-  | "LOOSE"
+  | "GAME_END"          // Game ended (see data.victory for win/loss)
   | "NUKE_LAUNCHED"
   | "HYDRO_LAUNCHED"
   | "MIRV_LAUNCHED"
@@ -260,7 +258,7 @@ Emitted when a new game begins.
 ```
 
 #### `GAME_END`
-Emitted when a game ends.
+Emitted when a game ends (victory or defeat). Contains result information in the data payload.
 
 ```json
 {
@@ -268,35 +266,67 @@ Emitted when a game ends.
   "payload": {
     "type": "GAME_END",
     "timestamp": 1234567890,
-    "message": "Game ended"
+    "message": "You died",
+    "data": {
+      "victory": false,
+      "phase": "game-lost",
+      "reason": "death"
+    }
   }
 }
 ```
 
-#### `WIN`
-Emitted when the player wins.
+**Data Fields:**
+- `victory` (boolean|null): `true` = player won, `false` = player lost, `null` = game ended but outcome unknown
+- `phase` (string, optional): Game phase at end - `"game-won"`, `"game-lost"`, or `"ended"`
+- `reason` (string, optional): Why game ended - `"death"` for elimination, `"victory"` for win, etc.
 
+**Examples:**
+
+Victory in solo/multiplayer:
 ```json
 {
   "type": "event",
   "payload": {
-    "type": "WIN",
+    "type": "GAME_END",
     "timestamp": 1234567890,
-    "message": "Victory!"
+    "message": "Victory!",
+    "data": {
+      "victory": true,
+      "phase": "game-won"
+    }
   }
 }
 ```
 
-#### `LOOSE`
-Emitted when the player loses.
-
+Death/elimination:
 ```json
 {
   "type": "event",
   "payload": {
-    "type": "LOOSE",
+    "type": "GAME_END",
     "timestamp": 1234567890,
-    "message": "Defeat"
+    "message": "You were eliminated",
+    "data": {
+      "victory": false,
+      "phase": "game-lost",
+      "reason": "death"
+    }
+  }
+}
+```
+
+Unknown outcome:
+```json
+{
+  "type": "event",
+  "payload": {
+    "type": "GAME_END",
+    "timestamp": 1234567890,
+    "message": "Game ended",
+    "data": {
+      "victory": null
+    }
   }
 }
 ```

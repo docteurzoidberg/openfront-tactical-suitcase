@@ -235,7 +235,7 @@ const eventFilters = ref<EventFilter[]>([
   { types: ['NUKE_LAUNCHED', 'NUKE_EXPLODED', 'NUKE_INTERCEPTED'], label: 'Nukes Sent', enabled: true, color: 'bg-orange-500' },
   { types: ['CMD_SENT'], label: 'Commands', enabled: true, color: 'bg-blue-500' },
   { types: ['TROOP_UPDATE'], label: 'Troop Updates', enabled: true, color: 'bg-purple-500' },
-  { types: ['GAME_START', 'GAME_END', 'WIN', 'LOOSE'], label: 'Game Events', enabled: true, color: 'bg-emerald-500' },
+  { types: ['GAME_START', 'GAME_END'], label: 'Game Events', enabled: true, color: 'bg-emerald-500' },
   { types: ['INFO'], label: 'Info', enabled: true, color: 'bg-slate-500' },
   { types: ['ERROR'], label: 'Errors', enabled: true, color: 'bg-red-400' },
   { types: ['OTHER'], label: 'Other', enabled: true, color: 'bg-slate-600' },
@@ -405,10 +405,8 @@ const eventBadgeClass = (type: GameEventType) => {
     case 'NUKE_INTERCEPTED':
       return 'bg-yellow-500/20 text-yellow-300'
     case 'GAME_START':
-    case 'WIN':
       return 'bg-emerald-500/15 text-emerald-300'
     case 'GAME_END':
-    case 'LOOSE':
       return 'bg-rose-500/15 text-rose-300'
     case 'HARDWARE_TEST':
       return 'bg-purple-500/20 text-purple-300'
