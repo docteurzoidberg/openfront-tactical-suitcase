@@ -22,6 +22,8 @@ export interface GameAPI {
   getTroopsToSend(): number | null
   // Game state
   isGameStarted(): boolean | null
+  // Game updates (polling)
+  getUpdatesSinceLastTick(): any | null
   // Game result
   didPlayerWin(): boolean | null
 }
@@ -220,9 +222,10 @@ export function createGameAPI(): GameAPI {
         const game = getGame()
         if (!game) return null
 
-        // Check if game has a started() method
-        if (typeof game.started === 'function') {
-          return game.started()
+        // Use inSpawnPhase() to determine if spawn countdown is active
+        // Returns false during spawn phase, true after spawn phase ends
+        if (typeof game.inSpawnPhase === 'function') {
+          return !game.inSpawnPhase()
         }
 
         // Fallback: check if ticks > 0 (game is running)
@@ -234,6 +237,17 @@ export function createGameAPI(): GameAPI {
         return null
       } catch (error) {
         console.error('[GameAPI] Error checking game started:', error)
+        return null
+      }
+    },
+
+    getUpdatesSinceLastTick(): any | null {
+      try {
+        const game = getGame()
+        if (!game || typeof game.updatesSinceLastTick !== 'function') return null
+        return game.updatesSinceLastTick()
+      } catch (error) {
+        console.error('[GameAPI] Error getting updates:', error)
         return null
       }
     },

@@ -949,8 +949,8 @@
         try {
           const game = getGame();
           if (!game) return null;
-          if (typeof game.started === "function") {
-            return game.started();
+          if (typeof game.inSpawnPhase === "function") {
+            return !game.inSpawnPhase();
           }
           if (typeof game.ticks === "function") {
             const ticks = game.ticks();
@@ -959,6 +959,16 @@
           return null;
         } catch (error) {
           console.error("[GameAPI] Error checking game started:", error);
+          return null;
+        }
+      },
+      getUpdatesSinceLastTick() {
+        try {
+          const game = getGame();
+          if (!game || typeof game.updatesSinceLastTick !== "function") return null;
+          return game.updatesSinceLastTick();
+        } catch (error) {
+          console.error("[GameAPI] Error getting updates:", error);
           return null;
         }
       },
@@ -1568,6 +1578,10 @@
   // src/game/openfront-bridge.ts
   var CONTROL_PANEL_SELECTOR = "control-panel";
   var POLL_INTERVAL_MS = 100;
+  var GameUpdateType = {
+    Win: 12
+    // GameUpdateType.Win enum value
+  };
   var GameBridge = class {
     constructor(ws, hud) {
       this.ws = ws;
@@ -1577,6 +1591,7 @@
       this.inGame = false;
       this.inSpawning = false;
       this.gameAPI = createGameAPI();
+      this.hasProcessedWin = false;
       this.nukeTracker = new NukeTracker();
       this.boatTracker = new BoatTracker();
       this.landTracker = new LandAttackTracker();
@@ -1604,6 +1619,56 @@
         }
       }, 100);
     }
+    pollForWinUpdates(gameAPI) {
+      try {
+        if (this.hasProcessedWin) return;
+        const myPlayer = gameAPI.getMyPlayer();
+        if (!myPlayer) return;
+        const isAlive = myPlayer.isAlive ? myPlayer.isAlive() : true;
+        const hasSpawned = myPlayer.hasSpawned ? myPlayer.hasSpawned() : false;
+        const game = getGameView();
+        const inSpawnPhase = game && game.inSpawnPhase ? game.inSpawnPhase() : false;
+        if (!isAlive && !inSpawnPhase && hasSpawned && this.inGame) {
+          this.hasProcessedWin = true;
+          this.ws.sendEvent("GAME_END", "You died", { victory: false, phase: "game-lost", reason: "death" });
+          console.log("[GameBridge] \u2717 You died!");
+          this.inGame = false;
+          this.inSpawning = false;
+          return;
+        }
+        const updates = gameAPI.getUpdatesSinceLastTick();
+        if (!updates) return;
+        const winUpdates = updates[GameUpdateType.Win];
+        if (!winUpdates || !Array.isArray(winUpdates) || winUpdates.length === 0) return;
+        this.hasProcessedWin = true;
+        const winUpdate = winUpdates[0];
+        let didWin = false;
+        const winner = winUpdate.winner;
+        if (winner) {
+          const myClientID = myPlayer.clientID ? myPlayer.clientID() : null;
+          const myTeam = myPlayer.team ? myPlayer.team() : null;
+          if (winner[0] === "player") {
+            didWin = winner[1] === myClientID;
+          } else if (winner[0] === "team") {
+            didWin = winner[1] === myTeam;
+          }
+        }
+        if (!isAlive) {
+          didWin = false;
+        }
+        if (didWin) {
+          this.ws.sendEvent("GAME_END", "Victory!", { victory: true, phase: "game-won", winner });
+          console.log("[GameBridge] \u2713 Game ended - VICTORY!");
+        } else {
+          this.ws.sendEvent("GAME_END", "Defeat", { victory: false, phase: "game-lost", winner });
+          console.log("[GameBridge] \u2717 Game ended - DEFEAT");
+        }
+        this.inGame = false;
+        this.inSpawning = false;
+      } catch (error) {
+        console.error("[GameBridge] Error polling win updates:", error);
+      }
+    }
     startPolling() {
       if (this.pollInterval) return;
       const gameAPI = createGameAPI();
@@ -1620,22 +1685,14 @@
           this.gameConnected = true;
           this.hud.setGameStatus(true);
         }
+        this.pollForWinUpdates(gameAPI);
         const myPlayerID = gameAPI.getMyPlayerID();
         if (!myPlayerID) {
           if (this.inGame || this.inSpawning) {
             this.inGame = false;
             this.inSpawning = false;
-            const didWin = gameAPI.didPlayerWin();
-            if (didWin === true) {
-              this.ws.sendEvent("GAME_END", "Victory!", { victory: true });
-              console.log("[GameBridge] Game ended - VICTORY!");
-            } else if (didWin === false) {
-              this.ws.sendEvent("GAME_END", "Defeat", { victory: false });
-              console.log("[GameBridge] Game ended - DEFEAT");
-            } else {
-              this.ws.sendEvent("GAME_END", "Game ended", { victory: null });
-              console.log("[GameBridge] Game ended (outcome unknown)");
-            }
+            this.hasProcessedWin = false;
+            console.log("[GameBridge] Player no longer in game");
           }
           this.clearTrackers();
           return;
@@ -1647,7 +1704,7 @@
           console.log("[GameBridge] Spawning phase - countdown active");
           this.clearTrackers();
         }
-        if (gameStarted === true && !this.inGame) {
+        if (gameStarted === true && !this.inGame && !this.hasProcessedWin) {
           this.inGame = true;
           this.inSpawning = false;
           this.ws.sendEvent("GAME_START", "Game started - countdown ended");
