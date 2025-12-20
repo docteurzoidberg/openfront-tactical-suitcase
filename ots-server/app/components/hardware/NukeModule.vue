@@ -86,11 +86,12 @@
 </template>
 
 <script setup lang="ts">
-import type { NukeType } from '../../../../ots-shared/src/game'
+import type { NukeType, GamePhase } from '../../../../ots-shared/src/game'
 
 interface Props {
   connected: boolean
   powered: boolean
+  gamePhase: GamePhase | null
   activeNukes: {
     atom: boolean
     hydro: boolean
@@ -105,7 +106,7 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const isEnabled = computed(() => props.connected && props.powered)
+const isEnabled = computed(() => props.connected && props.powered && props.gamePhase === 'in-game')
 
 const sendNuke = (nukeType: NukeType) => {
   emit('sendNuke', nukeType)

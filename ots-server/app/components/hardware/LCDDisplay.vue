@@ -185,23 +185,6 @@ const line2 = computed(() => {
   position: relative;
 }
 
-.lcd-screen::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.1) 0%,
-    transparent 50%,
-    rgba(0, 0, 0, 0.05) 100%
-  );
-  pointer-events: none;
-  border-radius: 2px;
-}
-
 .lcd-content {
   display: flex;
   flex-direction: column;

@@ -42,6 +42,7 @@
           <HardwareNukeModule
             :connected="uiStatus === 'OPEN'"
             :powered="powerOn"
+            :game-phase="gamePhase"
             :active-nukes="activeNukes"
             @send-nuke="sendNukeCommand"
           />
