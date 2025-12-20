@@ -1,7 +1,10 @@
 <template>
   <div class="flex items-center justify-between gap-4">
     <div>
-      <h1 class="text-2xl font-semibold tracking-tight">Openfront Tactical Suitcase emulator</h1>
+      <div class="flex items-center gap-3">
+        <h1 class="text-2xl font-semibold tracking-tight">Openfront Tactical Suitcase emulator</h1>
+        <span class="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-300 font-mono">v{{ version }}</span>
+      </div>
       <p class="text-sm text-slate-400">Real-time state and events from the userscript</p>
     </div>
     <div class="flex flex-wrap items-center gap-4 text-sm">
@@ -48,6 +51,10 @@
 </template>
 
 <script setup lang="ts">
+import packageJson from '../../../package.json'
+
+const version = packageJson.version
+
 const props = defineProps<{
   uiStatus: string
   userscriptStatus: string

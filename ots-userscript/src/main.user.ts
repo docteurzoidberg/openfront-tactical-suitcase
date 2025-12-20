@@ -3,7 +3,11 @@ import { WsClient } from './websocket/client'
 import { GameBridge } from './game/openfront-bridge'
 import { loadWsUrl, saveWsUrl } from './storage/config'
 
+// Version (updated by release.sh)
+const VERSION = '0.1.0'
+
   ; (function start() {
+    console.log(`[OTS Userscript] Version ${VERSION}`)
     let currentWsUrl = loadWsUrl()
 
     const hud = new Hud(
@@ -40,7 +44,7 @@ import { loadWsUrl, saveWsUrl } from './storage/config'
     ws.connect()
     game.init()
 
-    // Expose for debugging
+      // Expose for debugging
       ; (window as any).otsShowHud = () => hud.ensure()
       ; (window as any).otsWsClient = ws
       ; (window as any).otsGameBridge = game

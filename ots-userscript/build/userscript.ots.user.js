@@ -1887,7 +1887,9 @@
   }
 
   // src/main.user.ts
+  var VERSION = "0.1.0";
   (function start() {
+    console.log(`[OTS Userscript] Version ${VERSION}`);
     let currentWsUrl = loadWsUrl();
     const hud = new Hud(
       () => currentWsUrl,

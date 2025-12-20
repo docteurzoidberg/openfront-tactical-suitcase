@@ -101,7 +101,10 @@ static bool handle_event(const internal_event_t *event) {
 }
 
 void app_main(void) {
-    ESP_LOGI(TAG, "OTS Firmware Main Controller Starting...");
+    ESP_LOGI(TAG, "===========================================");
+    ESP_LOGI(TAG, "%s v%s", OTS_PROJECT_NAME, OTS_FIRMWARE_VERSION);
+    ESP_LOGI(TAG, "Firmware: %s", OTS_FIRMWARE_NAME);
+    ESP_LOGI(TAG, "===========================================");
     
     // Initialize NVS
     esp_err_t ret = nvs_flash_init();

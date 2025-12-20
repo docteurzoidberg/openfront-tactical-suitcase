@@ -1,4 +1,9 @@
 import esbuild from 'esbuild'
+import { readFileSync } from 'fs'
+
+// Read version from package.json
+const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'))
+const version = packageJson.version
 
 await esbuild.build({
   entryPoints: ['src/main.user.ts'],
@@ -7,8 +12,11 @@ await esbuild.build({
   target: ['es2018'],
   outfile: 'build/userscript.ots.user.js',
   banner: {
-    js: `// ==UserScript==\n// @name         OTS Game Dashboard Bridge\n// @namespace    http://tampermonkey.net/\n// @version      0.1.0\n// @description  Send game state and events to local Nuxt dashboard\n// @author       [PUSH] DUCKDUCK\n// @match        https://openfront.io/*\n// @grant        GM_getValue\n// @grant        GM_setValue\n// ==/UserScript==\n`
+    js: `// ==UserScript==\n// @name         OTS Game Dashboard Bridge\n// @namespace    http://tampermonkey.net/\n// @version      ${version}\n// @description  Send game state and events to local Nuxt dashboard\n// @author       [PUSH] DUCKDUCK\n// @match        https://openfront.io/*\n// @grant        GM_getValue\n// @grant        GM_setValue\n// ==/UserScript==\n`
+  },
+  define: {
+    'VERSION': `"${version}"`
   }
 })
 
-console.log('Built userscript to ./build/userscript.ots.user.js')
+console.log(`Built userscript v${version} to ./build/userscript.ots.user.js`)
