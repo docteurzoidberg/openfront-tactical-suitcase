@@ -149,7 +149,7 @@ Must update `src/CMakeLists.txt` SRCS list when adding `.c` files.
 2. Tag format: `YYYY-MM-DD.N` (date-based with auto-increment)
 3. Single tag applies to all projects (userscript, firmware, server)
 4. Release script handles: version updates → builds → git commit → tag
-5. Update `prompts/weekly_announces.md` for Discord changelog
+5. Update `weekly_announces.md` for Discord changelog
 
 **Quick commands:**
 ```bash
@@ -168,10 +168,10 @@ Must update `src/CMakeLists.txt` SRCS list when adding `.c` files.
 ```
 ots/
   release.sh                       # Automated release script
+  weekly_announces.md              # Discord changelog history
   prompts/
     protocol-context.md            # SOURCE OF TRUTH for WebSocket messages
     RELEASE.md                     # Release process and version management guide
-    weekly_announces.md            # Discord changelog history
   .github/
     copilot-instructions.md        # This file - workspace-level guidance
   

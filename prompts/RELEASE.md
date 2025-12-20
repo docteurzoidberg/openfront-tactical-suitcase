@@ -196,7 +196,7 @@ ls -ld ots-server/.output
 
 ## Weekly Changelog
 
-Update `prompts/weekly_announces.md` before releasing:
+Update `weekly_announces.md` before releasing:
 
 ```markdown
 ## Week of December 16-20, 2025
@@ -267,7 +267,7 @@ If versions are out of sync, use `-u` flag to reset all:
 1. **Always Use `-u` Flag**: Ensures version consistency across all projects
 2. **Test Before Pushing**: Use local release first, verify, then use `-p`
 3. **Meaningful Descriptions**: Write clear release messages for tag annotations
-4. **Update Changelog**: Keep `prompts/weekly_announces.md` current for Discord posts
+4. **Update Changelog**: Keep `weekly_announces.md` current for Discord posts
 5. **Build Verification**: Script handles this automatically - don't skip builds
 6. **One Tag Per Release**: Don't reuse or force-push tags (breaks history)
 
