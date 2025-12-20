@@ -4,7 +4,7 @@ import { GameBridge } from './game/openfront-bridge'
 import { loadWsUrl, saveWsUrl } from './storage/config'
 
 // Version (updated by release.sh)
-const VERSION = '0.1.0'
+const VERSION = '2025-12-20.1'
 
   ; (function start() {
     console.log(`[OTS Userscript] Version ${VERSION}`)

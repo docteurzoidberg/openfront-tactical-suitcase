@@ -7,7 +7,7 @@
 #define OTS_PROJECT_NAME        "OpenFront Tactical Suitcase"
 #define OTS_PROJECT_ABBREV      "OTS"
 #define OTS_FIRMWARE_NAME       "ots-fw-main"
-#define OTS_FIRMWARE_VERSION    "0.1.0"  // Updated by release.sh
+#define OTS_FIRMWARE_VERSION    "2025-12-20.1"  // Updated by release.sh
 
 // Wi-Fi Configuration
 #define WIFI_SSID "YOUR_WIFI_SSID"

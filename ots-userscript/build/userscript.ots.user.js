@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OTS Game Dashboard Bridge
 // @namespace    http://tampermonkey.net/
-// @version      0.1.0
+// @version      2025-12-20.1
 // @description  Send game state and events to local Nuxt dashboard
 // @author       [PUSH] DUCKDUCK
 // @match        https://openfront.io/*
@@ -1887,7 +1887,7 @@
   }
 
   // src/main.user.ts
-  var VERSION = "0.1.0";
+  var VERSION = "2025-12-20.1";
   (function start() {
     console.log(`[OTS Userscript] Version ${VERSION}`);
     let currentWsUrl = loadWsUrl();
