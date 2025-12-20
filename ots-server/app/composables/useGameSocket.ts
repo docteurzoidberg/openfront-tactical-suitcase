@@ -137,22 +137,20 @@ export function useGameSocket() {
           const victory = (msg.payload.data as any)?.victory
 
           if (victory === true) {
-            // Show victory screen for 5 seconds, then return to lobby
+            // Show victory screen - stays until userscript reconnects
             gamePhase.value = 'game-won'
-            if (gameEndTimer) clearTimeout(gameEndTimer)
-            gameEndTimer = setTimeout(() => {
-              gamePhase.value = 'lobby'
-            }, GAME_END_DISPLAY_TIME_MS)
           } else if (victory === false) {
-            // Show defeat screen for 5 seconds, then return to lobby
+            // Show defeat screen - stays until userscript reconnects
             gamePhase.value = 'game-lost'
-            if (gameEndTimer) clearTimeout(gameEndTimer)
-            gameEndTimer = setTimeout(() => {
-              gamePhase.value = 'lobby'
-            }, GAME_END_DISPLAY_TIME_MS)
           } else {
-            // Unknown outcome, just return to lobby
+            // Unknown outcome, return to lobby
             gamePhase.value = 'lobby'
+          }
+
+          // Clear any existing game end timer
+          if (gameEndTimer) {
+            clearTimeout(gameEndTimer)
+            gameEndTimer = null
           }
         }
 
