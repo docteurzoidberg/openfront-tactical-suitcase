@@ -20,7 +20,7 @@
           
           <!-- Hardware Module: Troops Module -->
           <HardwareTroopsModule
-            :connected="uiStatus === 'OPEN'"
+            :connected="userscriptStatus === 'ONLINE'"
             :powered="powerOn"
             :troops="troops"
             :attack-ratio="attackRatio"

@@ -261,7 +261,13 @@ export function useGameSocket() {
     if (!lastUserscriptHeartbeat.value) return 'UNKNOWN'
 
     const diff = Date.now() - lastUserscriptHeartbeat.value
-    if (diff < 10_000) return 'ONLINE'
+    if (diff < 10_000) {
+      // If userscript is ONLINE but gamePhase is null, default to lobby
+      if (gamePhase.value === null) {
+        gamePhase.value = 'lobby'
+      }
+      return 'ONLINE'
+    }
     if (diff < 60_000) return 'STALE'
     return 'OFFLINE'
   })

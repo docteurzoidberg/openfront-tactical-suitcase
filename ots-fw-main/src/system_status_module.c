@@ -26,6 +26,7 @@ typedef struct {
     bool display_dirty;
     bool player_won;      // true = victory, false = defeat
     bool show_game_end;   // Show game end screen
+    bool ws_connected;    // WebSocket connection status
 } system_status_state_t;
 
 static system_status_state_t module_state = {0};
@@ -102,6 +103,14 @@ static esp_err_t system_status_update(void) {
             return ESP_OK;
         }
         
+        // Check connection status first - if not connected, always show waiting screen
+        if (!module_state.ws_connected) {
+            display_waiting_connection();
+            module_state.display_dirty = false;
+            return ESP_OK;
+        }
+        
+        // Connected - show screen based on game phase
         switch (phase) {
             case GAME_PHASE_LOBBY:
                 display_lobby();
@@ -139,6 +148,7 @@ static bool system_status_handle_event(const internal_event_t *event) {
     switch (event->type) {
         case INTERNAL_EVENT_WS_CONNECTED:
             ESP_LOGI(TAG, "WebSocket connected - showing lobby screen");
+            module_state.ws_connected = true;
             module_state.display_active = true;
             module_state.display_dirty = true;
             module_state.show_game_end = false;  // Clear game end flag
@@ -146,6 +156,7 @@ static bool system_status_handle_event(const internal_event_t *event) {
             
         case INTERNAL_EVENT_WS_DISCONNECTED:
             ESP_LOGI(TAG, "WebSocket disconnected - showing waiting screen");
+            module_state.ws_connected = false;
             module_state.display_active = true;
             module_state.display_dirty = true;
             module_state.show_game_end = false;
