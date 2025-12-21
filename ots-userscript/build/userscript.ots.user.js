@@ -612,6 +612,7 @@
       this.reconnectTimeout = null;
       this.reconnectDelay = 2e3;
       this.heartbeatInterval = null;
+      this.shouldReconnect = true;
     }
     connect() {
       if (this.socket && this.socket.readyState === WebSocket.OPEN) {
@@ -620,11 +621,24 @@
       if (this.socket && this.socket.readyState === WebSocket.CONNECTING) {
         return;
       }
+      if (this.reconnectTimeout !== null) {
+        window.clearTimeout(this.reconnectTimeout);
+        this.reconnectTimeout = null;
+      }
       const url = this.getWsUrl();
       debugLog("Connecting to", url);
       this.hud.setWsStatus("CONNECTING");
       this.hud.pushLog("info", `Connecting to ${url}`);
-      this.socket = new WebSocket(url);
+      this.shouldReconnect = true;
+      try {
+        this.socket = new WebSocket(url);
+      } catch (error) {
+        debugLog("Failed to create WebSocket:", error);
+        this.hud.setWsStatus("ERROR");
+        this.hud.pushLog("info", `Failed to create WebSocket: ${error}`);
+        this.scheduleReconnect();
+        return;
+      }
       this.socket.addEventListener("open", () => {
         debugLog("WebSocket connected");
         this.hud.setWsStatus("OPEN");
@@ -639,13 +653,14 @@
         this.hud.setWsStatus("DISCONNECTED");
         this.hud.pushLog("info", `WebSocket closed (${ev.code} ${ev.reason || ""})`);
         this.stopHeartbeat();
-        this.scheduleReconnect();
+        if (this.shouldReconnect) {
+          this.scheduleReconnect();
+        }
       });
       this.socket.addEventListener("error", (err) => {
         debugLog("WebSocket error", err);
         this.hud.setWsStatus("ERROR");
-        this.hud.pushLog("info", "WebSocket error");
-        this.scheduleReconnect();
+        this.hud.pushLog("info", "WebSocket error - will retry connection");
       });
       this.socket.addEventListener("message", (event) => {
         var _a;
@@ -665,7 +680,12 @@
     }
     disconnect(code, reason) {
       if (!this.socket) return;
+      this.shouldReconnect = false;
       this.stopHeartbeat();
+      if (this.reconnectTimeout !== null) {
+        window.clearTimeout(this.reconnectTimeout);
+        this.reconnectTimeout = null;
+      }
       try {
         this.socket.close(code, reason);
       } catch (e) {
@@ -673,6 +693,8 @@
     }
     scheduleReconnect() {
       if (this.reconnectTimeout !== null) return;
+      if (!this.shouldReconnect) return;
+      debugLog(`Scheduling reconnect in ${this.reconnectDelay}ms`);
       this.reconnectTimeout = window.setTimeout(() => {
         this.reconnectTimeout = null;
         this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, 15e3);
@@ -683,6 +705,7 @@
           }
           this.socket = null;
         }
+        debugLog("Attempting to reconnect...");
         this.connect();
       }, this.reconnectDelay);
     }
@@ -1578,10 +1601,6 @@
   // src/game/openfront-bridge.ts
   var CONTROL_PANEL_SELECTOR = "control-panel";
   var POLL_INTERVAL_MS = 100;
-  var GameUpdateType = {
-    Win: 12
-    // GameUpdateType.Win enum value
-  };
   var GameBridge = class {
     constructor(ws, hud) {
       this.ws = ws;
@@ -1619,54 +1638,37 @@
         }
       }, 100);
     }
-    pollForWinUpdates(gameAPI) {
+    pollForGameEnd(gameAPI) {
       try {
-        if (this.hasProcessedWin) return;
+        if (this.hasProcessedWin || !this.inGame) return;
         const myPlayer = gameAPI.getMyPlayer();
         if (!myPlayer) return;
         const isAlive = myPlayer.isAlive ? myPlayer.isAlive() : true;
         const hasSpawned = myPlayer.hasSpawned ? myPlayer.hasSpawned() : false;
         const game = getGameView();
         const inSpawnPhase = game && game.inSpawnPhase ? game.inSpawnPhase() : false;
-        if (!isAlive && !inSpawnPhase && hasSpawned && this.inGame) {
-          this.hasProcessedWin = true;
+        if (!isAlive && !inSpawnPhase && hasSpawned) {
           this.ws.sendEvent("GAME_END", "You died", { victory: false, phase: "game-lost", reason: "death" });
           console.log("[GameBridge] \u2717 You died!");
+          this.hasProcessedWin = true;
           this.inGame = false;
           this.inSpawning = false;
           return;
         }
-        const updates = gameAPI.getUpdatesSinceLastTick();
-        if (!updates) return;
-        const winUpdates = updates[GameUpdateType.Win];
-        if (!winUpdates || !Array.isArray(winUpdates) || winUpdates.length === 0) return;
-        this.hasProcessedWin = true;
-        const winUpdate = winUpdates[0];
-        let didWin = false;
-        const winner = winUpdate.winner;
-        if (winner) {
-          const myClientID = myPlayer.clientID ? myPlayer.clientID() : null;
-          const myTeam = myPlayer.team ? myPlayer.team() : null;
-          if (winner[0] === "player") {
-            didWin = winner[1] === myClientID;
-          } else if (winner[0] === "team") {
-            didWin = winner[1] === myTeam;
-          }
-        }
-        if (!isAlive) {
-          didWin = false;
-        }
-        if (didWin) {
-          this.ws.sendEvent("GAME_END", "Victory!", { victory: true, phase: "game-won", winner });
+        const winResult = gameAPI.didPlayerWin();
+        if (winResult === null) return;
+        if (winResult === true) {
+          this.ws.sendEvent("GAME_END", "Victory!", { victory: true, phase: "game-won" });
           console.log("[GameBridge] \u2713 Game ended - VICTORY!");
         } else {
-          this.ws.sendEvent("GAME_END", "Defeat", { victory: false, phase: "game-lost", winner });
+          this.ws.sendEvent("GAME_END", "Defeat", { victory: false, phase: "game-lost" });
           console.log("[GameBridge] \u2717 Game ended - DEFEAT");
         }
+        this.hasProcessedWin = true;
         this.inGame = false;
         this.inSpawning = false;
       } catch (error) {
-        console.error("[GameBridge] Error polling win updates:", error);
+        console.error("[GameBridge] Error polling game end:", error);
       }
     }
     startPolling() {
@@ -1685,7 +1687,7 @@
           this.gameConnected = true;
           this.hud.setGameStatus(true);
         }
-        this.pollForWinUpdates(gameAPI);
+        this.pollForGameEnd(gameAPI);
         const myPlayerID = gameAPI.getMyPlayerID();
         if (!myPlayerID) {
           if (this.inGame || this.inSpawning) {

@@ -17,6 +17,7 @@ export class WsClient {
   private reconnectTimeout: number | null = null
   private reconnectDelay = 2000
   private heartbeatInterval: number | null = null
+  private shouldReconnect = true
 
   constructor(
     private hud: Hud,
@@ -33,11 +34,27 @@ export class WsClient {
       return
     }
 
+    // Clear any pending reconnect timeout
+    if (this.reconnectTimeout !== null) {
+      window.clearTimeout(this.reconnectTimeout)
+      this.reconnectTimeout = null
+    }
+
     const url = this.getWsUrl()
     debugLog('Connecting to', url)
     this.hud.setWsStatus('CONNECTING')
     this.hud.pushLog('info', `Connecting to ${url}`)
-    this.socket = new WebSocket(url)
+    this.shouldReconnect = true
+
+    try {
+      this.socket = new WebSocket(url)
+    } catch (error) {
+      debugLog('Failed to create WebSocket:', error)
+      this.hud.setWsStatus('ERROR')
+      this.hud.pushLog('info', `Failed to create WebSocket: ${error}`)
+      this.scheduleReconnect()
+      return
+    }
 
     this.socket.addEventListener('open', () => {
       debugLog('WebSocket connected')
@@ -59,14 +76,16 @@ export class WsClient {
       this.hud.setWsStatus('DISCONNECTED')
       this.hud.pushLog('info', `WebSocket closed (${ev.code} ${ev.reason || ''})`)
       this.stopHeartbeat()
-      this.scheduleReconnect()
+      if (this.shouldReconnect) {
+        this.scheduleReconnect()
+      }
     })
 
     this.socket.addEventListener('error', (err) => {
       debugLog('WebSocket error', err)
       this.hud.setWsStatus('ERROR')
-      this.hud.pushLog('info', 'WebSocket error')
-      this.scheduleReconnect()
+      this.hud.pushLog('info', 'WebSocket error - will retry connection')
+      // Note: 'close' event will be fired after 'error', so reconnect happens there
     })
 
     this.socket.addEventListener('message', (event) => {
@@ -90,7 +109,12 @@ export class WsClient {
 
   disconnect(code?: number, reason?: string) {
     if (!this.socket) return
+    this.shouldReconnect = false
     this.stopHeartbeat()
+    if (this.reconnectTimeout !== null) {
+      window.clearTimeout(this.reconnectTimeout)
+      this.reconnectTimeout = null
+    }
     try {
       this.socket.close(code, reason)
     } catch {
@@ -100,6 +124,9 @@ export class WsClient {
 
   private scheduleReconnect() {
     if (this.reconnectTimeout !== null) return
+    if (!this.shouldReconnect) return
+
+    debugLog(`Scheduling reconnect in ${this.reconnectDelay}ms`)
     this.reconnectTimeout = window.setTimeout(() => {
       this.reconnectTimeout = null
       this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, 15000)
@@ -111,6 +138,7 @@ export class WsClient {
         }
         this.socket = null
       }
+      debugLog('Attempting to reconnect...')
       this.connect()
     }, this.reconnectDelay)
   }

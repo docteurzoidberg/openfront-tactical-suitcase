@@ -11,11 +11,6 @@ import { TroopMonitor } from './troop-monitor'
 const CONTROL_PANEL_SELECTOR = 'control-panel'
 const POLL_INTERVAL_MS = 100
 
-// GameUpdateType enum from OpenFront.io (src/core/game/GameUpdates.ts)
-const GameUpdateType = {
-  Win: 12  // GameUpdateType.Win enum value
-} as const
-
 export class GameBridge {
   private pollInterval: number | null = null
   private nukeTracker: NukeTracker
@@ -66,78 +61,51 @@ export class GameBridge {
     }, 100)
   }
 
-  private pollForWinUpdates(gameAPI: ReturnType<typeof createGameAPI>) {
+  private pollForGameEnd(gameAPI: ReturnType<typeof createGameAPI>) {
     try {
-      // Skip if already processed
-      if (this.hasProcessedWin) return
+      // Skip if already processed or not in game
+      if (this.hasProcessedWin || !this.inGame) return
 
       const myPlayer = gameAPI.getMyPlayer()
       if (!myPlayer) return
 
-      // Check for player death (immediate detection)
+      // Check for immediate death (fast detection before gameOver flag is set)
       const isAlive = myPlayer.isAlive ? myPlayer.isAlive() : true
       const hasSpawned = myPlayer.hasSpawned ? myPlayer.hasSpawned() : false
       const game = getGameView()
       const inSpawnPhase = game && game.inSpawnPhase ? game.inSpawnPhase() : false
 
-      if (!isAlive && !inSpawnPhase && hasSpawned && this.inGame) {
-        // Player died during the game
-        this.hasProcessedWin = true
+      if (!isAlive && !inSpawnPhase && hasSpawned) {
+        // Player died during the game - immediate detection
         this.ws.sendEvent('GAME_END', 'You died', { victory: false, phase: 'game-lost', reason: 'death' })
         console.log('[GameBridge] ✗ You died!')
+        this.hasProcessedWin = true
         this.inGame = false
         this.inSpawning = false
         return
       }
 
-      // Get updates since last tick
-      const updates = gameAPI.getUpdatesSinceLastTick()
-      if (!updates) return
+      // Use universal game.gameOver() check (works in solo and multiplayer)
+      const winResult = gameAPI.didPlayerWin()
 
-      // Check for Win updates (GameUpdateType.Win = 12)
-      const winUpdates = updates[GameUpdateType.Win]
-      if (!winUpdates || !Array.isArray(winUpdates) || winUpdates.length === 0) return
+      // null means game is not over yet, keep polling
+      if (winResult === null) return
 
-      // Process win update (only once)
-      this.hasProcessedWin = true
-
-      const winUpdate = winUpdates[0]
-
-      // Determine if we won or lost
-      let didWin = false
-      const winner = winUpdate.winner
-
-      if (winner) {
-        const myClientID = myPlayer.clientID ? myPlayer.clientID() : null
-        const myTeam = myPlayer.team ? myPlayer.team() : null
-
-        if (winner[0] === 'player') {
-          // Individual win - check if we're the winner
-          didWin = winner[1] === myClientID
-        } else if (winner[0] === 'team') {
-          // Team win - check if we're on the winning team
-          didWin = winner[1] === myTeam
-        }
-      }
-
-      // Double-check death status
-      if (!isAlive) {
-        didWin = false
-      }
-
-      // Send game end event
-      if (didWin) {
-        this.ws.sendEvent('GAME_END', 'Victory!', { victory: true, phase: 'game-won', winner: winner })
+      // Game is over, send appropriate event
+      if (winResult === true) {
+        this.ws.sendEvent('GAME_END', 'Victory!', { victory: true, phase: 'game-won' })
         console.log('[GameBridge] ✓ Game ended - VICTORY!')
       } else {
-        this.ws.sendEvent('GAME_END', 'Defeat', { victory: false, phase: 'game-lost', winner: winner })
+        this.ws.sendEvent('GAME_END', 'Defeat', { victory: false, phase: 'game-lost' })
         console.log('[GameBridge] ✗ Game ended - DEFEAT')
       }
 
+      // Mark as processed after sending event
+      this.hasProcessedWin = true
       this.inGame = false
       this.inSpawning = false
     } catch (error) {
-      console.error('[GameBridge] Error polling win updates:', error)
+      console.error('[GameBridge] Error polling game end:', error)
     }
   }
 
@@ -163,8 +131,8 @@ export class GameBridge {
         this.hud.setGameStatus(true)
       }
 
-      // Poll for win updates (Option 3: Most reliable method)
-      this.pollForWinUpdates(gameAPI)
+      // Poll for game end (universal method for solo and multiplayer)
+      this.pollForGameEnd(gameAPI)
 
       const myPlayerID = gameAPI.getMyPlayerID()
       if (!myPlayerID) {
