@@ -81,6 +81,36 @@ The OpenFront.io game stores the attack ratio (troop send percentage) in multipl
 4. 0.2                                // Default fallback
 ```
 
+### Game End Detection Scenarios
+
+The userscript must detect game end in multiple scenarios and send `GAME_END` events with correct victory/defeat status.
+
+**Solo Game:**
+- **Player dies**: DEFEAT - Modal shows "You died"
+- **Player wins**: VICTORY - Modal shows "You won" (by controlling 95% of map)
+
+**Team Game:**
+- **Player dies**: DEFEAT - Modal shows "You died" (regardless of team outcome)
+- **Player's team wins**: VICTORY - Modal shows "Your team won!"
+- **Another team wins**: DEFEAT - Player's team lost
+
+**Detection Implementation** (in `openfront-bridge.ts`):
+
+1. **Win Updates (Primary)**: Check `game.updatesSinceLastTick()[11]` for `GameUpdateType.Win` updates
+   - Contains `winner: [type, id]` where type is `'team'` or `'player'`
+   - For team games: Compare `winner[1]` with `myPlayer.team()`
+   - For solo games: Compare `winner[1]` with `myPlayer.clientID()`
+
+2. **Death Detection**: Check `myPlayer.isAlive()` for immediate death detection
+   - Triggers before Win updates in some cases
+   - Always results in DEFEAT for the player
+
+3. **Fallback**: Use `game.gameOver()` and check if player is eliminated
+   - Less reliable for team games
+   - Used when Win updates aren't available
+
+**Important**: Win updates use the game's internal translation system, so don't look for literal strings like "You won" in the code. The modal text is determined by translation labels based on the win update data.
+
 ### Ghost Structure Targeting Mode
 
 OpenFrontIO uses a **ghost structure system** for all unit placement (buildings, nukes, etc.). This is the internal mechanism that powers keybinds (8/9/0 for nukes) and the build menu.

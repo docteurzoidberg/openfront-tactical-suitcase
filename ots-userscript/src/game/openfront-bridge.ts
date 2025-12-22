@@ -63,11 +63,139 @@ export class GameBridge {
 
   private pollForGameEnd(gameAPI: ReturnType<typeof createGameAPI>) {
     try {
-      // Skip if already processed or not in game
-      if (this.hasProcessedWin || !this.inGame) return
-
       const myPlayer = gameAPI.getMyPlayer()
       if (!myPlayer) return
+
+      // Always check for win updates first (even before checking hasProcessedWin for debugging)
+      const updates = gameAPI.getUpdatesSinceLastTick()
+
+      // Debug: Log all available update types
+      if (updates && Object.keys(updates).length > 0) {
+        const updateTypes = Object.keys(updates).filter(key => updates[key] && updates[key].length > 0)
+        if (updateTypes.length > 0) {
+          console.log('[GameBridge] Update types this tick:', updateTypes.join(', '))
+        }
+      }
+
+      if (updates && updates[13]) { // GameUpdateType.Win = 13
+        const winUpdates = updates[13]
+        if (winUpdates && winUpdates.length > 0) {
+          console.log('[GameBridge] Win updates detected (count: ' + winUpdates.length + '):', JSON.stringify(winUpdates))
+
+          // Skip if already processed
+          if (this.hasProcessedWin) {
+            console.log('[GameBridge] Already processed win, skipping')
+            return
+          }
+
+          // Log ALL win updates to find the right one
+          console.log('[GameBridge] Inspecting all Win updates:')
+          winUpdates.forEach((update: any, index: number) => {
+            console.log(`[GameBridge] Win update [${index}]:`, update)
+            console.log(`[GameBridge] Win update [${index}] keys:`, Object.keys(update))
+          })
+
+          // Try to find a win update with winner information
+          let winUpdate = null
+          let winnerType = null
+          let winnerId = null
+
+          for (const update of winUpdates) {
+            // Check multiple possible structures
+            if (update.winner) {
+              [winnerType, winnerId] = update.winner
+              winUpdate = update
+              console.log('[GameBridge] Found winner in update.winner:', winnerType, winnerId)
+              break
+            } else if (update.winnerType !== undefined && update.winnerId !== undefined) {
+              winnerType = update.winnerType
+              winnerId = update.winnerId
+              winUpdate = update
+              console.log('[GameBridge] Found winner in separate fields:', winnerType, winnerId)
+              break
+            } else if (update.emoji && update.emoji.winner) {
+              [winnerType, winnerId] = update.emoji.winner
+              winUpdate = update
+              console.log('[GameBridge] Found winner in emoji.winner:', winnerType, winnerId)
+              break
+            } else if (update.team !== undefined) {
+              winnerType = 'team'
+              winnerId = update.team
+              winUpdate = update
+              console.log('[GameBridge] Found winner in update.team:', winnerId)
+              break
+            } else if (update.player !== undefined) {
+              winnerType = 'player'
+              winnerId = update.player
+              winUpdate = update
+              console.log('[GameBridge] Found winner in update.player:', winnerId)
+              break
+            } else if (update.emoji && update.emoji.recipientID !== undefined) {
+              // Maybe recipientID is the winning team?
+              winnerType = 'team'
+              winnerId = update.emoji.recipientID
+              winUpdate = update
+              console.log('[GameBridge] Guessing winner from emoji.recipientID:', winnerId)
+              break
+            }
+          }
+
+          console.log(`[GameBridge] Final extracted winner - type: ${winnerType}, id: ${winnerId}`)
+
+          // Check if we successfully extracted winner info
+          if (winnerType && winnerId !== null && winnerId !== undefined) {
+
+            if (winnerType === 'team') {
+              // Team game victory/defeat
+              const myTeam = myPlayer.team ? myPlayer.team() : null
+              const mySmallID = myPlayer.smallID ? myPlayer.smallID() : null
+              console.log(`[GameBridge] My team: ${myTeam}, My smallID: ${mySmallID}, Winner ID: ${winnerId}`)
+
+              // Handle both cases: team match and team mismatch
+              if (myTeam !== null) {
+                if (winnerId === myTeam) {
+                  this.ws.sendEvent('GAME_END', 'Your team won!', { victory: true, phase: 'game-won', method: 'team-victory', myTeam, winnerId })
+                  console.log('[GameBridge] ✓ Your team won!')
+                } else {
+                  this.ws.sendEvent('GAME_END', `Team ${winnerId} won`, { victory: false, phase: 'game-lost', method: 'team-defeat', myTeam, winnerId })
+                  console.log(`[GameBridge] ✗ Team ${winnerId} won (you are team ${myTeam})`)
+                }
+              } else {
+                // Fallback: team is null, assume defeat
+                console.warn('[GameBridge] myPlayer.team() returned null, assuming defeat')
+                this.ws.sendEvent('GAME_END', `Team ${winnerId} won`, { victory: false, phase: 'game-lost', method: 'team-defeat-fallback', myTeam: null, winnerId })
+                console.log(`[GameBridge] ✗ Team ${winnerId} won (unable to determine your team)`)
+              }
+            } else if (winnerType === 'player') {
+              // Solo game victory/defeat
+              const myClientID = myPlayer.clientID ? myPlayer.clientID() : null
+              const mySmallID = myPlayer.smallID ? myPlayer.smallID() : null
+              console.log(`[GameBridge] My clientID: ${myClientID}, My smallID: ${mySmallID}, Winner ID: ${winnerId}`)
+
+              if (myClientID !== null && winnerId === myClientID) {
+                this.ws.sendEvent('GAME_END', 'You won!', { victory: true, phase: 'game-won', method: 'solo-victory', myClientID, winnerId })
+                console.log('[GameBridge] ✓ You won!')
+              } else {
+                this.ws.sendEvent('GAME_END', 'Another player won', { victory: false, phase: 'game-lost', method: 'solo-defeat', myClientID, winnerId })
+                console.log('[GameBridge] ✗ Another player won')
+              }
+            } else {
+              console.warn('[GameBridge] Unknown winner type:', winnerType)
+            }
+
+            // Mark as processed
+            this.hasProcessedWin = true
+            this.inGame = false
+            this.inSpawning = false
+            return
+          } else {
+            console.warn('[GameBridge] Win update has no winner field:', winUpdate)
+          }
+        }
+      }
+
+      // Skip further processing if already handled or not in game
+      if (this.hasProcessedWin || !this.inGame) return
 
       // Check for immediate death (fast detection before gameOver flag is set)
       const isAlive = myPlayer.isAlive ? myPlayer.isAlive() : true
@@ -85,7 +213,7 @@ export class GameBridge {
         return
       }
 
-      // Use universal game.gameOver() check (works in solo and multiplayer)
+      // Fallback: Use game.gameOver() check (less reliable for team games)
       const winResult = gameAPI.didPlayerWin()
 
       // null means game is not over yet, keep polling
@@ -93,11 +221,11 @@ export class GameBridge {
 
       // Game is over, send appropriate event
       if (winResult === true) {
-        this.ws.sendEvent('GAME_END', 'Victory!', { victory: true, phase: 'game-won' })
-        console.log('[GameBridge] ✓ Game ended - VICTORY!')
+        this.ws.sendEvent('GAME_END', 'Victory!', { victory: true, phase: 'game-won', method: 'gameOver-fallback' })
+        console.log('[GameBridge] ✓ Game ended - VICTORY! (fallback method)')
       } else {
-        this.ws.sendEvent('GAME_END', 'Defeat', { victory: false, phase: 'game-lost' })
-        console.log('[GameBridge] ✗ Game ended - DEFEAT')
+        this.ws.sendEvent('GAME_END', 'Defeat', { victory: false, phase: 'game-lost', method: 'gameOver-fallback' })
+        console.log('[GameBridge] ✗ Game ended - DEFEAT (fallback method)')
       }
 
       // Mark as processed after sending event
