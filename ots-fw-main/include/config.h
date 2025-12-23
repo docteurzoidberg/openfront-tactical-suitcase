@@ -9,15 +9,34 @@
 #define OTS_FIRMWARE_NAME       "ots-fw-main"
 #define OTS_FIRMWARE_VERSION    "2025-12-20.1"  // Updated by release.sh
 
-// Wi-Fi Configuration (Fallback - use Improv Serial for provisioning)
-#define WIFI_SSID "YOUR_WIFI_SSID"
-#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+// Wi-Fi Configuration (Fallback)
+//
+// Preferred workflow: provision via Improv Serial (stored in NVS).
+// Leave these empty to force "Improv-only" behavior.
+#define WIFI_SSID ""
+#define WIFI_PASSWORD ""
 
 // mDNS Configuration
-#define MDNS_HOSTNAME "ots-device"  // Device will be accessible at <hostname>.local
+// Default should match the TLS certificate hostname (see tls_creds.c).
+#ifndef MDNS_HOSTNAME
+#define MDNS_HOSTNAME "ots-fw-main"  // Device will be accessible at <hostname>.local
+#endif
 
 // WebSocket Server Configuration
-#define WS_SERVER_PORT 3000
+#define WS_USE_TLS 1                // 1 = WSS (HTTPS), 0 = WS (HTTP)
+#ifndef WS_SERVER_PORT
+#define WS_SERVER_PORT 3000         // Port for WebSocket server
+#endif
+
+#if WS_USE_TLS
+    // WSS (WebSocket Secure) - Required for userscript on HTTPS pages
+    #define WS_PROTOCOL "wss://"
+    #warning Building with WSS support - browsers will show security warning for self-signed certificate
+#else
+    // WS (WebSocket) - Only works with localhost or HTTP pages
+    #define WS_PROTOCOL "ws://"
+    #warning Building with WS support - will NOT work with userscript on HTTPS pages
+#endif
 
 // MCP23017 I2C addresses
 static const uint8_t MCP23017_ADDRESSES[] = {0x20, 0x21};

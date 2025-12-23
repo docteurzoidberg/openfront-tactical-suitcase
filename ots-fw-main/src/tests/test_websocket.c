@@ -1,3 +1,6 @@
+// Only compile when TEST_WEBSOCKET is defined
+#ifdef TEST_WEBSOCKET
+
 /*
  * WebSocket + Status LED Test
  * 
@@ -33,6 +36,17 @@
 #include "ws_server.h"
 #include "rgb_status.h"
 #include "protocol.h"
+#include "wifi_credentials.h"
+
+// Optional Improv Serial provisioning (USB WebSerial).
+// Build with -DENABLE_IMPROV_SERIAL=0 to disable.
+#ifndef ENABLE_IMPROV_SERIAL
+#define ENABLE_IMPROV_SERIAL 1
+#endif
+
+#if ENABLE_IMPROV_SERIAL
+#include "improv_serial.h"
+#endif
 
 static const char *TAG = "TEST_WS";
 
@@ -48,6 +62,20 @@ typedef struct {
 } test_state_t;
 
 static test_state_t test_state = {0};
+
+static volatile bool ws_server_start_requested = false;
+
+#if ENABLE_IMPROV_SERIAL
+static void on_improv_provisioned(bool success, const char *ssid) {
+    if (!success) {
+        ESP_LOGW(TAG, "Improv provisioning failed");
+        return;
+    }
+    ESP_LOGI(TAG, "Improv provisioned SSID '%s' - rebooting to apply", ssid ? ssid : "");
+    vTaskDelay(pdMS_TO_TICKS(500));
+    esp_restart();
+}
+#endif
 
 // Forward declarations
 void network_event_handler(network_event_type_t event, const char *ip);
@@ -72,15 +100,8 @@ void network_event_handler(network_event_type_t event, const char *ip) {
             if (ip) {
                 strncpy(test_state.current_ip, ip, sizeof(test_state.current_ip) - 1);
                 ESP_LOGI(TAG, "IP Address: %s", ip);
-                ESP_LOGI(TAG, "Starting WebSocket server...");
-                
-                // Start WebSocket server
-                esp_err_t ret = ws_server_start();
-                if (ret != ESP_OK) {
-                    ESP_LOGE(TAG, "Failed to start WebSocket server!");
-                } else {
-                    ESP_LOGI(TAG, "WebSocket server listening on ws://%s:%d/ws", ip, WS_SERVER_PORT);
-                }
+                // Request server start from the main task (avoid heavy work in event callback)
+                ws_server_start_requested = true;
             }
             break;
             
@@ -107,7 +128,7 @@ void ws_connection_handler(bool connected) {
         test_state.ws_connect_time = esp_log_timestamp();
         rgb_status_set(RGB_STATUS_CONNECTED);
         ESP_LOGI(TAG, "RGB LED: Green (fully connected)");
-        ESP_LOGI(TAG, "Server URL: ws://<device-ip>:3000/ws");
+        ESP_LOGI(TAG, "Server URL: %s<device-ip>:%d/ws", WS_PROTOCOL, WS_SERVER_PORT);
     } else {
         ESP_LOGW(TAG, "");
         ESP_LOGW(TAG, "╔═══════════════════════════════════════╗");
@@ -188,7 +209,8 @@ void display_statistics(void) {
     
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "WebSocket Status:");
-    ESP_LOGI(TAG, "  Server: ws://<device-ip>:%d/ws", WS_SERVER_PORT);
+    ESP_LOGI(TAG, "  Server started: %s", ws_server_is_started() ? "Yes" : "No");
+    ESP_LOGI(TAG, "  Server: %s<device-ip>:%d/ws", WS_PROTOCOL, WS_SERVER_PORT);
     ESP_LOGI(TAG, "  Clients connected: %d", ws_server_is_connected() ? 1 : 0);
     if (test_state.ws_connected) {
         uint32_t uptime = (esp_log_timestamp() - test_state.ws_connect_time) / 1000;
@@ -258,6 +280,53 @@ void app_main(void) {
     }
     ESP_ERROR_CHECK(ret);
     
+    // Initialize WiFi credentials and Improv Serial
+    ESP_LOGI(TAG, "Initializing WiFi credentials...");
+    wifi_credentials_init();
+
+#if ENABLE_IMPROV_SERIAL
+    improv_serial_init();
+    improv_serial_set_callback(on_improv_provisioned);
+    improv_serial_start();
+    ESP_LOGI(TAG, "✓ Improv Serial enabled");
+#else
+    ESP_LOGW(TAG, "Improv Serial disabled (ENABLE_IMPROV_SERIAL=0)");
+#endif
+    ESP_LOGI(TAG, "✓ Shared NVS: 'wifi' namespace");
+    
+    // Get credentials from NVS or fallback to config.h
+    wifi_credentials_t wifi_creds;
+        // Get credentials from NVS or fallback to config.h
+        // If not provisioned yet, we just wait for Improv Serial.
+        esp_err_t creds_ret = wifi_credentials_get(&wifi_creds);
+        if (creds_ret == ESP_ERR_NOT_FOUND) {
+#if ENABLE_IMPROV_SERIAL
+            // Keep the serial stream as clean as possible for Improv tooling.
+            ESP_LOGW(TAG, "No WiFi credentials provisioned yet.");
+            ESP_LOGW(TAG, "Open https://improv-wifi.com/serial/ and provision WiFi.");
+            ESP_LOGW(TAG, "Tip: Close any serial monitor before using WebSerial.");
+            // Wait here until provisioning callback triggers a reboot.
+            while (1) {
+                vTaskDelay(pdMS_TO_TICKS(2000));
+            }
+#else
+            // Improv is disabled: fall back to compile-time credentials.
+            if (strlen(WIFI_SSID) == 0) {
+                ESP_LOGE(TAG, "No WiFi credentials in NVS and WIFI_SSID is empty. Set WIFI_SSID/WIFI_PASSWORD in config.h or enable Improv.");
+                return;
+            }
+            memset(&wifi_creds, 0, sizeof(wifi_creds));
+            strncpy(wifi_creds.ssid, WIFI_SSID, sizeof(wifi_creds.ssid) - 1);
+            strncpy(wifi_creds.password, WIFI_PASSWORD, sizeof(wifi_creds.password) - 1);
+            ESP_LOGW(TAG, "Using fallback WiFi credentials from config.h (Improv disabled)");
+#endif
+        } else if (creds_ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to get WiFi credentials: %s", esp_err_to_name(creds_ret));
+            return;
+        }
+    ESP_LOGI(TAG, "Using WiFi SSID: %s", wifi_creds.ssid);
+    ESP_LOGI(TAG, "");
+    
     // Initialize RGB status LED
     ESP_LOGI(TAG, "Initializing RGB status LED (GPIO%d)...", RGB_LED_GPIO);
     ret = rgb_status_init();
@@ -271,7 +340,7 @@ void app_main(void) {
     
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "Configuration:");
-    ESP_LOGI(TAG, "  WiFi SSID: %s", WIFI_SSID);
+    ESP_LOGI(TAG, "  WiFi SSID (fallback): %s", (strlen(WIFI_SSID) > 0 ? WIFI_SSID : "<empty>"));
     ESP_LOGI(TAG, "  WebSocket Server Port: %d", WS_SERVER_PORT);
     ESP_LOGI(TAG, "  RGB LED Pin: GPIO%d", RGB_LED_GPIO);
     ESP_LOGI(TAG, "");
@@ -282,8 +351,8 @@ void app_main(void) {
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "Starting network services...");
     
-    // Initialize network manager
-    ret = network_manager_init(WIFI_SSID, WIFI_PASSWORD, MDNS_HOSTNAME);
+    // Initialize network manager with credentials from NVS
+    ret = network_manager_init(wifi_creds.ssid, wifi_creds.password, MDNS_HOSTNAME);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize network manager!");
         rgb_status_set(RGB_STATUS_ERROR);
@@ -308,8 +377,10 @@ void app_main(void) {
     
     // Start network (will trigger connection events)
     ret = network_manager_start();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start network!");
+    if (ret == ESP_ERR_INVALID_STATE) {
+        ESP_LOGW(TAG, "WiFi not started (awaiting Improv provisioning)");
+    } else if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start network: %s", esp_err_to_name(ret));
         rgb_status_set(RGB_STATUS_ERROR);
         vTaskDelay(pdMS_TO_TICKS(5000));
         esp_restart();
@@ -329,6 +400,20 @@ void app_main(void) {
     // Main test loop
     int cycle = 1;
     while (1) {
+        // Start (or retry) WebSocket server as soon as we have an IP.
+        if (test_state.wifi_connected && test_state.current_ip[0] != '\0') {
+            if (ws_server_start_requested || !ws_server_is_started()) {
+                ws_server_start_requested = false;
+                ESP_LOGI(TAG, "Starting WebSocket server...");
+                esp_err_t start_ret = ws_server_start();
+                if (start_ret != ESP_OK) {
+                    ESP_LOGE(TAG, "Failed to start WebSocket server: %s", esp_err_to_name(start_ret));
+                } else {
+                    ESP_LOGI(TAG, "WebSocket server listening on %s%s:%d/ws", WS_PROTOCOL, test_state.current_ip, WS_SERVER_PORT);
+                }
+            }
+        }
+
         vTaskDelay(pdMS_TO_TICKS(10000));  // Every 10 seconds
         
         ESP_LOGI(TAG, "");
@@ -344,10 +429,10 @@ void app_main(void) {
             ESP_LOGW(TAG, "");
             ESP_LOGW(TAG, "Not connected - skipping message test");
             if (!test_state.wifi_connected) {
-                ESP_LOGW(TAG, "Check WiFi credentials in config.h");
+                ESP_LOGW(TAG, "Provision WiFi via Improv Serial (USB /dev/ttyACM0). Close serial monitor first.");
             } else {
                 ESP_LOGW(TAG, "Waiting for client connection");
-                ESP_LOGW(TAG, "Connect userscript to: ws://<device-ip>:%d/ws", WS_SERVER_PORT);
+                ESP_LOGW(TAG, "Connect userscript to: %s<device-ip>:%d/ws", WS_PROTOCOL, WS_SERVER_PORT);
             }
         }
         
@@ -355,3 +440,5 @@ void app_main(void) {
         ESP_LOGI(TAG, "Next cycle in 10 seconds...");
     }
 }
+
+#endif // TEST_WEBSOCKET

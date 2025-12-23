@@ -2,9 +2,18 @@
 #include "ws_protocol.h"
 #include "event_dispatcher.h"
 #include "esp_http_server.h"
+#include "esp_https_server.h"
 #include "esp_log.h"
 #include "cJSON.h"
+#include "config.h"
+#include <stdlib.h>
 #include <string.h>
+
+// TLS credentials embedded as C strings (see tls_creds.c)
+extern const char ots_server_cert_pem[];
+extern const size_t ots_server_cert_pem_len;
+extern const char ots_server_key_pem[];
+extern const size_t ots_server_key_pem_len;
 
 static const char *TAG = "OTS_WS_SERVER";
 
@@ -17,7 +26,19 @@ static int active_clients = 0;
 #define MAX_CLIENTS 4
 static int client_fds[MAX_CLIENTS] = {0};
 
+static bool is_client_registered(int fd) {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (client_fds[i] == fd) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void register_client(int fd) {
+    if (fd <= 0 || is_client_registered(fd)) {
+        return;
+    }
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (client_fds[i] == 0) {
             client_fds[i] = fd;
@@ -57,10 +78,38 @@ static void unregister_client(int fd) {
     }
 }
 
+static esp_err_t root_handler(httpd_req_t *req) {
+    char body[512];
+    const int written = snprintf(
+        body,
+        sizeof(body),
+        "OTS test firmware\n"
+        "\n"
+        "- WebSocket endpoint: /ws\n"
+        "- This server uses a self-signed certificate.\n"
+        "\n"
+        "Recommended URLs (pick one):\n"
+        "- wss://<device-ip>:%d/ws\n"
+        "- wss://ots-fw-main.local:%d/ws\n"
+        "\n",
+        (int)WS_SERVER_PORT,
+        (int)WS_SERVER_PORT);
+
+    httpd_resp_set_type(req, "text/plain");
+    if (written < 0) {
+        return httpd_resp_send(req, "OTS test firmware\n", HTTPD_RESP_USE_STRLEN);
+    }
+    return httpd_resp_send(req, body, HTTPD_RESP_USE_STRLEN);
+}
+
 static esp_err_t ws_handler(httpd_req_t *req) {
-    if (req->method == HTTP_GET) {
-        ESP_LOGI(TAG, "WebSocket handshake from client");
-        return ESP_OK;
+    // NOTE: With ESP-IDF's http(s) server, WebSocket frames are still delivered
+    // through this same URI handler and the underlying request method is GET.
+    // Do not early-return on HTTP_GET, or frames will never be processed.
+    int fd = httpd_req_to_sockfd(req);
+    if (!is_client_registered(fd)) {
+        ESP_LOGI(TAG, "WebSocket client active (fd=%d)", fd);
+        register_client(fd);
     }
     
     httpd_ws_frame_t ws_pkt;
@@ -70,13 +119,14 @@ static esp_err_t ws_handler(httpd_req_t *req) {
     // Receive frame
     esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "httpd_ws_recv_frame failed: %s", esp_err_to_name(ret));
-        return ret;
+        // This can happen on the initial handshake invocation (no frame to read).
+        // Treat as non-fatal so the handshake can complete.
+        ESP_LOGD(TAG, "httpd_ws_recv_frame (len probe) returned: %s", esp_err_to_name(ret));
+        return ESP_OK;
     }
-    
-    if (ws_pkt.len == 0) {
-        // Client just connected
-        register_client(httpd_req_to_sockfd(req));
+
+    if (ws_pkt.len == 0 && ws_pkt.type != HTTPD_WS_TYPE_CLOSE) {
+        // No payload to read.
         return ESP_OK;
     }
     
@@ -113,7 +163,7 @@ static esp_err_t ws_handler(httpd_req_t *req) {
         
     } else if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
         ESP_LOGI(TAG, "Client requested close");
-        unregister_client(httpd_req_to_sockfd(req));
+        unregister_client(fd);
     }
     
     free(buf);
@@ -157,6 +207,38 @@ esp_err_t ws_server_start(void) {
         ESP_LOGW(TAG, "Server already started");
         return ESP_OK;
     }
+#if WS_USE_TLS
+    ESP_LOGI(TAG, "Starting HTTPS server (WSS) on port %d", server_port);
+    
+    // HTTPS server configuration
+    httpd_ssl_config_t config = HTTPD_SSL_CONFIG_DEFAULT();
+    // IMPORTANT: esp_https_server chooses the listen port from `port_secure`/
+    // `port_insecure` based on `transport_mode`. Setting `httpd.server_port`
+    // alone does not change the secure listener port.
+    config.port_secure = server_port;
+    config.httpd.ctrl_port = server_port + 1;
+    config.httpd.max_open_sockets = MAX_CLIENTS + 2;
+    config.httpd.lru_purge_enable = true;
+    
+    // Set certificate and key
+    config.servercert = (const uint8_t *)ots_server_cert_pem;
+    config.servercert_len = ots_server_cert_pem_len;
+    config.prvtkey_pem = (const uint8_t *)ots_server_key_pem;
+    config.prvtkey_len = ots_server_key_pem_len;
+    
+    // Start HTTPS server
+    esp_err_t ret = httpd_ssl_start(&server, &config);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start HTTPS server: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    ESP_LOGI(TAG, "HTTPS server started successfully");
+    ESP_LOGI(TAG, "Certificate: %d bytes", (int)config.servercert_len);
+    ESP_LOGW(TAG, "Note: Browsers will show security warning for self-signed cert");
+    
+#else
+    ESP_LOGI(TAG, "Starting HTTP server (WS) on port %d", server_port);
     
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = server_port;
@@ -164,12 +246,23 @@ esp_err_t ws_server_start(void) {
     config.max_open_sockets = MAX_CLIENTS + 2;
     config.lru_purge_enable = true;
     
-    ESP_LOGI(TAG, "Starting HTTP server on port %d", server_port);
     esp_err_t ret = httpd_start(&server, &config);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start HTTP server: %s", esp_err_to_name(ret));
         return ret;
     }
+    
+    ESP_LOGI(TAG, "HTTP server started successfully");
+#endif
+
+    // Register a simple root page (helps accept self-signed cert in browser)
+    httpd_uri_t root = {
+        .uri = "/",
+        .method = HTTP_GET,
+        .handler = root_handler,
+        .user_ctx = NULL,
+    };
+    (void)httpd_register_uri_handler(server, &root);
     
     // Register WebSocket handler
     httpd_uri_t ws = {
@@ -189,9 +282,14 @@ esp_err_t ws_server_start(void) {
         return ret;
     }
     
-    ESP_LOGI(TAG, "WebSocket server started successfully");
-    ESP_LOGI(TAG, "Listening for connections on ws://<device-ip>:%d/ws", server_port);
+        ESP_LOGI(TAG, "WebSocket server started successfully");
+        ESP_LOGI(TAG, "Listening for connections on %s<device-ip>:%d/ws", WS_PROTOCOL, server_port);
+        ESP_LOGI(TAG, "TLS cert is issued for: ots-fw-main.local (recommended)");
     return ESP_OK;
+}
+
+bool ws_server_is_started(void) {
+    return server != NULL;
 }
 
 void ws_server_stop(void) {

@@ -55,6 +55,12 @@ esp_err_t ws_server_send_event(const game_event_t *event);
 bool ws_server_is_connected(void);
 
 /**
+ * @brief Check if the WebSocket server has been started (listening)
+ * @return True if the server handle is initialized and running
+ */
+bool ws_server_is_started(void);
+
+/**
  * @brief Set connection callback
  * @param callback Callback function
  */
