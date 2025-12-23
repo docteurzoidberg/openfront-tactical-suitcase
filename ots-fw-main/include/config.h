@@ -9,7 +9,7 @@
 #define OTS_FIRMWARE_NAME       "ots-fw-main"
 #define OTS_FIRMWARE_VERSION    "2025-12-20.1"  // Updated by release.sh
 
-// Wi-Fi Configuration
+// Wi-Fi Configuration (Fallback - use Improv Serial for provisioning)
 #define WIFI_SSID "YOUR_WIFI_SSID"
 #define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
 
