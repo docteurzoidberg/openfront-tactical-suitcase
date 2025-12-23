@@ -23,6 +23,7 @@ idf_component_register(
         "troops_module.c"
         "lcd_driver.c"
         "adc_driver.c"
+        "rgb_status.c"
     INCLUDE_DIRS 
         "../include"
     REQUIRES 
