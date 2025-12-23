@@ -131,10 +131,48 @@ static void mdns_init_service(void) {
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data) {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
+        ESP_LOGI(TAG, "[WiFi] STA_START - initiating connection...");
+        esp_err_t ret = esp_wifi_connect();
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "[WiFi] esp_wifi_connect() failed: %s (0x%x)", esp_err_to_name(ret), ret);
+        }
+        // Don't set is_connected = true yet! Wait for WIFI_EVENT_STA_CONNECTED
+        
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_CONNECTED) {
+        ESP_LOGI(TAG, "[WiFi] STA_CONNECTED - WiFi connected to AP!");
         is_connected = true;
+        // Don't turn on LED yet - wait for IP address
+        
+        // Notify callback about WiFi connection
+        if (event_callback) {
+            event_callback(NETWORK_EVENT_CONNECTED, NULL);
+        }
+        
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        ESP_LOGI(TAG, "WiFi disconnected, reconnecting...");
+        wifi_event_sta_disconnected_t *event = (wifi_event_sta_disconnected_t *)event_data;
+        ESP_LOGW(TAG, "[WiFi] STA_DISCONNECTED - reason: %d", event->reason);
+        
+        // Log common disconnect reasons
+        switch (event->reason) {
+            case WIFI_REASON_AUTH_EXPIRE:
+            case WIFI_REASON_AUTH_FAIL:
+                ESP_LOGE(TAG, "  → Authentication failed! Check password.");
+                break;
+            case WIFI_REASON_NO_AP_FOUND:
+                ESP_LOGE(TAG, "  → SSID '%s' not found! Check SSID.", wifi_ssid);
+                break;
+            case WIFI_REASON_ASSOC_LEAVE:
+                ESP_LOGW(TAG, "  → Disconnected from AP");
+                break;
+            case WIFI_REASON_HANDSHAKE_TIMEOUT:
+                ESP_LOGE(TAG, "  → 4-way handshake timeout");
+                break;
+            default:
+                ESP_LOGW(TAG, "  → Reason code: %d", event->reason);
+                break;
+        }
+        
+        ESP_LOGI(TAG, "[WiFi] Reconnecting...");
         is_connected = false;
         has_ip = false;
         led_controller_link_set(false);
@@ -146,12 +184,16 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
             event_callback(NETWORK_EVENT_DISCONNECTED, NULL);
         }
         
-        esp_wifi_connect();
+        esp_err_t ret = esp_wifi_connect();
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "[WiFi] Reconnect failed: %s (0x%x)", esp_err_to_name(ret), ret);
+        }
+        
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         snprintf(current_ip, sizeof(current_ip), IPSTR, IP2STR(&event->ip_info.ip));
         
-        ESP_LOGI(TAG, "Got IP: %s", current_ip);
+        ESP_LOGI(TAG, "[IP] GOT_IP: %s", current_ip);
         has_ip = true;
         led_controller_link_set(true);
         

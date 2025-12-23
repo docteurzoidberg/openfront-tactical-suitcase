@@ -448,3 +448,7 @@ void io_expander_reset_errors(uint8_t board) {
     
     ESP_LOGI(TAG, "Error counters reset for board #%d", board);
 }
+
+i2c_master_bus_handle_t io_expander_get_bus(void) {
+    return i2c_bus;
+}

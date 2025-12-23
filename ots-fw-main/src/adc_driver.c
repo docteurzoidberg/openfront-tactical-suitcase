@@ -1,5 +1,5 @@
 #include "adc_driver.h"
-#include <driver/i2c.h>
+#include <driver/i2c_master.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_log.h>
@@ -19,47 +19,33 @@ static const char* TAG = "OTS_ADC";
 #define ADS1015_CONFIG_COMP_QUE_DISABLE 0x0003  // Disable comparator
 
 static uint8_t adc_addr = ADS1015_I2C_ADDR;
+static i2c_master_dev_handle_t adc_device = NULL;
 
-// I2C helpers
+// I2C helpers (NEW driver)
 static esp_err_t i2c_write_reg16(uint8_t reg, uint16_t value) {
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (adc_addr << 1) | I2C_MASTER_WRITE, true);
-    i2c_master_write_byte(cmd, reg, true);
-    i2c_master_write_byte(cmd, (value >> 8) & 0xFF, true);  // MSB first
-    i2c_master_write_byte(cmd, value & 0xFF, true);         // LSB
-    i2c_master_stop(cmd);
-    esp_err_t ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(1000));
-    i2c_cmd_link_delete(cmd);
-    return ret;
+    if (!adc_device) return ESP_FAIL;
+    
+    uint8_t data[3] = {
+        reg,
+        (value >> 8) & 0xFF,  // MSB first
+        value & 0xFF          // LSB
+    };
+    
+    return i2c_master_transmit(adc_device, data, 3, 1000 / portTICK_PERIOD_MS);
 }
 
 static esp_err_t i2c_read_reg16(uint8_t reg, uint16_t* value) {
-    uint8_t msb, lsb;
+    if (!adc_device || !value) return ESP_FAIL;
     
-    // Write register address
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (adc_addr << 1) | I2C_MASTER_WRITE, true);
-    i2c_master_write_byte(cmd, reg, true);
-    i2c_master_stop(cmd);
-    esp_err_t ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(1000));
-    i2c_cmd_link_delete(cmd);
+    uint8_t data[2];
     
+    // Write register address, then read 2 bytes
+    esp_err_t ret = i2c_master_transmit(adc_device, &reg, 1, 1000 / portTICK_PERIOD_MS);
     if (ret != ESP_OK) return ret;
     
-    // Read 2 bytes
-    cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (adc_addr << 1) | I2C_MASTER_READ, true);
-    i2c_master_read_byte(cmd, &msb, I2C_MASTER_ACK);
-    i2c_master_read_byte(cmd, &lsb, I2C_MASTER_NACK);
-    i2c_master_stop(cmd);
-    ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(1000));
-    i2c_cmd_link_delete(cmd);
-    
+    ret = i2c_master_receive(adc_device, data, 2, 1000 / portTICK_PERIOD_MS);
     if (ret == ESP_OK) {
-        *value = (msb << 8) | lsb;
+        *value = (data[0] << 8) | data[1];
     }
     
     return ret;
@@ -67,6 +53,27 @@ static esp_err_t i2c_read_reg16(uint8_t reg, uint16_t* value) {
 
 esp_err_t ads1015_init(uint8_t i2c_addr) {
     adc_addr = i2c_addr;
+    
+    // Get I2C bus handle from io_expander (it initializes the bus)
+    extern i2c_master_bus_handle_t io_expander_get_bus(void);
+    i2c_master_bus_handle_t bus = io_expander_get_bus();
+    if (!bus) {
+        ESP_LOGE(TAG, "I2C bus not initialized - call io_expander_begin() first");
+        return ESP_FAIL;
+    }
+    
+    // Add ADC device to bus
+    i2c_device_config_t dev_config = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = adc_addr,
+        .scl_speed_hz = 100000,
+    };
+    
+    esp_err_t ret = i2c_master_bus_add_device(bus, &dev_config, &adc_device);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to add ADC device: %s", esp_err_to_name(ret));
+        return ret;
+    }
     
     // Test communication
     uint16_t config = ADS1015_CONFIG_OS_SINGLE |
@@ -76,7 +83,7 @@ esp_err_t ads1015_init(uint8_t i2c_addr) {
                       ADS1015_CONFIG_DR_1600SPS |
                       ADS1015_CONFIG_COMP_QUE_DISABLE;
     
-    esp_err_t ret = i2c_write_reg16(ADS1015_REG_POINTER_CONFIG, config);
+    ret = i2c_write_reg16(ADS1015_REG_POINTER_CONFIG, config);
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "ADS1015 initialized at 0x%02x", adc_addr);
     } else {

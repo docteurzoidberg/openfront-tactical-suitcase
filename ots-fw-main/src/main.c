@@ -11,7 +11,7 @@
 #include "io_expander.h"
 #include "module_io.h"
 #include "protocol.h"
-#include "ws_client.h"
+#include "ws_server.h"
 #include "ws_protocol.h"
 #include "led_controller.h"
 #include "button_handler.h"
@@ -52,7 +52,7 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
         }
         
         // Start WebSocket client
-        ws_client_start();
+        ws_server_start();
     } else if (event_type == NETWORK_EVENT_DISCONNECTED) {
         ESP_LOGI(TAG, "Network disconnected");
         rgb_status_set(RGB_STATUS_DISCONNECTED);
@@ -86,7 +86,7 @@ static void handle_io_expander_recovery(uint8_t board, bool was_down) {
         vTaskDelay(pdMS_TO_TICKS(2000)); // Show error for 2 seconds
         
         // Restore previous status based on connection state
-        if (ws_client_is_connected()) {
+        if (ws_server_is_connected()) {
             rgb_status_set(RGB_STATUS_CONNECTED);
         } else if (network_manager_is_connected()) {
             rgb_status_set(RGB_STATUS_WIFI_ONLY);
@@ -212,7 +212,7 @@ void app_main(void) {
     }
     
     // Initialize network manager
-    if (network_manager_init(WIFI_SSID, WIFI_PASSWORD, OTA_HOSTNAME) != ESP_OK) {
+    if (network_manager_init(WIFI_SSID, WIFI_PASSWORD, MDNS_HOSTNAME) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize network manager!");
         return;
     }

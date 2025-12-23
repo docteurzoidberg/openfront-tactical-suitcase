@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "driver/i2c_master.h"
 
 #define MAX_MCP_BOARDS 2
 
@@ -51,5 +52,11 @@ bool io_expander_digital_write(uint8_t board, uint8_t pin, uint8_t value);
 bool io_expander_digital_read(uint8_t board, uint8_t pin, uint8_t *value);
 bool io_expander_is_initialized(void);
 uint8_t io_expander_get_board_count(void);
+
+/**
+ * @brief Get the shared I2C bus handle (for LCD and ADC)
+ * @return I2C master bus handle, or NULL if not initialized
+ */
+i2c_master_bus_handle_t io_expander_get_bus(void);
 
 #endif // IO_EXPANDER_H

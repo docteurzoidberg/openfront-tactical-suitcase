@@ -13,8 +13,11 @@
 #define WIFI_SSID "YOUR_WIFI_SSID"
 #define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
 
+// mDNS Configuration
+#define MDNS_HOSTNAME "ots-device"  // Device will be accessible at <hostname>.local
+
 // WebSocket Server Configuration
-#define WS_SERVER_URL "ws://192.168.77.121:3000/ws"
+#define WS_SERVER_PORT 3000
 
 // MCP23017 I2C addresses
 static const uint8_t MCP23017_ADDRESSES[] = {0x20, 0x21};

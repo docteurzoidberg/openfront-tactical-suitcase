@@ -1,6 +1,6 @@
 #include "lcd_driver.h"
 #include "config.h"
-#include <driver/i2c.h>
+#include <driver/i2c_master.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_log.h>
@@ -33,17 +33,12 @@ static const char* TAG = "OTS_LCD";
 
 static uint8_t lcd_addr = LCD_I2C_ADDR;
 static bool lcd_initialized = false;
+static i2c_master_dev_handle_t lcd_device = NULL;
 
-// I2C helper
+// I2C helper (NEW driver)
 static esp_err_t i2c_write_byte(uint8_t data) {
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (lcd_addr << 1) | I2C_MASTER_WRITE, true);
-    i2c_master_write_byte(cmd, data, true);
-    i2c_master_stop(cmd);
-    esp_err_t ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(1000));
-    i2c_cmd_link_delete(cmd);
-    return ret;
+    if (!lcd_device) return ESP_FAIL;
+    return i2c_master_transmit(lcd_device, &data, 1, 1000 / portTICK_PERIOD_MS);
 }
 
 static esp_err_t lcd_write_nibble(uint8_t data, bool rs) {
@@ -80,34 +75,16 @@ esp_err_t lcd_set_cursor(uint8_t col, uint8_t row) {
 }
 
 esp_err_t lcd_write_string(const char* str) {
-    if (!lcd_initialized || !str) {
+    if (!lcd_initialized || !str || !lcd_device) {
         return ESP_FAIL;
     }
     
-    // Optimized: Batch I2C writes for entire string
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (lcd_addr << 1) | I2C_MASTER_WRITE, true);
-    
+    // Write each character using nibble mode
     while (*str) {
-        uint8_t c = *str++;
-        
-        // Write high nibble
-        uint8_t high = (c & 0xF0) | LCD_BACKLIGHT | LCD_RS;
-        i2c_master_write_byte(cmd, high | LCD_EN, true);
-        i2c_master_write_byte(cmd, high, true);
-        
-        // Write low nibble
-        uint8_t low = ((c << 4) & 0xF0) | LCD_BACKLIGHT | LCD_RS;
-        i2c_master_write_byte(cmd, low | LCD_EN, true);
-        i2c_master_write_byte(cmd, low, true);
+        lcd_write_char(*str++);
     }
     
-    i2c_master_stop(cmd);
-    esp_err_t ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(1000));
-    i2c_cmd_link_delete(cmd);
-    
-    return ret;
+    return ESP_OK;
 }
 
 esp_err_t lcd_write_line(uint8_t row, const char* str) {
@@ -130,6 +107,27 @@ esp_err_t lcd_clear(void) {
 
 esp_err_t lcd_init(uint8_t i2c_addr) {
     lcd_addr = i2c_addr;
+    
+    // Get I2C bus handle from io_expander (it initializes the bus)
+    extern i2c_master_bus_handle_t io_expander_get_bus(void);
+    i2c_master_bus_handle_t bus = io_expander_get_bus();
+    if (!bus) {
+        ESP_LOGE(TAG, "I2C bus not initialized - call io_expander_begin() first");
+        return ESP_FAIL;
+    }
+    
+    // Add LCD device to bus
+    i2c_device_config_t dev_config = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = lcd_addr,
+        .scl_speed_hz = 100000,
+    };
+    
+    esp_err_t ret = i2c_master_bus_add_device(bus, &dev_config, &lcd_device);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to add LCD device: %s", esp_err_to_name(ret));
+        return ret;
+    }
     
     // Wait for LCD to power up
     vTaskDelay(pdMS_TO_TICKS(50));
