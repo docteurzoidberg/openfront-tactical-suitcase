@@ -29,6 +29,8 @@
 #include "system_status_module.h"
 #include "troops_module.h"
 #include "rgb_status.h"
+#include "wifi_credentials.h"
+#include "improv_serial.h"
 
 static const char *TAG = "OTS_MAIN";
 
@@ -39,6 +41,7 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
 static void handle_game_state_change(game_phase_t old_phase, game_phase_t new_phase);
 static void handle_ws_connection(bool connected);
 static void handle_io_expander_recovery(uint8_t board, bool was_down);
+static void handle_improv_provision(bool success, const char *ssid);
 
 // Network event handler
 static void handle_network_event(network_event_type_t event_type, const char *ip_address) {
@@ -73,6 +76,19 @@ static void handle_ws_connection(bool connected) {
 // Game state change handler
 static void handle_game_state_change(game_phase_t old_phase, game_phase_t new_phase) {
     ESP_LOGI(TAG, "Game state changed: %d -> %d", old_phase, new_phase);
+}
+
+// Improv provisioning callback
+static void handle_improv_provision(bool success, const char *ssid) {
+    if (success) {
+        ESP_LOGI(TAG, "WiFi provisioned: %s", ssid);
+        ESP_LOGI(TAG, "Restarting to apply new credentials...");
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        esp_restart();
+    } else {
+        ESP_LOGE(TAG, "WiFi provisioning failed: %s", ssid);
+        improv_serial_send_error(IMPROV_ERROR_UNABLE_TO_CONNECT);
+    }
 }
 
 // I/O expander recovery callback
@@ -121,10 +137,10 @@ static bool handle_event(const internal_event_t *event) {
 }
 
 void app_main(void) {
-    ESP_LOGI(TAG, "===========================================");
+    ESP_LOGI(TAG, "===========================================" );
     ESP_LOGI(TAG, "%s v%s", OTS_PROJECT_NAME, OTS_FIRMWARE_VERSION);
     ESP_LOGI(TAG, "Firmware: %s", OTS_FIRMWARE_NAME);
-    ESP_LOGI(TAG, "===========================================");
+    ESP_LOGI(TAG, "===========================================" );
     
     // Initialize NVS
     esp_err_t ret = nvs_flash_init();
@@ -133,6 +149,35 @@ void app_main(void) {
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+    
+    // Initialize WiFi credentials storage
+    ESP_LOGI(TAG, "Initializing WiFi credentials...");
+    if (wifi_credentials_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WiFi credentials!");
+        return;
+    }
+    
+    // Initialize Improv Serial
+    ESP_LOGI(TAG, "Initializing Improv Serial...");
+    if (improv_serial_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize Improv Serial!");
+        return;
+    }
+    improv_serial_set_callback(handle_improv_provision);
+    
+    // Start Improv Serial
+    if (improv_serial_start() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start Improv Serial!");
+    }
+    
+    // Get WiFi credentials (NVS or fallback to config.h)
+    wifi_credentials_t wifi_creds;
+    if (wifi_credentials_get(&wifi_creds) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get WiFi credentials!");
+        return;
+    }
+    
+    ESP_LOGI(TAG, "WiFi credentials loaded: SSID=%s", wifi_creds.ssid);
     
     // Initialize I/O expanders with error recovery
     ESP_LOGI(TAG, "Initializing I/O expanders...");
@@ -211,8 +256,8 @@ void app_main(void) {
         return;
     }
     
-    // Initialize network manager
-    if (network_manager_init(WIFI_SSID, WIFI_PASSWORD, MDNS_HOSTNAME) != ESP_OK) {
+    // Initialize network manager with credentials from NVS/config
+    if (network_manager_init(wifi_creds.ssid, wifi_creds.password, MDNS_HOSTNAME) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize network manager!");
         return;
     }
@@ -230,12 +275,12 @@ void app_main(void) {
         return;
     }
     
-    // Initialize WebSocket client
-    if (ws_client_init(WS_SERVER_URL) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize WebSocket client!");
+    // Initialize WebSocket server
+    if (ws_server_init(WS_SERVER_PORT) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WebSocket server!");
         return;
     }
-    ws_client_set_connection_callback(handle_ws_connection);
+    ws_server_set_connection_callback(handle_ws_connection);
     
     // Start network services
     if (network_manager_start() != ESP_OK) {

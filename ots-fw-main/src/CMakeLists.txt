@@ -35,7 +35,7 @@ else()
         "io_expander.c"
         "module_io.c"
         "protocol.c"
-        "ws_client.c"
+        "ws_server.c"
         "ws_protocol.c"
         "led_controller.c"
         "button_handler.c"
@@ -55,9 +55,10 @@ else()
         "lcd_driver.c"
         "adc_driver.c"
         "rgb_status.c"
+        "wifi_credentials.c"
+        "improv_serial.c"
     )
     set(COMPONENT_REQUIRES
-        espressif__esp_websocket_client
         espressif__mdns
         esp_wifi
         nvs_flash
