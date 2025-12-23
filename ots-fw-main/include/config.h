@@ -24,6 +24,9 @@ static const uint8_t MCP23017_ADDRESSES[] = {0x20, 0x21};
 #define I2C_SDA_PIN 8
 #define I2C_SCL_PIN 9
 
+// RGB LED GPIO pin (onboard WS2812 on most ESP32-S3 devboards)
+#define RGB_LED_GPIO 48
+
 // Task priorities
 #define TASK_PRIORITY_BUTTON_MONITOR 5
 #define TASK_PRIORITY_LED_BLINK 4

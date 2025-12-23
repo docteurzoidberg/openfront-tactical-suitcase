@@ -1,5 +1,6 @@
 #include "ota_manager.h"
 #include "led_controller.h"
+#include "rgb_status.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_http_server.h"
@@ -123,6 +124,9 @@ static esp_err_t ota_post_handler(httpd_req_t *req) {
     ESP_LOGI(TAG, "Starting OTA update, size: %d bytes", remaining);
     ota_in_progress = true;
     
+    // Set RGB to error state during OTA (simple - just solid red)
+    rgb_status_set(RGB_STATUS_ERROR);
+    
     // Turn off all module LEDs during OTA
     for (int i = 0; i < 3; i++) {
         led_command_t cmd = {.type = LED_TYPE_NUKE, .index = i, .effect = LED_EFFECT_OFF};
@@ -229,6 +233,9 @@ static esp_err_t ota_post_handler(httpd_req_t *req) {
 
     ESP_LOGI(TAG, "OTA update successful! Rebooting...");
     httpd_resp_sendstr(req, "Update successful, rebooting...");
+    
+    // Restore RGB to connected state before reboot
+    rgb_status_set(RGB_STATUS_CONNECTED);
     
     ota_in_progress = false;
     

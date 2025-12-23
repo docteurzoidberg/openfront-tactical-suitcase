@@ -28,6 +28,7 @@
 #include "main_power_module.h"
 #include "system_status_module.h"
 #include "troops_module.h"
+#include "rgb_status.h"
 
 static const char *TAG = "OTS_MAIN";
 
@@ -43,6 +44,7 @@ static void handle_io_expander_recovery(uint8_t board, bool was_down);
 static void handle_network_event(network_event_type_t event_type, const char *ip_address) {
     if (event_type == NETWORK_EVENT_GOT_IP) {
         ESP_LOGI(TAG, "Network connected with IP: %s", ip_address);
+        rgb_status_set(RGB_STATUS_WIFI_ONLY);
         
         // Start OTA server
         if (ota_manager_start() != ESP_OK) {
@@ -53,6 +55,7 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
         ws_client_start();
     } else if (event_type == NETWORK_EVENT_DISCONNECTED) {
         ESP_LOGI(TAG, "Network disconnected");
+        rgb_status_set(RGB_STATUS_DISCONNECTED);
     }
 }
 
@@ -60,8 +63,10 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
 static void handle_ws_connection(bool connected) {
     if (connected) {
         ESP_LOGI(TAG, "WebSocket connected");
+        rgb_status_set(RGB_STATUS_CONNECTED);
     } else {
         ESP_LOGI(TAG, "WebSocket disconnected");
+        rgb_status_set(RGB_STATUS_WIFI_ONLY);
     }
 }
 
@@ -74,6 +79,21 @@ static void handle_game_state_change(game_phase_t old_phase, game_phase_t new_ph
 static void handle_io_expander_recovery(uint8_t board, bool was_down) {
     ESP_LOGI(TAG, "I/O Expander board #%d recovered (was_down: %s)", 
              board, was_down ? "yes" : "no");
+    
+    // Set RGB to error state briefly to indicate hardware issue
+    if (was_down) {
+        rgb_status_set(RGB_STATUS_ERROR);
+        vTaskDelay(pdMS_TO_TICKS(2000)); // Show error for 2 seconds
+        
+        // Restore previous status based on connection state
+        if (ws_client_is_connected()) {
+            rgb_status_set(RGB_STATUS_CONNECTED);
+        } else if (network_manager_is_connected()) {
+            rgb_status_set(RGB_STATUS_WIFI_ONLY);
+        } else {
+            rgb_status_set(RGB_STATUS_DISCONNECTED);
+        }
+    }
     
     // Post internal event for modules to react
     event_dispatcher_post_simple(INTERNAL_EVENT_WS_CONNECTED, EVENT_SOURCE_SYSTEM);
@@ -165,6 +185,13 @@ void app_main(void) {
         return;
     }
     game_state_set_callback(handle_game_state_change);
+    
+    // Initialize RGB status LED
+    if (rgb_status_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize RGB status LED!");
+        return;
+    }
+    rgb_status_set(RGB_STATUS_DISCONNECTED);
     
     // Initialize LED controller
     if (led_controller_init() != ESP_OK) {
