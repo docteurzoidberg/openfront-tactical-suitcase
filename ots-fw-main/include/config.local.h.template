@@ -1,0 +1,32 @@
+# Local Configuration Template
+
+Copy this file to `config.local.h` and update with your credentials.
+The `config.local.h` file is git-ignored and won't be committed.
+
+## Usage
+
+```bash
+cp include/config.local.h.template include/config.local.h
+# Edit config.local.h with your credentials
+```
+
+Then in `config.h`, add:
+```c
+// Include local config if it exists (git-ignored)
+#ifdef __has_include
+  #if __has_include("config.local.h")
+    #include "config.local.h"
+  #endif
+#endif
+```
+
+## Alternative: Use Improv Serial
+
+Instead of hardcoding credentials, use **Improv Serial WiFi provisioning**:
+
+1. Flash firmware with default credentials
+2. Visit https://www.improv-wifi.com/serial/
+3. Connect via USB and provision your WiFi
+4. Credentials stored in NVS (persistent across reboots)
+
+See `IMPROV_SERIAL.md` for details.
