@@ -207,5 +207,5 @@ for (uint8_t i = 0; i < 2; i++) {
 - `src/io_task.c` - Periodic health checks in I/O loop
 - `src/main.c` - Recovery callback registration
 - `src/module_io.c` - Pin reconfiguration after recovery
-- `docs/CHANGELOG.md` - Version history and changes
+- `CHANGELOG.md` - Version history and changes
 

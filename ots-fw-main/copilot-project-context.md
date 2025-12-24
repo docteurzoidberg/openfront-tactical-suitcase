@@ -173,7 +173,7 @@ ots-fw-main/
     troops_module.h        # Troops module interface
     
   prompts/               # AI assistant prompts for modules
-  docs/CHANGELOG.md
+  CHANGELOG.md
   copilot-project-context.md
 ```
 
@@ -438,7 +438,7 @@ See `docs/OTA_GUIDE.md` for detailed instructions and troubleshooting.
 
 ### Major Changes
 
-- Update `docs/CHANGELOG.md` with version and date
+- Update `CHANGELOG.md` with version and date
 - Update this context file for architecture changes
 - Update module prompt files if interfaces change
 - Test compilation with `pio run` (or `idf.py build` for ESP-IDF)

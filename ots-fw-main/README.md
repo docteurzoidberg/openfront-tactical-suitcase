@@ -40,7 +40,7 @@ See docs/TESTING.md for the full test matrix and expected output.
 
 ## Where to look
 
-- docs/ — human docs (OTA, testing, display modes, changelog, etc.)
+- docs/ — human docs (OTA, testing, display modes, etc.)
 - prompts/ — AI prompt files for firmware work (task-oriented)
 - include/ — public headers
 - src/ — firmware source
@@ -52,7 +52,7 @@ See docs/TESTING.md for the full test matrix and expected output.
 - docs/WSS_TEST_GUIDE.md
 - docs/RGB_LED_STATUS.md
 - docs/NAMING_CONVENTIONS.md
-- docs/CHANGELOG.md
+- CHANGELOG.md
 
 ## Protocol changes
 

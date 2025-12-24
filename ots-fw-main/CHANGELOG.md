@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - 2025-12-24 (Maintenance / Cleanup)
+- **Removed Improv Serial provisioning**
+  - Deleted Improv implementation files from firmware build
+  - Kept historical documentation in `docs/IMPROV_SERIAL.md` (marked removed)
+- **More robust boot without optional hardware**
+  - Firmware no longer aborts startup when MCP23017 expanders (0x20/0x21) are missing
+  - Allows WiFi/WebSocket test builds to run without I/O boards attached
+- **Reduced event noise and improved userscript detection**
+  - Improved WebSocket server-side userscript presence detection
+  - Reduced noisy/flood events that could contribute to event queue pressure
+- **Build/test reliability improvements**
+  - Updated test build selection to prefer PlatformIO `-DTEST_*` build flags
+  - Updated PlatformIO board config to `esp32-s3-devkitc1-n16r8` (16MB flash)
+- **Docs/prompts organization**
+  - Long-form docs live in `docs/`
+  - AI prompt guides live in `prompts/`
+
 ### Added - 2025-12-19 (Game End Screen)
 - **Victory/Defeat display on LCD**
   - Dedicated game end screen in `system_status_module`
