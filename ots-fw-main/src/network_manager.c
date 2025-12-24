@@ -70,6 +70,9 @@ esp_err_t network_manager_start(void) {
     strncpy((char *)wifi_config.sta.password, wifi_password, sizeof(wifi_config.sta.password));
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    // Disable WiFi power save to avoid periodic STA sleep/disconnects that can
+    // drop long-lived connections like WSS/WebSocket.
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 

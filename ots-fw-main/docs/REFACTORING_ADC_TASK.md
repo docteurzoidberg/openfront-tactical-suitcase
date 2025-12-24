@@ -208,7 +208,7 @@ Potential: Module-specific event subscriptions (reduce unnecessary event process
 
 - [ ] Update `copilot-project-context.md` with ADC handler architecture
 - [ ] Add ADC handler section to "I/O Handlers" in project context
-- [ ] Update `NAMING_CONVENTIONS.md` with handler pattern guidelines
+- [ ] Update `docs/NAMING_CONVENTIONS.md` with handler pattern guidelines
 - [ ] Document dual-interval io_task design
 - [ ] Update `TROOPS_MODULE_PROMPT.md` to reflect event-driven approach
 

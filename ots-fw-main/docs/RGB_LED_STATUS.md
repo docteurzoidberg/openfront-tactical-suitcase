@@ -38,7 +38,8 @@ esp_err_t ret = rgb_status_init();
 // Set status
 rgb_status_set(RGB_STATUS_DISCONNECTED);  // Red solid
 rgb_status_set(RGB_STATUS_WIFI_ONLY);     // Orange solid
-rgb_status_set(RGB_STATUS_CONNECTED);     // Green solid
+rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED); // Purple solid
+rgb_status_set(RGB_STATUS_GAME_STARTED);         // Green solid
 rgb_status_set(RGB_STATUS_ERROR);         // Red fast blink
 
 // Get current status

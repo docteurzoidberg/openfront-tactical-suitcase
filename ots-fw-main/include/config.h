@@ -13,8 +13,8 @@
 //
 // Preferred workflow: provision via Improv Serial (stored in NVS).
 // Leave these empty to force "Improv-only" behavior.
-#define WIFI_SSID ""
-#define WIFI_PASSWORD ""
+#define WIFI_SSID "IOT"
+#define WIFI_PASSWORD "totoaimeliot"
 
 // mDNS Configuration
 // Default should match the TLS certificate hostname (see tls_creds.c).

@@ -18,8 +18,10 @@
  * 
  * LED States:
  *   - OFF (black): No WiFi
- *   - Orange: WiFi connected, waiting for WebSocket
- *   - Green: Fully connected (WiFi + WebSocket)
+ *   - Blue: WiFi connecting
+ *   - Yellow: WiFi connected, no WebSocket clients
+ *   - Purple: Userscript connected
+ *   - Green: Game started
  *   - Red: Error state
  */
 
@@ -37,16 +39,7 @@
 #include "rgb_status.h"
 #include "protocol.h"
 #include "wifi_credentials.h"
-
-// Optional Improv Serial provisioning (USB WebSerial).
-// Build with -DENABLE_IMPROV_SERIAL=0 to disable.
-#ifndef ENABLE_IMPROV_SERIAL
-#define ENABLE_IMPROV_SERIAL 1
-#endif
-
-#if ENABLE_IMPROV_SERIAL
-#include "improv_serial.h"
-#endif
+#include "event_dispatcher.h"
 
 static const char *TAG = "TEST_WS";
 
@@ -65,23 +58,39 @@ static test_state_t test_state = {0};
 
 static volatile bool ws_server_start_requested = false;
 
-#if ENABLE_IMPROV_SERIAL
-static void on_improv_provisioned(bool success, const char *ssid) {
-    if (!success) {
-        ESP_LOGW(TAG, "Improv provisioning failed");
-        return;
-    }
-    ESP_LOGI(TAG, "Improv provisioned SSID '%s' - rebooting to apply", ssid ? ssid : "");
-    vTaskDelay(pdMS_TO_TICKS(500));
-    esp_restart();
-}
-#endif
-
 // Forward declarations
 void network_event_handler(network_event_type_t event, const char *ip);
 void ws_connection_handler(bool connected);
 void test_send_messages(void);
 void display_statistics(void);
+
+static bool test_event_handler(const internal_event_t *event) {
+    if (!event) {
+        return false;
+    }
+
+    if (event->type == GAME_EVENT_GAME_START) {
+        rgb_status_set(RGB_STATUS_GAME_STARTED);
+        ESP_LOGI(TAG, "RGB LED: Green (game started)");
+        return true;
+    }
+
+    if (event->type == GAME_EVENT_GAME_END) {
+        if (ws_server_has_userscript()) {
+            rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
+            ESP_LOGI(TAG, "RGB LED: Purple (userscript connected)");
+        } else if (test_state.wifi_connected) {
+            rgb_status_set(RGB_STATUS_WIFI_ONLY);
+            ESP_LOGI(TAG, "RGB LED: Yellow (WiFi connected, no clients)");
+        } else {
+            rgb_status_set(RGB_STATUS_DISCONNECTED);
+            ESP_LOGI(TAG, "RGB LED: OFF (no connection)");
+        }
+        return true;
+    }
+
+    return false;
+}
 
 void network_event_handler(network_event_type_t event, const char *ip) {
     switch (event) {
@@ -93,7 +102,7 @@ void network_event_handler(network_event_type_t event, const char *ip) {
             test_state.wifi_connected = true;
             test_state.wifi_connect_time = esp_log_timestamp();
             rgb_status_set(RGB_STATUS_WIFI_ONLY);
-            ESP_LOGI(TAG, "RGB LED: Orange (WiFi only)");
+            ESP_LOGI(TAG, "RGB LED: Yellow (WiFi connected, no clients)");
             break;
             
         case NETWORK_EVENT_GOT_IP:
@@ -126,8 +135,13 @@ void ws_connection_handler(bool connected) {
         ESP_LOGI(TAG, "╚═══════════════════════════════════════╝");
         test_state.ws_connected = true;
         test_state.ws_connect_time = esp_log_timestamp();
-        rgb_status_set(RGB_STATUS_CONNECTED);
-        ESP_LOGI(TAG, "RGB LED: Green (fully connected)");
+        if (ws_server_has_userscript()) {
+            rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
+            ESP_LOGI(TAG, "RGB LED: Purple (userscript connected)");
+        } else {
+            rgb_status_set(RGB_STATUS_WIFI_ONLY);
+            ESP_LOGI(TAG, "RGB LED: Yellow (WiFi connected, no userscript)");
+        }
         ESP_LOGI(TAG, "Server URL: %s<device-ip>:%d/ws", WS_PROTOCOL, WS_SERVER_PORT);
     } else {
         ESP_LOGW(TAG, "");
@@ -137,7 +151,7 @@ void ws_connection_handler(bool connected) {
         test_state.ws_connected = false;
         if (test_state.wifi_connected) {
             rgb_status_set(RGB_STATUS_WIFI_ONLY);
-            ESP_LOGW(TAG, "RGB LED: Orange (WiFi only)");
+            ESP_LOGW(TAG, "RGB LED: Yellow (WiFi connected, no clients)");
         } else {
             rgb_status_set(RGB_STATUS_DISCONNECTED);
             ESP_LOGW(TAG, "RGB LED: OFF (no connection)");
@@ -227,8 +241,10 @@ void display_statistics(void) {
     rgb_status_t current = rgb_status_get();
     const char *status_str[] = {
         "OFF (disconnected)",
-        "Orange (WiFi only)",
-        "Green (fully connected)",
+        "Blue (WiFi connecting)",
+        "Yellow (WiFi, no clients)",
+        "Purple (userscript connected)",
+        "Green (game started)",
         "Red (error)"
     };
     ESP_LOGI(TAG, "  Current: %s", status_str[current]);
@@ -246,12 +262,20 @@ void test_led_cycle(void) {
     rgb_status_set(RGB_STATUS_DISCONNECTED);
     vTaskDelay(pdMS_TO_TICKS(2000));
     
-    ESP_LOGI(TAG, "  Orange - 2 seconds");
+    ESP_LOGI(TAG, "  Blue - 2 seconds");
+    rgb_status_set(RGB_STATUS_WIFI_CONNECTING);
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    ESP_LOGI(TAG, "  Yellow - 2 seconds");
     rgb_status_set(RGB_STATUS_WIFI_ONLY);
     vTaskDelay(pdMS_TO_TICKS(2000));
-    
+
+    ESP_LOGI(TAG, "  Purple - 2 seconds");
+    rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
     ESP_LOGI(TAG, "  Green - 2 seconds");
-    rgb_status_set(RGB_STATUS_CONNECTED);
+    rgb_status_set(RGB_STATUS_GAME_STARTED);
     vTaskDelay(pdMS_TO_TICKS(2000));
     
     ESP_LOGI(TAG, "  Red - 2 seconds");
@@ -280,50 +304,18 @@ void app_main(void) {
     }
     ESP_ERROR_CHECK(ret);
     
-    // Initialize WiFi credentials and Improv Serial
+    // Initialize WiFi credentials
     ESP_LOGI(TAG, "Initializing WiFi credentials...");
     wifi_credentials_init();
-
-#if ENABLE_IMPROV_SERIAL
-    improv_serial_init();
-    improv_serial_set_callback(on_improv_provisioned);
-    improv_serial_start();
-    ESP_LOGI(TAG, "✓ Improv Serial enabled");
-#else
-    ESP_LOGW(TAG, "Improv Serial disabled (ENABLE_IMPROV_SERIAL=0)");
-#endif
     ESP_LOGI(TAG, "✓ Shared NVS: 'wifi' namespace");
     
     // Get credentials from NVS or fallback to config.h
     wifi_credentials_t wifi_creds;
-        // Get credentials from NVS or fallback to config.h
-        // If not provisioned yet, we just wait for Improv Serial.
-        esp_err_t creds_ret = wifi_credentials_get(&wifi_creds);
-        if (creds_ret == ESP_ERR_NOT_FOUND) {
-#if ENABLE_IMPROV_SERIAL
-            // Keep the serial stream as clean as possible for Improv tooling.
-            ESP_LOGW(TAG, "No WiFi credentials provisioned yet.");
-            ESP_LOGW(TAG, "Open https://improv-wifi.com/serial/ and provision WiFi.");
-            ESP_LOGW(TAG, "Tip: Close any serial monitor before using WebSerial.");
-            // Wait here until provisioning callback triggers a reboot.
-            while (1) {
-                vTaskDelay(pdMS_TO_TICKS(2000));
-            }
-#else
-            // Improv is disabled: fall back to compile-time credentials.
-            if (strlen(WIFI_SSID) == 0) {
-                ESP_LOGE(TAG, "No WiFi credentials in NVS and WIFI_SSID is empty. Set WIFI_SSID/WIFI_PASSWORD in config.h or enable Improv.");
-                return;
-            }
-            memset(&wifi_creds, 0, sizeof(wifi_creds));
-            strncpy(wifi_creds.ssid, WIFI_SSID, sizeof(wifi_creds.ssid) - 1);
-            strncpy(wifi_creds.password, WIFI_PASSWORD, sizeof(wifi_creds.password) - 1);
-            ESP_LOGW(TAG, "Using fallback WiFi credentials from config.h (Improv disabled)");
-#endif
-        } else if (creds_ret != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to get WiFi credentials: %s", esp_err_to_name(creds_ret));
-            return;
-        }
+    esp_err_t creds_ret = wifi_credentials_get(&wifi_creds);
+    if (creds_ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get WiFi credentials: %s", esp_err_to_name(creds_ret));
+        return;
+    }
     ESP_LOGI(TAG, "Using WiFi SSID: %s", wifi_creds.ssid);
     ESP_LOGI(TAG, "");
     
@@ -337,6 +329,15 @@ void app_main(void) {
         ESP_LOGI(TAG, "RGB LED initialized successfully");
         rgb_status_set(RGB_STATUS_DISCONNECTED);
     }
+
+    // Initialize event dispatcher (used to react to GAME_START/GAME_END)
+    if (event_dispatcher_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize event dispatcher");
+        rgb_status_set(RGB_STATUS_ERROR);
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        esp_restart();
+    }
+    event_dispatcher_register(GAME_EVENT_INVALID, test_event_handler);
     
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "Configuration:");
@@ -376,6 +377,7 @@ void app_main(void) {
     ws_server_set_connection_callback(ws_connection_handler);
     
     // Start network (will trigger connection events)
+    rgb_status_set(RGB_STATUS_WIFI_CONNECTING);
     ret = network_manager_start();
     if (ret == ESP_ERR_INVALID_STATE) {
         ESP_LOGW(TAG, "WiFi not started (awaiting Improv provisioning)");
@@ -389,12 +391,13 @@ void app_main(void) {
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "Network services started");
     ESP_LOGI(TAG, "Waiting for WiFi connection...");
-    ESP_LOGI(TAG, "RGB LED: OFF (no connection yet)");
+    ESP_LOGI(TAG, "RGB LED: Blue (WiFi connecting)");
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "Watch the RGB LED:");
-    ESP_LOGI(TAG, "  1. OFF → Connecting to WiFi");
-    ESP_LOGI(TAG, "  2. Orange → WiFi OK, waiting for client");
-    ESP_LOGI(TAG, "  3. Green → Client connected!");
+    ESP_LOGI(TAG, "  1. Blue → Connecting to WiFi");
+    ESP_LOGI(TAG, "  2. Yellow → WiFi OK, no clients");
+    ESP_LOGI(TAG, "  3. Purple → Userscript connected");
+    ESP_LOGI(TAG, "  4. Green → Game started");
     ESP_LOGI(TAG, "");
     
     // Main test loop

@@ -57,6 +57,10 @@ esp_err_t event_dispatcher_init(void) {
     registry_count = 0;
     wildcard_count = 0;
     
+    // Mark running *before* creating the task.
+    // Otherwise the task can start immediately, see is_running==false, and exit.
+    is_running = true;
+
     // Create dispatcher task
     BaseType_t result = xTaskCreate(
         event_dispatcher_task,
@@ -71,10 +75,10 @@ esp_err_t event_dispatcher_init(void) {
         ESP_LOGE(TAG, "Failed to create event dispatcher task");
         vQueueDelete(event_queue);
         event_queue = NULL;
+        is_running = false;
         return ESP_FAIL;
     }
-    
-    is_running = true;
+
     ESP_LOGI(TAG, "Event dispatcher initialized");
     return ESP_OK;
 }

@@ -20,13 +20,6 @@ Then in `config.h`, add:
 #endif
 ```
 
-## Alternative: Use Improv Serial
+## Alternative: Store In NVS
 
-Instead of hardcoding credentials, use **Improv Serial WiFi provisioning**:
-
-1. Flash firmware with default credentials
-2. Visit https://www.improv-wifi.com/serial/
-3. Connect via USB and provision your WiFi
-4. Credentials stored in NVS (persistent across reboots)
-
-See `IMPROV_SERIAL.md` for details.
+This firmware will load WiFi credentials from NVS if present, otherwise it falls back to the compile-time values in `config.h`.

@@ -363,7 +363,7 @@ Test builds have minimal overhead since they replace production code:
 
 ### Phase 1: Create Test Files
 1. Create `src/tests/` directory
-2. Port `test_i2c_scan.c` from HARDWARE_TEST_PLAN.md
+2. Port `test_i2c_scan.c` from docs/HARDWARE_TEST_PLAN.md
 3. Port `test_output_board.c`
 4. Port `test_input_board.c`
 5. Add PlatformIO test environments
@@ -390,8 +390,8 @@ Test builds have minimal overhead since they replace production code:
 4. Build and test: `pio run -e test-i2c -t upload && pio device monitor`
 
 **Once working:**
-5. Port remaining tests from HARDWARE_TEST_PLAN.md
-6. Create simple TESTING.md with usage instructions
+5. Port remaining tests from docs/HARDWARE_TEST_PLAN.md
+6. Create simple docs/TESTING.md with usage instructions
 7. Test on real hardware during assembly
 
 ---

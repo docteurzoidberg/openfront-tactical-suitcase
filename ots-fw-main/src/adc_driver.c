@@ -1,4 +1,5 @@
 #include "adc_driver.h"
+#include "i2c_bus.h"
 #include <driver/i2c_master.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -54,11 +55,18 @@ static esp_err_t i2c_read_reg16(uint8_t reg, uint16_t* value) {
 esp_err_t ads1015_init(uint8_t i2c_addr) {
     adc_addr = i2c_addr;
     
-    // Get I2C bus handle from io_expander (it initializes the bus)
-    extern i2c_master_bus_handle_t io_expander_get_bus(void);
-    i2c_master_bus_handle_t bus = io_expander_get_bus();
+    // Get shared I2C bus (initialize if needed)
+    i2c_master_bus_handle_t bus = ots_i2c_bus_get();
     if (!bus) {
-        ESP_LOGE(TAG, "I2C bus not initialized - call io_expander_begin() first");
+        esp_err_t init_ret = ots_i2c_bus_init();
+        if (init_ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to init I2C bus: %s", esp_err_to_name(init_ret));
+            return init_ret;
+        }
+        bus = ots_i2c_bus_get();
+    }
+    if (!bus) {
+        ESP_LOGE(TAG, "I2C bus not initialized");
         return ESP_FAIL;
     }
     

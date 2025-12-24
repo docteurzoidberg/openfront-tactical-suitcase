@@ -393,8 +393,8 @@ If firmware grows too large:
 ## Related Documentation
 
 - **Main Project Context**: `copilot-project-context.md`
-- **Changelog**: `CHANGELOG.md` - OTA implementation history
-- **Improvements List**: `IMPROVEMENTS.md`
+- **Changelog**: `docs/CHANGELOG.md` - OTA implementation history
+- **Improvements List**: `docs/IMPROVEMENTS.md`
 - **ESP-IDF OTA Docs**: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/system/ota.html
 
 ---

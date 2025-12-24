@@ -27,10 +27,12 @@ typedef struct {
 
 // RGB color definitions for each state
 static const rgb_color_t STATE_COLORS[] = {
-    [RGB_STATUS_DISCONNECTED] = {.r = 0, .g = 0, .b = 0},      // OFF
-    [RGB_STATUS_WIFI_ONLY]   = {.r = 255, .g = 128, .b = 0},  // Orange
-    [RGB_STATUS_CONNECTED]   = {.r = 0, .g = 255, .b = 0},    // Green
-    [RGB_STATUS_ERROR]       = {.r = 255, .g = 0, .b = 0}     // Red
+    [RGB_STATUS_DISCONNECTED]         = {.r = 0,   .g = 0,   .b = 0},   // OFF
+    [RGB_STATUS_WIFI_CONNECTING]      = {.r = 0,   .g = 0,   .b = 255}, // Blue
+    [RGB_STATUS_WIFI_ONLY]            = {.r = 255, .g = 255, .b = 0},   // Yellow
+    [RGB_STATUS_USERSCRIPT_CONNECTED] = {.r = 128, .g = 0,   .b = 255}, // Purple
+    [RGB_STATUS_GAME_STARTED]         = {.r = 0,   .g = 255, .b = 0},   // Green
+    [RGB_STATUS_ERROR]                = {.r = 255, .g = 0,   .b = 0}    // Red
 };
 
 // Simple bytes encoder for WS2812
@@ -172,7 +174,7 @@ void rgb_status_set(rgb_status_t status) {
         return;
     }
     
-    if (status > RGB_STATUS_ERROR) {
+    if (status < 0 || status >= RGB_STATUS__COUNT) {
         ESP_LOGE(TAG, "Invalid status: %d", status);
         return;
     }
@@ -181,7 +183,14 @@ void rgb_status_set(rgb_status_t status) {
         return;  // No change needed
     }
     
-    const char *status_names[] = {"DISCONNECTED", "WIFI_ONLY", "CONNECTED", "ERROR"};
+    const char *status_names[] = {
+        "DISCONNECTED",
+        "WIFI_CONNECTING",
+        "WIFI_ONLY",
+        "USERSCRIPT_CONNECTED",
+        "GAME_STARTED",
+        "ERROR",
+    };
     ESP_LOGI(TAG, "Status: %s -> %s", 
              status_names[current_state], 
              status_names[status]);

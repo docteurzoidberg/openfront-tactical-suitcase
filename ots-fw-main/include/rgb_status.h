@@ -11,17 +11,22 @@
  * Simple status-only RGB LED control for ESP32-S3 onboard LED
  * 
  * Status mapping:
- * - No WiFi: Red solid
- * - WiFi only (no WebSocket): Orange solid
- * - Fully connected: Green solid
- * - Hardware error: Red fast blink
+ * - DISCONNECTED: Off
+ * - WIFI_CONNECTING: Blue
+ * - WIFI_ONLY: Yellow (WiFi connected, no WebSocket clients)
+ * - USERSCRIPT_CONNECTED: Purple
+ * - GAME_STARTED: Green
+ * - ERROR: Red
  */
 
 typedef enum {
-    RGB_STATUS_DISCONNECTED,    // Red solid - No WiFi connection
-    RGB_STATUS_WIFI_ONLY,       // Orange solid - WiFi connected, no WebSocket
-    RGB_STATUS_CONNECTED,       // Green solid - WiFi + WebSocket connected
-    RGB_STATUS_ERROR            // Red fast blink - Hardware error
+    RGB_STATUS_DISCONNECTED = 0,
+    RGB_STATUS_WIFI_CONNECTING,
+    RGB_STATUS_WIFI_ONLY,
+    RGB_STATUS_USERSCRIPT_CONNECTED,
+    RGB_STATUS_GAME_STARTED,
+    RGB_STATUS_ERROR,
+    RGB_STATUS__COUNT
 } rgb_status_t;
 
 /**

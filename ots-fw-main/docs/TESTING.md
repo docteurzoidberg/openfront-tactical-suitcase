@@ -400,7 +400,7 @@ pio run -e esp32-s3-dev -t upload  # Flash production firmware
 
 ## Adding New Tests
 
-See [HARDWARE_TEST_INTEGRATION.md](HARDWARE_TEST_INTEGRATION.md) for full details.
+See [docs/HARDWARE_TEST_INTEGRATION.md](docs/HARDWARE_TEST_INTEGRATION.md) for full details.
 
 **Quick steps:**
 1. Create `src/tests/test_new_feature.c` with `app_main()` function

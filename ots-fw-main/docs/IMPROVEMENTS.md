@@ -129,7 +129,7 @@ void printStats() {
 ---
 
 ### 11. ✅ OTA Update Support (IMPLEMENTED)
-**Status**: Full ArduinoOTA implementation with authentication, LED feedback, and error handling. See `OTA_GUIDE.md` for details.
+**Status**: Full ArduinoOTA implementation with authentication, LED feedback, and error handling. See `docs/OTA_GUIDE.md` for details.
 
 ---
 

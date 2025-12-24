@@ -17,6 +17,10 @@ This firmware:
 - Implements event dispatcher for flexible event routing
 - Supports Over-The-Air (OTA) updates via HTTP
 
+## Prompt Files
+
+Firmware prompt index: `prompts/PROMPTS_INDEX.md`
+
 ## Tech Stack
 
 - Platform: **ESP32-S3** dev board
@@ -31,6 +35,14 @@ This firmware:
 - OTA Updates: HTTP server on port 3232 with dual-partition support
 
 ## Building the Firmware
+
+## Build Tooling Notes (AI Reminder)
+
+- Ignore this non-blocking warning: `esp_idf_size: error: unrecognized arguments: --ng`. Do not spend time debugging it unless the user explicitly asks.
+- When validating builds, treat success as: compile + link + `pio run` succeeds (even if `esp_idf_size` prints that warning).
+- Prefer PlatformIO env builds via `pio run -e <env>`; avoid custom scripts that swap CMakeLists files.
+- Test selection must be driven by PlatformIO `build_flags` (`-DTEST_*`) first, with fallbacks only when not provided.
+- Keep terminal commands targeted (one env at a time) and run the smallest build needed to verify a change.
 
 ### Using PlatformIO (Recommended)
 
@@ -161,7 +173,7 @@ ots-fw-main/
     troops_module.h        # Troops module interface
     
   prompts/               # AI assistant prompts for modules
-  CHANGELOG.md
+  docs/CHANGELOG.md
   copilot-project-context.md
 ```
 
@@ -393,7 +405,7 @@ curl -X POST --data-binary @build/ots-fw-main.bin http://192.168.x.x:3232/update
 
 ### See Also
 
-See `OTA_GUIDE.md` for detailed instructions and troubleshooting.
+See `docs/OTA_GUIDE.md` for detailed instructions and troubleshooting.
 
 ## When Updating This Project
 
@@ -426,7 +438,7 @@ See `OTA_GUIDE.md` for detailed instructions and troubleshooting.
 
 ### Major Changes
 
-- Update `CHANGELOG.md` with version and date
+- Update `docs/CHANGELOG.md` with version and date
 - Update this context file for architecture changes
 - Update module prompt files if interfaces change
 - Test compilation with `pio run` (or `idf.py build` for ESP-IDF)

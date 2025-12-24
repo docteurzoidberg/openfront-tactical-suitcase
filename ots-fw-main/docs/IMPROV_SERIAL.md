@@ -1,3 +1,11 @@
+# Improv Serial WiFi Provisioning (Removed)
+
+This document describes the previous Improv Serial provisioning feature.
+
+**Note:** Improv Serial was removed from `ots-fw-main` per project decision; this file is kept for historical/reference purposes.
+
+---
+
 # Improv Serial WiFi Provisioning
 
 The OTS firmware now supports **Improv Serial** for easy WiFi provisioning without reflashing!

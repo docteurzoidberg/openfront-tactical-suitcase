@@ -9,6 +9,59 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if !CONFIG_HTTPD_WS_SUPPORT
+
+static const char *TAG = "OTS_WS_SERVER";
+static uint16_t server_port = 3000;
+static ws_connection_callback_t connection_callback = NULL;
+
+esp_err_t ws_server_init(uint16_t port) {
+    server_port = port;
+    return ESP_OK;
+}
+
+void ws_server_set_port(uint16_t port) {
+    server_port = port;
+}
+
+void ws_server_set_connection_callback(ws_connection_callback_t cb) {
+    connection_callback = cb;
+    (void)connection_callback;
+}
+
+esp_err_t ws_server_start(void) {
+    ESP_LOGW(TAG, "WebSocket support disabled (CONFIG_HTTPD_WS_SUPPORT=0); server not started (port=%u)", server_port);
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+void ws_server_stop(void) {
+}
+
+bool ws_server_has_userscript(void) {
+    return false;
+}
+
+esp_err_t ws_server_send_text(const char *data, size_t len) {
+    (void)data;
+    (void)len;
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t ws_server_send_event(const game_event_t *event) {
+    (void)event;
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+bool ws_server_is_connected(void) {
+    return false;
+}
+
+bool ws_server_is_started(void) {
+    return false;
+}
+
+#else
+
 // TLS credentials embedded as C strings (see tls_creds.c)
 extern const char ots_server_cert_pem[];
 extern const size_t ots_server_cert_pem_len;
@@ -21,10 +74,21 @@ static httpd_handle_t server = NULL;
 static uint16_t server_port = 3000;
 static ws_connection_callback_t connection_callback = NULL;
 static int active_clients = 0;
+static int userscript_clients = 0;
 
 // Store client file descriptors
 #define MAX_CLIENTS 4
 static int client_fds[MAX_CLIENTS] = {0};
+static bool client_is_userscript[MAX_CLIENTS] = {0};
+
+static int find_client_index(int fd) {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (client_fds[i] == fd) {
+            return i;
+        }
+    }
+    return -1;
+}
 
 static bool is_client_registered(int fd) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
@@ -42,6 +106,7 @@ static void register_client(int fd) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (client_fds[i] == 0) {
             client_fds[i] = fd;
+            client_is_userscript[i] = false;
             active_clients++;
             ESP_LOGI(TAG, "Client connected (fd=%d), total clients: %d", fd, active_clients);
             
@@ -60,6 +125,19 @@ static void register_client(int fd) {
 static void unregister_client(int fd) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (client_fds[i] == fd) {
+            if (client_is_userscript[i]) {
+                client_is_userscript[i] = false;
+                if (userscript_clients > 0) {
+                    userscript_clients--;
+                }
+
+                // If we're losing the last userscript client, notify callback so
+                // the app can revert purple->yellow without requiring a full disconnect.
+                if (userscript_clients == 0 && active_clients > 1 && connection_callback) {
+                    connection_callback(true);
+                }
+            }
+
             client_fds[i] = 0;
             active_clients--;
             ESP_LOGI(TAG, "Client disconnected (fd=%d), total clients: %d", fd, active_clients);
@@ -76,6 +154,10 @@ static void unregister_client(int fd) {
             break;
         }
     }
+}
+
+bool ws_server_has_userscript(void) {
+    return userscript_clients > 0;
 }
 
 static esp_err_t root_handler(httpd_req_t *req) {
@@ -155,8 +237,49 @@ static esp_err_t ws_handler(httpd_req_t *req) {
         ws_message_t msg;
         ret = ws_protocol_parse((char *)ws_pkt.payload, ws_pkt.len, &msg);
         if (ret == ESP_OK) {
-            // TODO: Handle parsed message (dispatch to modules)
-            ESP_LOGI(TAG, "Message parsed successfully");
+            if (msg.type == WS_MSG_HANDSHAKE) {
+                const int idx = find_client_index(fd);
+                const bool is_userscript = (strcmp(msg.payload.handshake.client_type, "userscript") == 0);
+                if (idx >= 0 && is_userscript && !client_is_userscript[idx]) {
+                    client_is_userscript[idx] = true;
+                    userscript_clients++;
+                    ESP_LOGI(TAG, "Identified userscript client (fd=%d), userscript_clients=%d", fd, userscript_clients);
+
+                    // Notify callback so the app can change yellow->purple immediately.
+                    if (connection_callback) {
+                        connection_callback(true);
+                    }
+                }
+            } else if (msg.type == WS_MSG_EVENT) {
+                // Forward protocol events into the firmware event system.
+                // NOTE: Userscript can send frequent INFO heartbeats; don't enqueue them
+                // or they can fill the event queue and cause important events (GAME_START)
+                // to be dropped.
+                if (msg.payload.event.event_type == GAME_EVENT_INFO) {
+                    // Treat the userscript's initial INFO as a secondary handshake.
+                    // Userscript sends: {type:'event', payload:{type:'INFO', message:'userscript-connected'}}
+                    const int idx = find_client_index(fd);
+                    if (idx >= 0 &&
+                        strcmp(msg.payload.event.message, "userscript-connected") == 0 &&
+                        !client_is_userscript[idx]) {
+                        client_is_userscript[idx] = true;
+                        userscript_clients++;
+                        ESP_LOGI(TAG, "Identified userscript client via INFO (fd=%d), userscript_clients=%d", fd, userscript_clients);
+
+                        if (connection_callback) {
+                            connection_callback(true);
+                        }
+                    }
+
+                    ESP_LOGD(TAG, "Dropping INFO event (no enqueue)");
+                } else if (msg.payload.event.event_type == GAME_EVENT_INVALID) {
+                    ESP_LOGD(TAG, "Dropping invalid event (no enqueue)");
+                } else {
+                    event_dispatcher_post_simple(msg.payload.event.event_type, EVENT_SOURCE_WEBSOCKET);
+                }
+            }
+
+            ESP_LOGD(TAG, "Message parsed successfully");
         } else {
             ESP_LOGW(TAG, "Failed to parse message");
         }
@@ -196,7 +319,9 @@ static void ws_async_send(void *arg) {
 esp_err_t ws_server_init(uint16_t port) {
     server_port = port;
     active_clients = 0;
+    userscript_clients = 0;
     memset(client_fds, 0, sizeof(client_fds));
+    memset(client_is_userscript, 0, sizeof(client_is_userscript));
     
     ESP_LOGI(TAG, "Initializing WebSocket server on port %d", server_port);
     return ESP_OK;
@@ -298,7 +423,9 @@ void ws_server_stop(void) {
         httpd_stop(server);
         server = NULL;
         active_clients = 0;
+        userscript_clients = 0;
         memset(client_fds, 0, sizeof(client_fds));
+        memset(client_is_userscript, 0, sizeof(client_is_userscript));
     }
 }
 
@@ -355,3 +482,5 @@ bool ws_server_is_connected(void) {
 void ws_server_set_connection_callback(ws_connection_callback_t callback) {
     connection_callback = callback;
 }
+
+#endif  // CONFIG_HTTPD_WS_SUPPORT

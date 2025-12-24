@@ -61,6 +61,12 @@ bool ws_server_is_connected(void);
 bool ws_server_is_started(void);
 
 /**
+ * @brief Check if at least one connected WebSocket client identified as a userscript
+ * (via handshake {"type":"handshake","clientType":"userscript"}).
+ */
+bool ws_server_has_userscript(void);
+
+/**
  * @brief Set connection callback
  * @param callback Callback function
  */

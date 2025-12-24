@@ -30,7 +30,6 @@
 #include "troops_module.h"
 #include "rgb_status.h"
 #include "wifi_credentials.h"
-#include "improv_serial.h"
 
 static const char *TAG = "OTS_MAIN";
 
@@ -41,7 +40,6 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
 static void handle_game_state_change(game_phase_t old_phase, game_phase_t new_phase);
 static void handle_ws_connection(bool connected);
 static void handle_io_expander_recovery(uint8_t board, bool was_down);
-static void handle_improv_provision(bool success, const char *ssid);
 
 // Network event handler
 static void handle_network_event(network_event_type_t event_type, const char *ip_address) {
@@ -65,30 +63,34 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
 // WebSocket connection handler
 static void handle_ws_connection(bool connected) {
     if (connected) {
-        ESP_LOGI(TAG, "WebSocket connected");
-        rgb_status_set(RGB_STATUS_CONNECTED);
+        ESP_LOGI(TAG, "WebSocket client connected");
+        // Only turn purple once we've identified a userscript client.
+        if (ws_server_has_userscript()) {
+            // If the game is already running, keep green.
+            if (!game_state_is_in_game()) {
+                rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
+            }
+        } else {
+            // Some client connected (e.g. browser), but not userscript yet.
+            if (network_manager_is_connected()) {
+                rgb_status_set(RGB_STATUS_WIFI_ONLY);
+            } else {
+                rgb_status_set(RGB_STATUS_WIFI_CONNECTING);
+            }
+        }
     } else {
         ESP_LOGI(TAG, "WebSocket disconnected");
-        rgb_status_set(RGB_STATUS_WIFI_ONLY);
+        if (network_manager_is_connected()) {
+            rgb_status_set(RGB_STATUS_WIFI_ONLY);
+        } else {
+            rgb_status_set(RGB_STATUS_DISCONNECTED);
+        }
     }
 }
 
 // Game state change handler
 static void handle_game_state_change(game_phase_t old_phase, game_phase_t new_phase) {
     ESP_LOGI(TAG, "Game state changed: %d -> %d", old_phase, new_phase);
-}
-
-// Improv provisioning callback
-static void handle_improv_provision(bool success, const char *ssid) {
-    if (success) {
-        ESP_LOGI(TAG, "WiFi provisioned: %s", ssid);
-        ESP_LOGI(TAG, "Restarting to apply new credentials...");
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        esp_restart();
-    } else {
-        ESP_LOGE(TAG, "WiFi provisioning failed: %s", ssid);
-        improv_serial_send_error(IMPROV_ERROR_UNABLE_TO_CONNECT);
-    }
 }
 
 // I/O expander recovery callback
@@ -101,9 +103,11 @@ static void handle_io_expander_recovery(uint8_t board, bool was_down) {
         rgb_status_set(RGB_STATUS_ERROR);
         vTaskDelay(pdMS_TO_TICKS(2000)); // Show error for 2 seconds
         
-        // Restore previous status based on connection state
-        if (ws_server_is_connected()) {
-            rgb_status_set(RGB_STATUS_CONNECTED);
+        // Restore previous status based on connection/game state
+        if (game_state_is_in_game()) {
+            rgb_status_set(RGB_STATUS_GAME_STARTED);
+        } else if (ws_server_has_userscript()) {
+            rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
         } else if (network_manager_is_connected()) {
             rgb_status_set(RGB_STATUS_WIFI_ONLY);
         } else {
@@ -130,6 +134,19 @@ static bool handle_event(const internal_event_t *event) {
         event->type == GAME_EVENT_GAME_START ||
         event->type == GAME_EVENT_GAME_END) {
         game_state_update(event->type);
+
+        if (event->type == GAME_EVENT_GAME_START) {
+            rgb_status_set(RGB_STATUS_GAME_STARTED);
+        } else if (event->type == GAME_EVENT_GAME_END) {
+            // Restore to purple/yellow based on current connectivity.
+            if (ws_server_has_userscript()) {
+                rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
+            } else if (network_manager_is_connected()) {
+                rgb_status_set(RGB_STATUS_WIFI_ONLY);
+            } else {
+                rgb_status_set(RGB_STATUS_DISCONNECTED);
+            }
+        }
         return true;
     }
     
@@ -149,25 +166,19 @@ void app_main(void) {
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    // Initialize RGB status LED early so we can report boot failures
+    if (rgb_status_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize RGB status LED!");
+        return;
+    }
+    rgb_status_set(RGB_STATUS_DISCONNECTED);
     
     // Initialize WiFi credentials storage
     ESP_LOGI(TAG, "Initializing WiFi credentials...");
     if (wifi_credentials_init() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize WiFi credentials!");
         return;
-    }
-    
-    // Initialize Improv Serial
-    ESP_LOGI(TAG, "Initializing Improv Serial...");
-    if (improv_serial_init() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize Improv Serial!");
-        return;
-    }
-    improv_serial_set_callback(handle_improv_provision);
-    
-    // Start Improv Serial
-    if (improv_serial_start() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start Improv Serial!");
     }
     
     // Get WiFi credentials (NVS or fallback to config.h)
@@ -181,18 +192,18 @@ void app_main(void) {
     
     // Initialize I/O expanders with error recovery
     ESP_LOGI(TAG, "Initializing I/O expanders...");
-    if (!io_expander_begin(MCP23017_ADDRESSES, MCP23017_COUNT)) {
-        ESP_LOGE(TAG, "Failed to initialize I/O expanders!");
-        return;
-    }
-    
-    // Register recovery callback
-    io_expander_set_recovery_callback(handle_io_expander_recovery);
-    
-    // Initialize module I/O
-    if (module_io_init() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize module I/O!");
-        return;
+    bool io_expanders_ready = io_expander_begin(MCP23017_ADDRESSES, MCP23017_COUNT);
+    if (!io_expanders_ready) {
+        ESP_LOGE(TAG, "Failed to initialize I/O expanders - continuing without hardware I/O boards");
+    } else {
+        // Register recovery callback
+        io_expander_set_recovery_callback(handle_io_expander_recovery);
+
+        // Initialize module I/O
+        if (module_io_init() != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize module I/O - continuing without hardware modules");
+            io_expanders_ready = false;
+        }
     }
     
     // Initialize event dispatcher
@@ -204,24 +215,28 @@ void app_main(void) {
     // Register event handler (handles game state events)
     event_dispatcher_register(GAME_EVENT_INVALID, handle_event);
     
-    // Initialize module manager
-    if (module_manager_init() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize module manager!");
-        return;
+    if (io_expanders_ready) {
+        // Initialize module manager
+        if (module_manager_init() != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize module manager - continuing without hardware modules");
+            io_expanders_ready = false;
+        }
     }
-    
-    // Register hardware modules
-    ESP_LOGI(TAG, "Registering hardware modules...");
-    module_manager_register(&nuke_module);
-    module_manager_register(&alert_module);
-    module_manager_register(&main_power_module);
-    module_manager_register(system_status_module_get());  // Handles boot/lobby screens
-    module_manager_register(troops_module_get());         // Handles in-game troop display
-    
-    // Initialize all hardware modules (includes splash screen)
-    if (module_manager_init_all() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize hardware modules!");
-        return;
+
+    if (io_expanders_ready) {
+        // Register hardware modules
+        ESP_LOGI(TAG, "Registering hardware modules...");
+        module_manager_register(&nuke_module);
+        module_manager_register(&alert_module);
+        module_manager_register(&main_power_module);
+        module_manager_register(system_status_module_get());  // Handles boot/lobby screens
+        module_manager_register(troops_module_get());         // Handles in-game troop display
+
+        // Initialize all hardware modules (includes splash screen)
+        if (module_manager_init_all() != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize hardware modules - continuing without hardware modules");
+            io_expanders_ready = false;
+        }
     }
     
     // Initialize game state manager
@@ -231,29 +246,28 @@ void app_main(void) {
     }
     game_state_set_callback(handle_game_state_change);
     
-    // Initialize RGB status LED
-    if (rgb_status_init() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize RGB status LED!");
-        return;
-    }
-    rgb_status_set(RGB_STATUS_DISCONNECTED);
-    
     // Initialize LED controller
-    if (led_controller_init() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize LED controller!");
-        return;
+    if (io_expanders_ready) {
+        if (led_controller_init() != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize LED controller!");
+            return;
+        }
     }
     
     // Initialize button handler
-    if (button_handler_init() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize button handler!");
-        return;
+    if (io_expanders_ready) {
+        if (button_handler_init() != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize button handler!");
+            return;
+        }
     }
     
     // Initialize ADC handler
-    if (adc_handler_init() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize ADC handler!");
-        return;
+    if (io_expanders_ready) {
+        if (adc_handler_init() != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize ADC handler!");
+            return;
+        }
     }
     
     // Initialize network manager with credentials from NVS/config
@@ -283,15 +297,18 @@ void app_main(void) {
     ws_server_set_connection_callback(handle_ws_connection);
     
     // Start network services
+    rgb_status_set(RGB_STATUS_WIFI_CONNECTING);
     if (network_manager_start() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start network!");
         return;
     }
     
     // Start dedicated I/O task
-    if (io_task_start() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start I/O task!");
-        return;
+    if (io_expanders_ready) {
+        if (io_task_start() != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to start I/O task!");
+            return;
+        }
     }
     
     ESP_LOGI(TAG, "OTS Firmware initialized successfully");

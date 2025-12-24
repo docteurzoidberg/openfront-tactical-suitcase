@@ -151,7 +151,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `esp_http_server` for OTA HTTP endpoint
   - Added `app_update` for OTA partition management
 - **Updated documentation**
-  - Refreshed `OTA_GUIDE.md` with ESP-IDF specific instructions
+  - Refreshed `docs/OTA_GUIDE.md` with ESP-IDF specific instructions
   - Added curl-based OTA upload examples
   - Documented partition table layout and boot process
   - Added troubleshooting section for ESP-IDF OTA

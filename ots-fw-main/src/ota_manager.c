@@ -123,6 +123,8 @@ static esp_err_t ota_post_handler(httpd_req_t *req) {
 
     ESP_LOGI(TAG, "Starting OTA update, size: %d bytes", remaining);
     ota_in_progress = true;
+
+    const rgb_status_t pre_ota_status = rgb_status_get();
     
     // Set RGB to error state during OTA (simple - just solid red)
     rgb_status_set(RGB_STATUS_ERROR);
@@ -234,8 +236,8 @@ static esp_err_t ota_post_handler(httpd_req_t *req) {
     ESP_LOGI(TAG, "OTA update successful! Rebooting...");
     httpd_resp_sendstr(req, "Update successful, rebooting...");
     
-    // Restore RGB to connected state before reboot
-    rgb_status_set(RGB_STATUS_CONNECTED);
+    // Restore RGB to previous state before reboot
+    rgb_status_set(pre_ota_status);
     
     ota_in_progress = false;
     
