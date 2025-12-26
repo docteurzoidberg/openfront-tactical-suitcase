@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - 2025-12-26 (WebSocket Userscript Tracking + Test Automation)
+- **Userscript presence semantics made reliable**
+  - `INTERNAL_EVENT_WS_CONNECTED/DISCONNECTED` now represents userscript presence transitions (0→1, 1→0 userscript clients)
+  - Added HTTP server session `close_fn` handling so abrupt disconnects unregister clients even without a WS CLOSE frame
+- **WSS server stability + hygiene improvements**
+  - Continued hardening of the WebSocket path to reduce noisy disconnect conditions and log spam
+  - Removed legacy WS client implementation (`ws_client.*`) in favor of the server-centric flow
+- **Automation tooling for repeatable validation**
+  - Added stdlib-only Python tooling to simulate a userscript WebSocket client and assert expected serial-log “contract”
+  - Added a focused connect/disconnect integration test script under `tools/tests/`
+- **Build/config support for factory flashing and test workflows**
+  - Added `sdkconfig.esp32-s3-dev-factory` and `partitions.test.csv` to support factory/test environments
+
 ### Changed - 2025-12-24 (Maintenance / Cleanup)
 - **Removed Improv Serial provisioning**
   - Deleted Improv implementation files from firmware build
