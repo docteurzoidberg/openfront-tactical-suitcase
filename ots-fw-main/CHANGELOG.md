@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Automation tooling for repeatable validation**
   - Added stdlib-only Python tooling to simulate a userscript WebSocket client and assert expected serial-log “contract”
   - Added a focused connect/disconnect integration test script under `tools/tests/`
+- **LCD testing and diagnostics**
+  - LCD testing workflow is now in place (updated LCD test code + added Python LCD diagnostic helper)
 - **Build/config support for factory flashing and test workflows**
   - Added `sdkconfig.esp32-s3-dev-factory` and `partitions.test.csv` to support factory/test environments
 

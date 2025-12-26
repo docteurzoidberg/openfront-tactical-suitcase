@@ -4,6 +4,22 @@ Collection of weekly changelog announcements for Discord.
 
 ---
 
+## 🎮 Week of December 22-26, 2025
+
+### 🔌 WebSocket Reliability (Userscript Presence)
+- ✅ **Status now follows userscript presence** (connect/disconnect transitions are reliable)
+- 🧯 **Abrupt disconnects handled** (server unregisters sessions even if the browser drops without sending a WS CLOSE)
+
+### 🧪 Automation & Testing
+- 🐍 **Stdlib-only Python harness** can simulate the userscript connection and assert the expected serial-log behavior
+- 🧰 Tooling is split into a reusable connector + focused integration test scripts
+
+### 🖥️ LCD Testing
+- ✅ **LCD testing marked done** with updated LCD test code and a small diagnostic helper script
+
+### 🔧 Build/Flash Quality-of-Life
+- 🏭 Added factory/test config artifacts to support repeatable flashing and test workflows
+
 ## 🎮 Week of December 16-20, 2025
 
 ### 🎯 Game End Detection & LCD Screens
