@@ -162,7 +162,7 @@ The module processes `event` messages to trigger LED blinking:
    - Sends launch events to server
    - Does NOT control LEDs
 
-2. **Event Handler** (in `ws_client.cpp`)
+2. **Event Handler** (in `ws_server.c`/`ws_protocol.c`)
    - Receives launch events from server
    - Triggers LED blink timers
    - Updates nuke module state
@@ -359,7 +359,7 @@ Pin mappings in `include/module_io.h`:
 - [ ] Add `updateNukeModule()` to main loop
 
 ### Phase 3: Event Processing
-- [ ] Parse `NUKE_LAUNCHED` events in `ws_client.cpp`
+- [ ] Parse `NUKE_LAUNCHED` events in `ws_server.c`
 - [ ] Parse `HYDRO_LAUNCHED` events
 - [ ] Parse `MIRV_LAUNCHED` events
 - [ ] Trigger LED blinks on event receipt

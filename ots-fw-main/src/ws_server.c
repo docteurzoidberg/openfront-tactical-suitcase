@@ -8,6 +8,8 @@
 #include "config.h"
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #if !CONFIG_HTTPD_WS_SUPPORT
 
@@ -109,14 +111,6 @@ static void register_client(int fd) {
             client_is_userscript[i] = false;
             active_clients++;
             ESP_LOGI(TAG, "Client connected (fd=%d), total clients: %d", fd, active_clients);
-            
-            // Post internal event
-            event_dispatcher_post_simple(INTERNAL_EVENT_WS_CONNECTED, EVENT_SOURCE_SYSTEM);
-            
-            // Notify callback
-            if (connection_callback) {
-                connection_callback(true);
-            }
             break;
         }
     }
@@ -125,28 +119,32 @@ static void register_client(int fd) {
 static void unregister_client(int fd) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (client_fds[i] == fd) {
-            if (client_is_userscript[i]) {
+            const bool was_userscript = client_is_userscript[i];
+            if (was_userscript) {
                 client_is_userscript[i] = false;
                 if (userscript_clients > 0) {
                     userscript_clients--;
-                }
-
-                // If we're losing the last userscript client, notify callback so
-                // the app can revert purple->yellow without requiring a full disconnect.
-                if (userscript_clients == 0 && active_clients > 1 && connection_callback) {
-                    connection_callback(true);
                 }
             }
 
             client_fds[i] = 0;
             active_clients--;
             ESP_LOGI(TAG, "Client disconnected (fd=%d), total clients: %d", fd, active_clients);
-            
-            if (active_clients == 0) {
-                // Post internal event
+
+            // Align with test-websocket semantics: "connected" means the userscript is
+            // connected, not merely that *some* WebSocket client exists.
+            if (was_userscript && userscript_clients == 0) {
+                ESP_LOGI(TAG, "Last userscript disconnected; userscript_clients=0");
                 event_dispatcher_post_simple(INTERNAL_EVENT_WS_DISCONNECTED, EVENT_SOURCE_SYSTEM);
-                
-                // Notify callback
+                if (connection_callback) {
+                    connection_callback(false);
+                }
+            }
+
+            // If we have no clients at all, also ensure modules can reset state.
+            // (This is a no-op if the userscript transition already fired above.)
+            if (active_clients == 0 && userscript_clients == 0) {
+                event_dispatcher_post_simple(INTERNAL_EVENT_WS_DISCONNECTED, EVENT_SOURCE_SYSTEM);
                 if (connection_callback) {
                     connection_callback(false);
                 }
@@ -154,6 +152,18 @@ static void unregister_client(int fd) {
             break;
         }
     }
+}
+
+// Ensure clients are unregistered even when the TCP/TLS socket closes without a
+// WebSocket CLOSE frame (e.g. abrupt client exit, WiFi drop).
+//
+// NOTE: When `close_fn` is set, ESP-IDF expects the callback to close the socket.
+static void ws_session_close_cb(httpd_handle_t hd, int sockfd) {
+    (void)hd;
+    unregister_client(sockfd);
+    // Best-effort; sockfd may already be invalid per ESP-IDF docs.
+    (void)shutdown(sockfd, SHUT_RDWR);
+    (void)close(sockfd);
 }
 
 bool ws_server_has_userscript(void) {
@@ -185,10 +195,29 @@ static esp_err_t root_handler(httpd_req_t *req) {
 }
 
 static esp_err_t ws_handler(httpd_req_t *req) {
-    // NOTE: With ESP-IDF's http(s) server, WebSocket frames are still delivered
-    // through this same URI handler and the underlying request method is GET.
-    // Do not early-return on HTTP_GET, or frames will never be processed.
+    // ESP-IDF calls this handler once for the initial HTTP upgrade (handshake)
+    // and then again for subsequent WebSocket frames.
+    // Do not attempt to read a WebSocket frame during the handshake invocation,
+    // or the server will complain about masking / framing and we'll drop data.
     int fd = httpd_req_to_sockfd(req);
+
+    // If this invocation is the initial HTTP Upgrade request, it will still have
+    // HTTP headers. WebSocket frame invocations do not.
+    // Reading ws frames during the upgrade call can trigger esp_http_server logs
+    // like: "WS frame is not properly masked".
+    const size_t upgrade_len = httpd_req_get_hdr_value_len(req, "Upgrade");
+    if (upgrade_len > 0) {
+        // Let the server complete the handshake; frames will arrive in later calls.
+        return ESP_OK;
+    }
+
+    // This URI can be hit by non-WebSocket HTTP GETs as well. Only treat the
+    // connection as an active client once the WebSocket protocol is active.
+    if (server == NULL || httpd_ws_get_fd_info(server, fd) != HTTPD_WS_CLIENT_WEBSOCKET) {
+        ESP_LOGD(TAG, "/ws called but not a WebSocket client yet (fd=%d)", fd);
+        return ESP_OK;
+    }
+
     if (!is_client_registered(fd)) {
         ESP_LOGI(TAG, "WebSocket client active (fd=%d)", fd);
         register_client(fd);
@@ -196,7 +225,6 @@ static esp_err_t ws_handler(httpd_req_t *req) {
     
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
     
     // Receive frame
     esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
@@ -212,26 +240,50 @@ static esp_err_t ws_handler(httpd_req_t *req) {
         return ESP_OK;
     }
     
-    // Allocate buffer for payload
-    uint8_t *buf = malloc(ws_pkt.len + 1);
-    if (buf == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate memory for WebSocket payload");
-        return ESP_ERR_NO_MEM;
+    // Special-case CLOSE frames: we don't need to read payload.
+    if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
+        ESP_LOGI(TAG, "Client requested close");
+        unregister_client(fd);
+        return ESP_OK;
     }
-    
+
+    // Allocate buffer for payload (avoid heap churn for common small frames)
+    uint8_t small_buf[513];
+    uint8_t *buf = NULL;
+    if (ws_pkt.len <= 512) {
+        buf = small_buf;
+    } else {
+        buf = malloc(ws_pkt.len + 1);
+        if (buf == NULL) {
+            ESP_LOGE(TAG, "Failed to allocate memory for WebSocket payload");
+            return ESP_ERR_NO_MEM;
+        }
+    }
+
     ws_pkt.payload = buf;
     ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "httpd_ws_recv_frame failed: %s", esp_err_to_name(ret));
-        free(buf);
+        if (buf != small_buf) {
+            free(buf);
+        }
         return ret;
     }
-    
+
     buf[ws_pkt.len] = '\0';  // Null terminate
     
     // Handle different frame types
-    if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
-        ESP_LOGI(TAG, "Received packet: %.*s", ws_pkt.len, ws_pkt.payload);
+    if (ws_pkt.type == HTTPD_WS_TYPE_PING) {
+        // If control frames are delivered to us, we must respond with PONG.
+        httpd_ws_frame_t pong;
+        memset(&pong, 0, sizeof(pong));
+        pong.type = HTTPD_WS_TYPE_PONG;
+        pong.payload = ws_pkt.payload;
+        pong.len = ws_pkt.len;
+        (void)httpd_ws_send_frame(req, &pong);
+    } else if (ws_pkt.type == HTTPD_WS_TYPE_PONG) {
+        // No action needed.
+    } else if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
         
         // Parse message using protocol handler
         ws_message_t msg;
@@ -242,12 +294,16 @@ static esp_err_t ws_handler(httpd_req_t *req) {
                 const bool is_userscript = (strcmp(msg.payload.handshake.client_type, "userscript") == 0);
                 if (idx >= 0 && is_userscript && !client_is_userscript[idx]) {
                     client_is_userscript[idx] = true;
+                    const bool was_zero = (userscript_clients == 0);
                     userscript_clients++;
                     ESP_LOGI(TAG, "Identified userscript client (fd=%d), userscript_clients=%d", fd, userscript_clients);
 
-                    // Notify callback so the app can change yellow->purple immediately.
-                    if (connection_callback) {
-                        connection_callback(true);
+                    // Notify modules/app when the *first* userscript appears.
+                    if (was_zero) {
+                        event_dispatcher_post_simple(INTERNAL_EVENT_WS_CONNECTED, EVENT_SOURCE_SYSTEM);
+                        if (connection_callback) {
+                            connection_callback(true);
+                        }
                     }
                 }
             } else if (msg.type == WS_MSG_EVENT) {
@@ -256,6 +312,8 @@ static esp_err_t ws_handler(httpd_req_t *req) {
                 // or they can fill the event queue and cause important events (GAME_START)
                 // to be dropped.
                 if (msg.payload.event.event_type == GAME_EVENT_INFO) {
+                    // Logging every heartbeat at INFO can starve CPU and destabilize WS.
+                    ESP_LOGD(TAG, "Received INFO event: %s", msg.payload.event.message);
                     // Treat the userscript's initial INFO as a secondary handshake.
                     // Userscript sends: {type:'event', payload:{type:'INFO', message:'userscript-connected'}}
                     const int idx = find_client_index(fd);
@@ -263,11 +321,15 @@ static esp_err_t ws_handler(httpd_req_t *req) {
                         strcmp(msg.payload.event.message, "userscript-connected") == 0 &&
                         !client_is_userscript[idx]) {
                         client_is_userscript[idx] = true;
+                        const bool was_zero = (userscript_clients == 0);
                         userscript_clients++;
                         ESP_LOGI(TAG, "Identified userscript client via INFO (fd=%d), userscript_clients=%d", fd, userscript_clients);
 
-                        if (connection_callback) {
-                            connection_callback(true);
+                        if (was_zero) {
+                            event_dispatcher_post_simple(INTERNAL_EVENT_WS_CONNECTED, EVENT_SOURCE_SYSTEM);
+                            if (connection_callback) {
+                                connection_callback(true);
+                            }
                         }
                     }
 
@@ -275,7 +337,15 @@ static esp_err_t ws_handler(httpd_req_t *req) {
                 } else if (msg.payload.event.event_type == GAME_EVENT_INVALID) {
                     ESP_LOGD(TAG, "Dropping invalid event (no enqueue)");
                 } else {
-                    event_dispatcher_post_simple(msg.payload.event.event_type, EVENT_SOURCE_WEBSOCKET);
+                    ESP_LOGI(TAG, "Received event type=%d msg=%s", (int)msg.payload.event.event_type, msg.payload.event.message);
+                    internal_event_t evt = {
+                        .type = msg.payload.event.event_type,
+                        .source = EVENT_SOURCE_WEBSOCKET,
+                        .timestamp = msg.payload.event.timestamp,
+                    };
+                    strncpy(evt.message, msg.payload.event.message, sizeof(evt.message) - 1);
+                    strncpy(evt.data, msg.payload.event.data, sizeof(evt.data) - 1);
+                    event_dispatcher_post(&evt);
                 }
             }
 
@@ -284,12 +354,11 @@ static esp_err_t ws_handler(httpd_req_t *req) {
             ESP_LOGW(TAG, "Failed to parse message");
         }
         
-    } else if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
-        ESP_LOGI(TAG, "Client requested close");
-        unregister_client(fd);
     }
-    
-    free(buf);
+
+    if (buf != small_buf) {
+        free(buf);
+    }
     return ESP_OK;
 }
 
@@ -344,6 +413,7 @@ esp_err_t ws_server_start(void) {
     config.httpd.ctrl_port = server_port + 1;
     config.httpd.max_open_sockets = MAX_CLIENTS + 2;
     config.httpd.lru_purge_enable = true;
+    config.httpd.close_fn = ws_session_close_cb;
     
     // Set certificate and key
     config.servercert = (const uint8_t *)ots_server_cert_pem;
@@ -370,6 +440,7 @@ esp_err_t ws_server_start(void) {
     config.ctrl_port = server_port + 1;
     config.max_open_sockets = MAX_CLIENTS + 2;
     config.lru_purge_enable = true;
+    config.close_fn = ws_session_close_cb;
     
     esp_err_t ret = httpd_start(&server, &config);
     if (ret != ESP_OK) {

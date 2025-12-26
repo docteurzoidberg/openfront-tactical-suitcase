@@ -21,6 +21,8 @@
 #include "adc_driver.h"
 #include "i2c_bus.h"
 
+#include "ots_logging.h"
+
 static const char *TAG = "TEST_ADC";
 
 float adc_to_voltage(int16_t adc_value) {
@@ -107,6 +109,8 @@ void test_voltage_ranges(void) {
 }
 
 void app_main(void) {
+    (void)ots_logging_init();
+
     ESP_LOGI(TAG, "╔═══════════════════════════════════════╗");
     ESP_LOGI(TAG, "║    OTS ADC Test                       ║");
     ESP_LOGI(TAG, "║    ADS1015 @ 0x48                     ║");

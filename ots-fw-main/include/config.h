@@ -49,6 +49,17 @@ static const uint8_t MCP23017_ADDRESSES[] = {0x20, 0x21};
 // RGB LED GPIO pin (onboard WS2812 on most ESP32-S3 devboards)
 #define RGB_LED_GPIO 48
 
+// Serial logging filter
+//
+// Controls which logs appear on the serial port.
+// Values match ESP-IDF's esp_log_level_t:
+//   0=NONE, 1=ERROR, 2=WARN, 3=INFO, 4=DEBUG, 5=VERBOSE
+//
+// Override per build via PlatformIO build flags: -DOTS_LOG_LEVEL=2
+#ifndef OTS_LOG_LEVEL
+#define OTS_LOG_LEVEL 3
+#endif
+
 // Task priorities
 #define TASK_PRIORITY_BUTTON_MONITOR 5
 #define TASK_PRIORITY_LED_BLINK 4
@@ -64,7 +75,7 @@ static const uint8_t MCP23017_ADDRESSES[] = {0x20, 0x21};
 
 // Naming Conventions
 // All logging TAGs should use prefix: OTS_<COMPONENT>
-// Examples: OTS_MAIN, OTS_NETWORK, OTS_WS_CLIENT, OTS_NUKE, OTS_ALERT
+// Examples: OTS_MAIN, OTS_NETWORK, OTS_WS_SERVER, OTS_NUKE, OTS_ALERT
 #define OTS_TAG_PREFIX "OTS_"
 
 #endif // CONFIG_H

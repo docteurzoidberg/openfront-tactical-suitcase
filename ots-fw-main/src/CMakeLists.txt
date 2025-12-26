@@ -108,6 +108,7 @@ if(TEST_BUILD)
             "game_state.c"
             "network_manager.c"
             "rgb_status.c"
+            "ots_logging.c"
             "wifi_credentials.c"
             "tests/test_websocket.c"
         )
@@ -123,6 +124,7 @@ if(TEST_BUILD)
         )
     elseif(TEST_NAME STREQUAL "test-i2c")
         set(COMPONENT_SRCS
+            "ots_logging.c"
             "tests/test_i2c_scan.c"
         )
         set(COMPONENT_REQUIRES
@@ -130,6 +132,7 @@ if(TEST_BUILD)
         )
     elseif(TEST_NAME STREQUAL "test-outputs")
         set(COMPONENT_SRCS
+            "ots_logging.c"
             "tests/test_output_board.c"
         )
         set(COMPONENT_REQUIRES
@@ -137,6 +140,7 @@ if(TEST_BUILD)
         )
     elseif(TEST_NAME STREQUAL "test-inputs")
         set(COMPONENT_SRCS
+            "ots_logging.c"
             "tests/test_input_board.c"
         )
         set(COMPONENT_REQUIRES
@@ -144,6 +148,7 @@ if(TEST_BUILD)
         )
     elseif(TEST_NAME STREQUAL "test-adc")
         set(COMPONENT_SRCS
+            "ots_logging.c"
             "i2c_bus.c"
             "adc_driver.c"
             "tests/test_adc.c"
@@ -153,6 +158,7 @@ if(TEST_BUILD)
         )
     elseif(TEST_NAME STREQUAL "test-lcd")
         set(COMPONENT_SRCS
+            "ots_logging.c"
             "i2c_bus.c"
             "lcd_driver.c"
             "tests/test_lcd.c"
@@ -192,6 +198,7 @@ else()
         "lcd_driver.c"
         "adc_driver.c"
         "rgb_status.c"
+        "ots_logging.c"
         "wifi_credentials.c"
     )
     set(COMPONENT_REQUIRES

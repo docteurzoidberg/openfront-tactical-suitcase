@@ -1,0 +1,13 @@
+# Python
+**/__pycache__/
+**/*.py[cod]
+
+# PlatformIO / SCons
+**/.pio/
+**/.sconsign*.dblite
+
+# Common build outputs
+**/build/
+
+# OS / editor
+.DS_Store

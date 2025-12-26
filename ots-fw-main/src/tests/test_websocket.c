@@ -41,6 +41,8 @@
 #include "wifi_credentials.h"
 #include "event_dispatcher.h"
 
+#include "ots_logging.h"
+
 static const char *TAG = "TEST_WS";
 
 // Test state
@@ -71,20 +73,16 @@ static bool test_event_handler(const internal_event_t *event) {
 
     if (event->type == GAME_EVENT_GAME_START) {
         rgb_status_set(RGB_STATUS_GAME_STARTED);
-        ESP_LOGI(TAG, "RGB LED: Green (game started)");
         return true;
     }
 
     if (event->type == GAME_EVENT_GAME_END) {
         if (ws_server_has_userscript()) {
             rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
-            ESP_LOGI(TAG, "RGB LED: Purple (userscript connected)");
         } else if (test_state.wifi_connected) {
             rgb_status_set(RGB_STATUS_WIFI_ONLY);
-            ESP_LOGI(TAG, "RGB LED: Yellow (WiFi connected, no clients)");
         } else {
             rgb_status_set(RGB_STATUS_DISCONNECTED);
-            ESP_LOGI(TAG, "RGB LED: OFF (no connection)");
         }
         return true;
     }
@@ -102,7 +100,6 @@ void network_event_handler(network_event_type_t event, const char *ip) {
             test_state.wifi_connected = true;
             test_state.wifi_connect_time = esp_log_timestamp();
             rgb_status_set(RGB_STATUS_WIFI_ONLY);
-            ESP_LOGI(TAG, "RGB LED: Yellow (WiFi connected, no clients)");
             break;
             
         case NETWORK_EVENT_GOT_IP:
@@ -122,7 +119,6 @@ void network_event_handler(network_event_type_t event, const char *ip) {
             test_state.wifi_connected = false;
             test_state.ws_connected = false;
             rgb_status_set(RGB_STATUS_DISCONNECTED);
-            ESP_LOGW(TAG, "RGB LED: OFF (no connection)");
             break;
     }
 }
@@ -137,10 +133,8 @@ void ws_connection_handler(bool connected) {
         test_state.ws_connect_time = esp_log_timestamp();
         if (ws_server_has_userscript()) {
             rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
-            ESP_LOGI(TAG, "RGB LED: Purple (userscript connected)");
         } else {
             rgb_status_set(RGB_STATUS_WIFI_ONLY);
-            ESP_LOGI(TAG, "RGB LED: Yellow (WiFi connected, no userscript)");
         }
         ESP_LOGI(TAG, "Server URL: %s<device-ip>:%d/ws", WS_PROTOCOL, WS_SERVER_PORT);
     } else {
@@ -151,10 +145,8 @@ void ws_connection_handler(bool connected) {
         test_state.ws_connected = false;
         if (test_state.wifi_connected) {
             rgb_status_set(RGB_STATUS_WIFI_ONLY);
-            ESP_LOGW(TAG, "RGB LED: Yellow (WiFi connected, no clients)");
         } else {
             rgb_status_set(RGB_STATUS_DISCONNECTED);
-            ESP_LOGW(TAG, "RGB LED: OFF (no connection)");
         }
     }
 }
@@ -236,58 +228,40 @@ void display_statistics(void) {
     ESP_LOGI(TAG, "  Sent: %lu", test_state.messages_sent);
     ESP_LOGI(TAG, "  Received: %lu", test_state.messages_received);
     
-    ESP_LOGI(TAG, "");
-    ESP_LOGI(TAG, "RGB LED Status:");
-    rgb_status_t current = rgb_status_get();
-    const char *status_str[] = {
-        "OFF (disconnected)",
-        "Blue (WiFi connecting)",
-        "Yellow (WiFi, no clients)",
-        "Purple (userscript connected)",
-        "Green (game started)",
-        "Red (error)"
-    };
-    ESP_LOGI(TAG, "  Current: %s", status_str[current]);
+    // Intentionally do not log RGB LED status transitions/states.
 }
 
 void test_led_cycle(void) {
-    ESP_LOGI(TAG, "");
-    ESP_LOGI(TAG, "=== RGB LED Manual Test ===");
-    ESP_LOGI(TAG, "Testing all LED states manually...");
+    // Cycle through all LED states without logging status names.
     
     // Save current state
     rgb_status_t saved_state = rgb_status_get();
     
-    ESP_LOGI(TAG, "  OFF (black) - 2 seconds");
     rgb_status_set(RGB_STATUS_DISCONNECTED);
     vTaskDelay(pdMS_TO_TICKS(2000));
     
-    ESP_LOGI(TAG, "  Blue - 2 seconds");
     rgb_status_set(RGB_STATUS_WIFI_CONNECTING);
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    ESP_LOGI(TAG, "  Yellow - 2 seconds");
     rgb_status_set(RGB_STATUS_WIFI_ONLY);
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    ESP_LOGI(TAG, "  Purple - 2 seconds");
     rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    ESP_LOGI(TAG, "  Green - 2 seconds");
     rgb_status_set(RGB_STATUS_GAME_STARTED);
     vTaskDelay(pdMS_TO_TICKS(2000));
     
-    ESP_LOGI(TAG, "  Red - 2 seconds");
     rgb_status_set(RGB_STATUS_ERROR);
     vTaskDelay(pdMS_TO_TICKS(2000));
     
     // Restore state
-    ESP_LOGI(TAG, "Restoring previous state");
     rgb_status_set(saved_state);
 }
 
 void app_main(void) {
+    (void)ots_logging_init();
+
     ESP_LOGI(TAG, "╔═══════════════════════════════════════╗");
     ESP_LOGI(TAG, "║    OTS WebSocket + LED Test           ║");
     ESP_LOGI(TAG, "║    Network Stack Verification         ║");
@@ -391,14 +365,9 @@ void app_main(void) {
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "Network services started");
     ESP_LOGI(TAG, "Waiting for WiFi connection...");
-    ESP_LOGI(TAG, "RGB LED: Blue (WiFi connecting)");
+    // Intentionally do not log RGB LED status.
     ESP_LOGI(TAG, "");
-    ESP_LOGI(TAG, "Watch the RGB LED:");
-    ESP_LOGI(TAG, "  1. Blue → Connecting to WiFi");
-    ESP_LOGI(TAG, "  2. Yellow → WiFi OK, no clients");
-    ESP_LOGI(TAG, "  3. Purple → Userscript connected");
-    ESP_LOGI(TAG, "  4. Green → Game started");
-    ESP_LOGI(TAG, "");
+    // Intentionally do not log RGB LED status.
     
     // Main test loop
     int cycle = 1;

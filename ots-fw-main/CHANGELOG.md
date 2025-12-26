@@ -118,7 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Improved event routing**
   - network_manager now posts `INTERNAL_EVENT_NETWORK_CONNECTED/DISCONNECTED` to event dispatcher
-  - ws_client now posts `INTERNAL_EVENT_WS_CONNECTED/DISCONNECTED/ERROR` to event dispatcher
+  - ws_server now posts `INTERNAL_EVENT_WS_CONNECTED/DISCONNECTED/ERROR` to event dispatcher
   - main_power_module receives these events and controls link LED accordingly
   - Alert module properly triggers warning LED on any alert event
 

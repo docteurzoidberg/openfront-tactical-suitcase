@@ -33,29 +33,8 @@
 
 ---
 
-### 4. WebSocket Event Handler Inefficiency
-**Current Problem**: String concatenation byte-by-byte in WS_EVT_DATA handler.
-
-**Impact**: Memory fragmentation, slower processing for large messages.
-
-**Recommended Fix in `ws_client.cpp`**:
-```cpp
-case WS_EVT_DATA: {
-  AwsFrameInfo *info = (AwsFrameInfo*)arg;
-  
-  if (info->final && info->index == 0 && info->len == len) {
-    // Single frame message
-    String msg;
-    msg.reserve(len);
-    for (size_t i = 0; i < len; i++) {
-      msg += static_cast<char>(data[i]);
-    }
-    handleMessage(msg);
-  }
-  // Handle multi-frame messages if needed
-  break;
-}
-```
+### 4. WebSocket Event Handler Inefficiency (legacy client)
+**Status**: Obsolete. The firmware now hosts a WebSocket server (`ws_server.c` + `ws_protocol.c`); the old client-side handler no longer exists.
 
 ---
 

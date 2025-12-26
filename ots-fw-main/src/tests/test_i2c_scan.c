@@ -17,6 +17,8 @@
 #include "driver/i2c.h"
 #include "esp_log.h"
 
+#include "ots_logging.h"
+
 #define I2C_MASTER_SCL_IO    9
 #define I2C_MASTER_SDA_IO    8
 #define I2C_MASTER_FREQ_HZ   100000
@@ -75,6 +77,8 @@ void i2c_scan(void) {
 }
 
 void app_main(void) {
+    (void)ots_logging_init();
+
     ESP_LOGI(TAG, "╔═══════════════════════════════════════╗");
     ESP_LOGI(TAG, "║    OTS I2C Bus Scan Test              ║");
     ESP_LOGI(TAG, "╚═══════════════════════════════════════╝");

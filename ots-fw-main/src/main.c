@@ -30,8 +30,20 @@
 #include "troops_module.h"
 #include "rgb_status.h"
 #include "wifi_credentials.h"
+#include "ots_logging.h"
 
 static const char *TAG = "OTS_MAIN";
+
+// Module update task
+static TaskHandle_t s_module_task = NULL;
+static void module_update_task(void *pvParameters) {
+    (void)pvParameters;
+    // Keep this lightweight; modules are expected to be non-blocking.
+    while (true) {
+        (void)module_manager_update_all();
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+}
 
 // Event handlers
 static bool handle_event(const internal_event_t *event);
@@ -43,9 +55,24 @@ static void handle_io_expander_recovery(uint8_t board, bool was_down);
 
 // Network event handler
 static void handle_network_event(network_event_type_t event_type, const char *ip_address) {
-    if (event_type == NETWORK_EVENT_GOT_IP) {
+    if (event_type == NETWORK_EVENT_CONNECTED) {
+        // If a userscript is already connected (e.g. DHCP renew / reconnect edge cases),
+        // keep the higher-priority purple state instead of overwriting it with yellow.
+        if (ws_server_has_userscript()) {
+            rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
+        } else {
+            // Match test-websocket semantics: as soon as WiFi associates, show YELLOW.
+            rgb_status_set(RGB_STATUS_WIFI_ONLY);
+        }
+    } else if (event_type == NETWORK_EVENT_GOT_IP) {
         ESP_LOGI(TAG, "Network connected with IP: %s", ip_address);
-        rgb_status_set(RGB_STATUS_WIFI_ONLY);
+        // Test-websocket stays YELLOW once WiFi is up, but do not override
+        // an already-established userscript session.
+        if (ws_server_has_userscript()) {
+            rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
+        } else {
+            rgb_status_set(RGB_STATUS_WIFI_ONLY);
+        }
         
         // Start OTA server
         if (ota_manager_start() != ESP_OK) {
@@ -63,20 +90,14 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
 // WebSocket connection handler
 static void handle_ws_connection(bool connected) {
     if (connected) {
-        ESP_LOGI(TAG, "WebSocket client connected");
-        // Only turn purple once we've identified a userscript client.
+        ESP_LOGI(TAG, "WebSocket client connected (has_userscript=%s)", ws_server_has_userscript() ? "yes" : "no");
+        // Match test-websocket semantics: WS activity is reflected immediately,
+        // even if the game had started (i.e. do not keep green).
         if (ws_server_has_userscript()) {
-            // If the game is already running, keep green.
-            if (!game_state_is_in_game()) {
-                rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
-            }
+            rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
         } else {
             // Some client connected (e.g. browser), but not userscript yet.
-            if (network_manager_is_connected()) {
-                rgb_status_set(RGB_STATUS_WIFI_ONLY);
-            } else {
-                rgb_status_set(RGB_STATUS_WIFI_CONNECTING);
-            }
+            rgb_status_set(RGB_STATUS_WIFI_ONLY);
         }
     } else {
         ESP_LOGI(TAG, "WebSocket disconnected");
@@ -103,10 +124,8 @@ static void handle_io_expander_recovery(uint8_t board, bool was_down) {
         rgb_status_set(RGB_STATUS_ERROR);
         vTaskDelay(pdMS_TO_TICKS(2000)); // Show error for 2 seconds
         
-        // Restore previous status based on connection/game state
-        if (game_state_is_in_game()) {
-            rgb_status_set(RGB_STATUS_GAME_STARTED);
-        } else if (ws_server_has_userscript()) {
+        // Restore previous status based on the same semantics as test-websocket.
+        if (ws_server_has_userscript()) {
             rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
         } else if (network_manager_is_connected()) {
             rgb_status_set(RGB_STATUS_WIFI_ONLY);
@@ -114,9 +133,6 @@ static void handle_io_expander_recovery(uint8_t board, bool was_down) {
             rgb_status_set(RGB_STATUS_DISCONNECTED);
         }
     }
-    
-    // Post internal event for modules to react
-    event_dispatcher_post_simple(INTERNAL_EVENT_WS_CONNECTED, EVENT_SOURCE_SYSTEM);
     
     // Reinitialize module I/O configuration
     if (module_io_reinit() == ESP_OK) {
@@ -154,6 +170,9 @@ static bool handle_event(const internal_event_t *event) {
 }
 
 void app_main(void) {
+    // Configure serial log filtering as early as possible.
+    (void)ots_logging_init();
+
     ESP_LOGI(TAG, "===========================================" );
     ESP_LOGI(TAG, "%s v%s", OTS_PROJECT_NAME, OTS_FIRMWARE_VERSION);
     ESP_LOGI(TAG, "Firmware: %s", OTS_FIRMWARE_NAME);
@@ -214,28 +233,53 @@ void app_main(void) {
     
     // Register event handler (handles game state events)
     event_dispatcher_register(GAME_EVENT_INVALID, handle_event);
-    
-    if (io_expanders_ready) {
-        // Initialize module manager
-        if (module_manager_init() != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to initialize module manager - continuing without hardware modules");
-            io_expanders_ready = false;
-        }
+
+    // Initialize module manager (modules may not require MCP23017 boards).
+    if (module_manager_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize module manager");
+        return;
     }
 
+    // Route all events to modules as well.
+    event_dispatcher_register(GAME_EVENT_INVALID, module_manager_route_event);
+
+    // Register modules.
+    // Always register SystemStatus so the LCD can show boot/connection screens
+    // even when the MCP23017 I/O boards are absent.
+    ESP_LOGI(TAG, "Registering hardware modules...");
+    module_manager_register((hardware_module_t *)system_status_module_get());
+    
     if (io_expanders_ready) {
-        // Register hardware modules
-        ESP_LOGI(TAG, "Registering hardware modules...");
         module_manager_register(&nuke_module);
         module_manager_register(&alert_module);
         module_manager_register(&main_power_module);
-        module_manager_register(system_status_module_get());  // Handles boot/lobby screens
-        module_manager_register(troops_module_get());         // Handles in-game troop display
+        module_manager_register((hardware_module_t *)troops_module_get()); // In-game troop display
 
         // Initialize all hardware modules (includes splash screen)
         if (module_manager_init_all() != ESP_OK) {
             ESP_LOGE(TAG, "Failed to initialize hardware modules - continuing without hardware modules");
             io_expanders_ready = false;
+        }
+    } else {
+        // Still initialize SystemStatus (LCD screens) even without MCP23017 boards.
+        if (module_manager_init_all() != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize SystemStatus module");
+        }
+    }
+
+    // Start periodic module updates (LCD screen refresh, timers, etc.).
+    if (!s_module_task) {
+        BaseType_t ok = xTaskCreate(
+            module_update_task,
+            "mod_upd",
+            4096,
+            NULL,
+            4,
+            &s_module_task
+        );
+        if (ok != pdPASS) {
+            ESP_LOGE(TAG, "Failed to start module update task");
+            s_module_task = NULL;
         }
     }
     

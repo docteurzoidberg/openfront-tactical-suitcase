@@ -15,6 +15,8 @@
 #include "game_state.h"
 #include "protocol.h"
 #include <esp_log.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <string.h>
 
 static const char *TAG = "SysStatus";
@@ -77,13 +79,25 @@ static void display_game_end(bool victory) {
 
 static esp_err_t system_status_init(void) {
     ESP_LOGI(TAG, "Initializing system status module...");
+
+    // Ensure the LCD is initialized before we attempt to draw anything.
+    esp_err_t ret = lcd_init(LCD_I2C_ADDR);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize LCD at 0x%02X: %s", LCD_I2C_ADDR, esp_err_to_name(ret));
+        return ret;
+    }
     
     // Show splash screen on boot
     display_splash();
+
+    // After a short splash, move to the normal "waiting for connection" screen.
+    // This prevents the LCD from sitting on "Booting..." forever if there are
+    // no events yet.
+    vTaskDelay(pdMS_TO_TICKS(1200));
     
     module_state.initialized = true;
     module_state.display_active = true;  // We start with control
-    module_state.display_dirty = false;
+    module_state.display_dirty = true;
     
     ESP_LOGI(TAG, "System status module initialized");
     return ESP_OK;
@@ -230,6 +244,7 @@ static esp_err_t system_status_shutdown(void) {
 
 static const hardware_module_t system_status_module = {
     .name = "SystemStatus",
+    .enabled = true,
     .init = system_status_init,
     .update = system_status_update,
     .handle_event = system_status_handle_event,

@@ -10,8 +10,8 @@
 ## Naming Conventions
 
 ### 1. File Names
-- **Source files**: `snake_case.c` (e.g., `nuke_module.c`, `ws_client.c`)
-- **Header files**: `snake_case.h` (e.g., `nuke_module.h`, `ws_client.h`)
+- **Source files**: `snake_case.c` (e.g., `nuke_module.c`, `ws_server.c`)
+- **Header files**: `snake_case.h` (e.g., `nuke_module.h`, `ws_server.h`)
 - **Module pattern**: `<module_name>_module.{c,h}` for hardware modules
 - **Driver pattern**: `<device>_driver.{c,h}` for I2C device drivers
 
@@ -24,7 +24,7 @@ All logging tags use the `OTS_` prefix for easy filtering in serial output.
 ```c
 static const char *TAG = "OTS_MAIN";         // Main application
 static const char *TAG = "OTS_NETWORK";      // Network manager
-static const char *TAG = "OTS_WS_CLIENT";    // WebSocket client
+static const char *TAG = "OTS_WS_SERVER";    // WebSocket server
 static const char *TAG = "OTS_NUKE";         // Nuke module
 static const char *TAG = "OTS_ALERT";        // Alert module
 static const char *TAG = "OTS_TROOPS";       // Troops module
@@ -34,7 +34,7 @@ static const char *TAG = "OTS_ADC";          // ADC driver
 ```
 
 **Complete TAG List**:
-- Core: `OTS_MAIN`, `OTS_NETWORK`, `OTS_WS_CLIENT`, `OTS_WS_PROTO`, `OTS_OTA`
+- Core: `OTS_MAIN`, `OTS_NETWORK`, `OTS_WS_SERVER`, `OTS_WS_PROTO`, `OTS_OTA`
 - System: `OTS_GAME_STATE`, `OTS_EVENTS`, `OTS_MOD_MGR`, `OTS_IO_EXP`, `OTS_MODULE_IO`
 - Control: `OTS_LED_CTRL`, `OTS_BUTTONS`, `OTS_IO_TASK`, `OTS_NUKE_TRK`
 - Modules: `OTS_NUKE`, `OTS_ALERT`, `OTS_POWER`, `OTS_TROOPS`

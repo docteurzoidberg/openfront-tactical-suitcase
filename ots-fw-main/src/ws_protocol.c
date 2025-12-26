@@ -63,9 +63,20 @@ esp_err_t ws_protocol_parse(const char *json_str, size_t len, ws_message_t *msg)
             }
             
             cJSON *data = cJSON_GetObjectItem(payload, "data");
-            if (data && cJSON_IsString(data)) {
-                strncpy(msg->payload.event.data, data->valuestring,
-                       sizeof(msg->payload.event.data) - 1);
+            if (data) {
+                if (cJSON_IsString(data) && data->valuestring) {
+                    strncpy(msg->payload.event.data, data->valuestring,
+                           sizeof(msg->payload.event.data) - 1);
+                } else {
+                    // Userscript/ots-server commonly send `data` as an object.
+                    // Internally, firmware modules expect `event.data` as a JSON string.
+                    char *data_str = cJSON_PrintUnformatted(data);
+                    if (data_str) {
+                        strncpy(msg->payload.event.data, data_str,
+                               sizeof(msg->payload.event.data) - 1);
+                        free(data_str);
+                    }
+                }
             }
         }
     }

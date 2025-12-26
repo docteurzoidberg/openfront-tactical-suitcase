@@ -13,6 +13,16 @@
 #define LCD_I2C_ADDR 0x27
 
 /**
+ * @brief Turn LCD backlight on (if the backpack supports it)
+ */
+void lcd_backlight_on(void);
+
+/**
+ * @brief Turn LCD backlight off (if the backpack supports it)
+ */
+void lcd_backlight_off(void);
+
+/**
  * @brief Initialize LCD display
  * 
  * @param i2c_addr I2C address of LCD backpack (default: 0x27)

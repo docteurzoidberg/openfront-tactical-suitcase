@@ -183,18 +183,6 @@ void rgb_status_set(rgb_status_t status) {
         return;  // No change needed
     }
     
-    const char *status_names[] = {
-        "DISCONNECTED",
-        "WIFI_CONNECTING",
-        "WIFI_ONLY",
-        "USERSCRIPT_CONNECTED",
-        "GAME_STARTED",
-        "ERROR",
-    };
-    ESP_LOGI(TAG, "Status: %s -> %s", 
-             status_names[current_state], 
-             status_names[status]);
-    
     current_state = status;
     set_color(STATE_COLORS[status]);
 }

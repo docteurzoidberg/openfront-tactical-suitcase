@@ -41,6 +41,7 @@ static void send_percent_command(uint8_t percent);
 // Module interface
 static const hardware_module_t troops_module = {
     .name = "Troops",
+    .enabled = true,
     .init = troops_init,
     .update = troops_update,
     .handle_event = troops_handle_event,
@@ -144,22 +145,9 @@ static void send_percent_command(uint8_t percent) {
 static esp_err_t troops_init(void) {
     ESP_LOGI(TAG, "Initializing troops module...");
     
-    // Initialize ADC
-    esp_err_t ret = ads1015_init(TROOPS_ADS1015_ADDR);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize ADS1015");
-        return ret;
-    }
-    
-    // Initialize LCD
-    ret = lcd_init(TROOPS_LCD_ADDR);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize LCD");
-        return ret;
-    }
-    
-    // Module initialization complete
-    lcd_clear();
+    // Note: LCD is owned/initialized by SystemStatus at boot and this module
+    // only writes during GAME_PHASE_IN_GAME.
+    // ADC is initialized and scanned by adc_handler/io_task.
     
     module_state.initialized = true;
     module_state.display_dirty = true;

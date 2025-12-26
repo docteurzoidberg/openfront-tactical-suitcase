@@ -130,7 +130,7 @@ ots-fw-main/
     
     # Network & Communication
     network_manager.c      # WiFi lifecycle and mDNS
-    ws_client.c            # WebSocket transport layer
+    ws_server.c            # WebSocket server (dashboard/userscript connect to firmware)
     ws_protocol.c          # WebSocket protocol parsing/building
     ota_manager.c          # OTA HTTP server
     
