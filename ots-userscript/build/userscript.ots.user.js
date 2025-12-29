@@ -5,6 +5,8 @@
 // @description  Send game state and events to OTS controller
 // @author       [PUSH] DUCKDUCK
 // @author       DeloVan
+// @author       [PUSH] Nono
+// @author       [PUSH] Rime
 // @match        https://openfront.io/*
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -1712,14 +1714,17 @@
                 if (myTeam !== null) {
                   if (winnerId === myTeam) {
                     this.ws.sendEvent("GAME_END", "Your team won!", { victory: true, phase: "game-won", method: "team-victory", myTeam, winnerId });
+                    this.ws.sendEvent("SOUND_PLAY", "Victory sound", { soundId: "game_victory", priority: "high" });
                     console.log("[GameBridge] \u2713 Your team won!");
                   } else {
                     this.ws.sendEvent("GAME_END", `Team ${winnerId} won`, { victory: false, phase: "game-lost", method: "team-defeat", myTeam, winnerId });
+                    this.ws.sendEvent("SOUND_PLAY", "Defeat sound", { soundId: "game_defeat", priority: "high" });
                     console.log(`[GameBridge] \u2717 Team ${winnerId} won (you are team ${myTeam})`);
                   }
                 } else {
                   console.warn("[GameBridge] myPlayer.team() returned null, assuming defeat");
                   this.ws.sendEvent("GAME_END", `Team ${winnerId} won`, { victory: false, phase: "game-lost", method: "team-defeat-fallback", myTeam: null, winnerId });
+                  this.ws.sendEvent("SOUND_PLAY", "Defeat sound", { soundId: "game_defeat", priority: "high" });
                   console.log(`[GameBridge] \u2717 Team ${winnerId} won (unable to determine your team)`);
                 }
               } else if (winnerType === "player") {
@@ -1728,9 +1733,11 @@
                 console.log(`[GameBridge] My clientID: ${myClientID}, My smallID: ${mySmallID}, Winner ID: ${winnerId}`);
                 if (myClientID !== null && winnerId === myClientID) {
                   this.ws.sendEvent("GAME_END", "You won!", { victory: true, phase: "game-won", method: "solo-victory", myClientID, winnerId });
+                  this.ws.sendEvent("SOUND_PLAY", "Victory sound", { soundId: "game_victory", priority: "high" });
                   console.log("[GameBridge] \u2713 You won!");
                 } else {
                   this.ws.sendEvent("GAME_END", "Another player won", { victory: false, phase: "game-lost", method: "solo-defeat", myClientID, winnerId });
+                  this.ws.sendEvent("SOUND_PLAY", "Defeat sound", { soundId: "game_defeat", priority: "high" });
                   console.log("[GameBridge] \u2717 Another player won");
                 }
               } else {
@@ -1752,6 +1759,7 @@
         const inSpawnPhase = game && game.inSpawnPhase ? game.inSpawnPhase() : false;
         if (!isAlive && !inSpawnPhase && hasSpawned) {
           this.ws.sendEvent("GAME_END", "You died", { victory: false, phase: "game-lost", reason: "death" });
+          this.ws.sendEvent("SOUND_PLAY", "Player death sound", { soundId: "game_player_death", priority: "high" });
           console.log("[GameBridge] \u2717 You died!");
           this.hasProcessedWin = true;
           this.inGame = false;
@@ -1762,9 +1770,11 @@
         if (winResult === null) return;
         if (winResult === true) {
           this.ws.sendEvent("GAME_END", "Victory!", { victory: true, phase: "game-won", method: "gameOver-fallback" });
+          this.ws.sendEvent("SOUND_PLAY", "Victory sound", { soundId: "game_victory", priority: "high" });
           console.log("[GameBridge] \u2713 Game ended - VICTORY! (fallback method)");
         } else {
           this.ws.sendEvent("GAME_END", "Defeat", { victory: false, phase: "game-lost", method: "gameOver-fallback" });
+          this.ws.sendEvent("SOUND_PLAY", "Defeat sound", { soundId: "game_defeat", priority: "high" });
           console.log("[GameBridge] \u2717 Game ended - DEFEAT (fallback method)");
         }
         this.hasProcessedWin = true;
@@ -1813,6 +1823,11 @@
           this.inGame = true;
           this.inSpawning = false;
           this.ws.sendEvent("GAME_START", "Game started - countdown ended");
+          this.ws.sendEvent("SOUND_PLAY", "Play game start sound", {
+            soundId: "game_start",
+            priority: "high",
+            interrupt: true
+          });
           console.log("[GameBridge] Game started - spawn countdown ended");
           this.clearTrackers();
           this.troopMonitor.start();
@@ -2018,11 +2033,19 @@
       }
     );
     game = new GameBridge(ws, hud);
-    hud.ensure();
-    ws.connect();
-    game.init();
-    window.otsShowHud = () => hud.ensure();
-    window.otsWsClient = ws;
-    window.otsGameBridge = game;
+    function initialize() {
+      console.log("[OTS Userscript] Initializing...");
+      hud.ensure();
+      ws.connect();
+      game.init();
+      window.otsShowHud = () => hud.ensure();
+      window.otsWsClient = ws;
+      window.otsGameBridge = game;
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initialize);
+    } else {
+      initialize();
+    }
   })();
 })();

@@ -14,6 +14,7 @@ export type GameEventType =
   | 'GAME_SPAWNING'
   | 'GAME_START'
   | 'GAME_END'
+  | 'SOUND_PLAY'
   | 'NUKE_LAUNCHED'
   | 'NUKE_EXPLODED'
   | 'NUKE_INTERCEPTED'
@@ -51,6 +52,16 @@ export type GameEvent = {
   timestamp: number
   message?: string
   data?: unknown
+}
+
+export type SoundPriority = 'low' | 'normal' | 'high'
+
+export type SoundPlayEventData = {
+  soundId: string
+  priority?: SoundPriority
+  interrupt?: boolean
+  requestId?: string
+  context?: Record<string, unknown>
 }
 
 export type NukeSentEventData = {

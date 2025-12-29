@@ -29,8 +29,19 @@
           />
         </div>
 
-        <!-- Column 2: Alert + Nuke -->
+        <!-- Column 2: Sound + Alert + Nuke -->
         <div class="space-y-6">
+          <!-- Hardware Module: Sound Module -->
+          <HardwareSoundModule
+            :connected="uiStatus === 'OPEN'"
+            :powered="powerOn"
+            :module-power-on="soundModulePowerOn"
+            :volume="soundVolume"
+            :last-sound="lastSound"
+            @toggle-module-power="toggleSoundModulePower"
+            @set-volume="setSoundVolume"
+          />
+
           <!-- Hardware Module: Alert Module -->
           <HardwareAlertModule
             :connected="uiStatus === 'OPEN'"
@@ -60,5 +71,5 @@
 <script setup lang="ts">
 import { useGameSocket } from '../composables/useGameSocket'
 
-const { uiStatus, userscriptStatus, gameStatus, gamePhase, events, activeNukes, activeAlerts, powerOn, troops, attackRatio, sendNukeCommand, sendSetTroopsPercent, togglePower, userscriptHeartbeatId, clearEvents } = useGameSocket()
+const { uiStatus, userscriptStatus, gameStatus, gamePhase, events, activeNukes, activeAlerts, powerOn, troops, attackRatio, lastSound, soundModulePowerOn, soundVolume, sendNukeCommand, sendSetTroopsPercent, togglePower, toggleSoundModulePower, setSoundVolume, userscriptHeartbeatId, clearEvents } = useGameSocket()
 </script>

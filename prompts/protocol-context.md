@@ -89,6 +89,7 @@ GameEventType =
   | "INFO"
   | "GAME_START"
   | "GAME_END"          // Game ended (see data.victory for win/loss)
+  | "SOUND_PLAY"        // Request sound playback (userscript → server → firmware)
   | "NUKE_LAUNCHED"
   | "HYDRO_LAUNCHED"
   | "MIRV_LAUNCHED"
@@ -330,6 +331,12 @@ Unknown outcome:
   }
 }
 ```
+
+**Game outcome sounds:**
+After `GAME_END`, emit `SOUND_PLAY` events with appropriate `soundId` to trigger audio:
+- Player death: `SOUND_PLAY` with `soundId: "game_player_death"`
+- Victory: `SOUND_PLAY` with `soundId: "game_victory"`
+- Defeat: `SOUND_PLAY` with `soundId: "game_defeat"`
 
 ### Nuke Module Events
 
@@ -640,6 +647,62 @@ Naval invasion detected.
 - Multiple alerts can be active simultaneously
 - All alerts auto-expire after their timeout
 - Output-only module (no commands sent to game)
+
+### Sound Module Events
+
+#### `SOUND_PLAY`
+Emitted to request that the Sound Module play an audio asset.
+
+**Flow**: Game/userscript → Server → Firmware → CAN → Sound Module
+
+This is an **intent** event ("play this sound"), not a guarantee. The Sound Module may be powered off.
+
+```json
+{
+  "type": "event",
+  "payload": {
+    "type": "SOUND_PLAY",
+    "timestamp": 1234567890,
+    "message": "Play alert sound",
+    "data": {
+      "soundId": "alert.atom",
+      "priority": "high",
+      "interrupt": true,
+      "requestId": "evt-9f3c2d"
+    }
+  }
+}
+```
+
+**Data fields**:
+- `soundId` (string, required): Stable identifier for the requested sound. Examples:
+  - `"alert.atom"`, `"alert.hydro"`, `"alert.mirv"`
+  - `"nuke.launch.atom"`, `"nuke.launch.hydro"`, `"nuke.launch.mirv"`
+  - `"game.start"`, `"game.win"`, `"game.lose"`
+- `priority` ("low" | "normal" | "high", optional): Hint for playback policy.
+- `interrupt` (boolean, optional): Hint indicating whether this sound should interrupt current playback.
+- `requestId` (string, optional): Correlation ID for logs/acks (best-effort).
+- `context` (object, optional): Any extra context for debugging (ignored by firmware).
+
+**Userscript guidance**:
+- Emit `SOUND_PLAY` for events you want to be audible.
+- Prefer a **small, stable `soundId` set** (avoid embedding player names, etc.).
+- Keep `data` small; firmware will typically use only `soundId`, `priority`, `interrupt`.
+
+### Sound Catalog (Canonical Mapping Table)
+
+This table is the single source of truth for mapping `soundId` → `soundIndex` and expected filenames.
+
+Notes:
+- **Sound Module (SD card)** uses `/sounds/NNNN.mp3` preferred, `/sounds/NNNN.wav` fallback.
+- **Local dev assets (dashboard)** live in `ots-server/public/sounds/` and can include a descriptive suffix.
+
+| soundId | soundIndex | Sound Module SD path | Local dev file (recommended) |
+|---|---:|---|---|
+| `game_start` | 1 | `/sounds/0001.mp3` (or `.wav`) | `ots-server/public/sounds/0001-game_start.mp3` |
+| `game_player_death` | 2 | `/sounds/0002.mp3` (or `.wav`) | `ots-server/public/sounds/0002-game_player_death.mp3` |
+| `game_victory` | 3 | `/sounds/0003.mp3` (or `.wav`) | `ots-server/public/sounds/0003-game_victory.mp3` |
+| `game_defeat` | 4 | `/sounds/0004.mp3` (or `.wav`) | `ots-server/public/sounds/0004-game_defeat.mp3` |
 
 ### Nuke Outcome Events
 
@@ -1052,6 +1115,39 @@ ADC_ADDRESS = 0x48  // ADS1115 ADC
 ```
 
 **Hardware Connection**: Both devices on shared I2C bus (main 2×05 IDC header)
+
+### Sound Module (8U)
+
+**Purpose**: Play audio cues for important game events.
+
+**Hardware Components**:
+- ESP32-A1S (AI Thinker ESP32 Audio Kit v2.2) running `ots-fw-audiomodule`
+- SD card with sound assets
+- 3Ω speaker
+- Volume potentiometer (local)
+- On/off switch (hard power cut)
+
+**Protocol Behavior**:
+
+**Incoming (Event → CAN playback request)**:
+- Firmware receives `SOUND_PLAY` events.
+- Firmware maps `soundId` → `soundIndex` (numeric, local mapping table).
+- Firmware sends CAN `PLAY_SOUND` frame to the Sound Module.
+
+**CAN Bus (recommended defaults)**:
+- CAN 2.0 (classic), 500 kbps, standard 11-bit IDs, 8-byte payloads.
+
+**CAN IDs**:
+- `0x420` PLAY_SOUND (main → sound)
+- `0x421` STOP_SOUND (main → sound)
+- `0x422` SOUND_STATUS (sound → main)
+- `0x423` SOUND_ACK (sound → main, optional)
+
+**PLAY_SOUND payload** (`0x420`, little-endian):
+- `cmd=0x01`, `flags`, `soundIndex (u16)`, `volumeOverride (u8, 0xFF=ignore)`, `requestId (u16)`
+
+**SD naming** (recommended):
+- `/sounds/0020.mp3` preferred, `/sounds/0020.wav` fallback.
 
 ---
 

@@ -557,6 +557,7 @@ export class Hud {
       }
     })
   }
+
 }
 
 function setupResize(container: HTMLDivElement, handle: HTMLDivElement) {

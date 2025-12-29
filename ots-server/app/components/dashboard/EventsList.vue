@@ -179,6 +179,12 @@
               | Troops: <span class="text-slate-200">{{ ((event.data as any).troops || 0).toLocaleString() }}</span>
             </span>
           </template>
+          <template v-else-if="event.type === 'SOUND_PLAY'">
+            <span class="font-semibold text-cyan-300">🔊 SOUND PLAY</span>
+            <span class="text-slate-400">
+              — <span class="font-mono text-slate-200">{{ (event.data as any)?.soundId || 'unknown' }}</span>
+            </span>
+          </template>
           <template v-else>
             {{ event.message }}
           </template>
@@ -233,6 +239,7 @@ interface EventFilter {
 const eventFilters = ref<EventFilter[]>([
   { types: ['ALERT_NUKE', 'ALERT_HYDRO', 'ALERT_MIRV', 'ALERT_LAND', 'ALERT_NAVAL'], label: 'Incoming Threats', enabled: true, color: 'bg-red-500' },
   { types: ['NUKE_LAUNCHED', 'NUKE_EXPLODED', 'NUKE_INTERCEPTED'], label: 'Nukes Sent', enabled: true, color: 'bg-orange-500' },
+  { types: ['SOUND_PLAY'], label: 'Sounds', enabled: true, color: 'bg-cyan-500' },
   { types: ['CMD_SENT'], label: 'Commands', enabled: true, color: 'bg-blue-500' },
   { types: ['TROOP_UPDATE'], label: 'Troop Updates', enabled: true, color: 'bg-purple-500' },
   { types: ['GAME_START', 'GAME_END'], label: 'Game Events', enabled: true, color: 'bg-emerald-500' },
@@ -404,6 +411,8 @@ const eventBadgeClass = (type: GameEventType) => {
     case 'NUKE_EXPLODED':
     case 'NUKE_INTERCEPTED':
       return 'bg-yellow-500/20 text-yellow-300'
+    case 'SOUND_PLAY':
+      return 'bg-cyan-500/20 text-cyan-300'
     case 'GAME_START':
       return 'bg-emerald-500/15 text-emerald-300'
     case 'GAME_END':

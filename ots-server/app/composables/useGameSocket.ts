@@ -60,6 +60,77 @@ const gamePhase = ref<GamePhase | null>(null)
 let gameEndTimer: NodeJS.Timeout | null = null
 const GAME_END_DISPLAY_TIME_MS = 5000
 
+type SoundPlaybackStatus = 'idle' | 'requested' | 'playing' | 'blocked' | 'missing' | 'powered-off'
+
+export type SoundPlaybackState = {
+  soundId: string
+  requestedAt: number
+  status: SoundPlaybackStatus
+  fileUrl?: string
+  error?: string
+}
+
+const lastSound = ref<SoundPlaybackState | null>(null)
+
+// Sound module emulator controls (independent from global powerOn)
+const soundModulePowerOn = ref(true)
+const soundVolume = ref(80) // 0-100
+
+const localSoundCandidatesForId = (soundId: string): string[] => {
+  // Minimal catalog (keep in sync with prompts/protocol-context.md Sound Catalog)
+  if (soundId === 'game_start') {
+    return ['/sounds/0001-game_start.mp3', '/sounds/0001-game_start.wav']
+  }
+  if (soundId === 'game_player_death') {
+    return ['/sounds/0002-game_player_death.mp3', '/sounds/0002-game_player_death.wav']
+  }
+  if (soundId === 'game_victory') {
+    return ['/sounds/0003-game_victory.mp3', '/sounds/0003-game_victory.wav']
+  }
+  if (soundId === 'game_defeat') {
+    return ['/sounds/0004-game_defeat.mp3', '/sounds/0004-game_defeat.wav']
+  }
+
+  return []
+}
+
+let sharedAudio: HTMLAudioElement | null = null
+
+const tryPlayLocalSound = async (soundId: string): Promise<{ status: SoundPlaybackStatus; fileUrl?: string; error?: string }> => {
+  if (typeof window === 'undefined') return { status: 'missing', error: 'Not in browser context' }
+
+  const candidates = localSoundCandidatesForId(soundId)
+  if (!candidates.length) return { status: 'missing', error: `No local mapping for soundId: ${soundId}` }
+
+  if (!sharedAudio) {
+    sharedAudio = new Audio()
+  }
+
+  sharedAudio.volume = Math.max(0, Math.min(1, soundVolume.value / 100))
+
+  // Try candidates sequentially. If autoplay is blocked, stop immediately.
+  for (const url of candidates) {
+    sharedAudio.src = url
+    try {
+      await sharedAudio.play()
+      return { status: 'playing', fileUrl: url }
+    } catch (e: any) {
+      const name = typeof e?.name === 'string' ? e.name : ''
+      const message = typeof e?.message === 'string' ? e.message : String(e)
+
+      // Autoplay restriction: don't continue trying other files.
+      if (name === 'NotAllowedError') {
+        return { status: 'blocked', fileUrl: url, error: message }
+      }
+
+      // Try next candidate (e.g., mp3 unsupported -> fall back to wav)
+      continue
+    }
+  }
+
+  return { status: 'missing', error: 'No playable local file found' }
+}
+
 export function useGameSocket() {
   const { status, data, send, open, close } = useWebSocket(WS_URL, {
     autoReconnect: {
@@ -200,6 +271,43 @@ export function useGameSocket() {
         } else if (msg.payload.type === 'ALERT_NAVAL') {
           startAlert('naval')
         }
+
+        // Handle sound play events (best-effort local playback in emulator)
+        if (msg.payload.type === 'SOUND_PLAY') {
+          const data = (msg.payload.data ?? {}) as any
+          const soundId = typeof data?.soundId === 'string' ? data.soundId : ''
+
+          if (soundId) {
+            if (!powerOn.value || !soundModulePowerOn.value) {
+              lastSound.value = {
+                soundId,
+                requestedAt: Date.now(),
+                status: 'powered-off'
+              }
+            } else {
+              lastSound.value = {
+                soundId,
+                requestedAt: Date.now(),
+                status: 'requested'
+              }
+
+              void (async () => {
+                const res = await tryPlayLocalSound(soundId)
+
+                // Only update if this is still the latest request
+                if (lastSound.value?.soundId === soundId) {
+                  lastSound.value = {
+                    soundId,
+                    requestedAt: lastSound.value?.requestedAt ?? Date.now(),
+                    status: res.status,
+                    fileUrl: res.fileUrl,
+                    error: res.error
+                  }
+                }
+              })()
+            }
+          }
+        }
       }
     } catch {
       // ignore malformed messages
@@ -303,10 +411,31 @@ export function useGameSocket() {
     send(JSON.stringify(msg))
   }
 
+  const toggleSoundModulePower = () => {
+    const next = !soundModulePowerOn.value
+    soundModulePowerOn.value = next
+
+    if (!next && sharedAudio) {
+      try {
+        sharedAudio.pause()
+        sharedAudio.currentTime = 0
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  const setSoundVolume = (volume: number) => {
+    soundVolume.value = Math.max(0, Math.min(100, Math.round(volume)))
+    if (sharedAudio) {
+      sharedAudio.volume = Math.max(0, Math.min(1, soundVolume.value / 100))
+    }
+  }
+
   const sendNukeCommand = (nukeType: NukeType) => {
     // Log the command being sent
     events.value = [{
-      type: 'CMD_SENT',
+      type: 'INFO',
       timestamp: Date.now(),
       message: `Nuke command sent: ${nukeType.toUpperCase()}`,
       data: { action: 'send-nuke', nukeType }
@@ -356,10 +485,15 @@ export function useGameSocket() {
     powerOn,
     troops,
     attackRatio,
+    lastSound,
+    soundModulePowerOn,
+    soundVolume,
     send: sendMessage,
     sendNukeCommand,
     sendSetTroopsPercent,
     togglePower,
+    toggleSoundModulePower,
+    setSoundVolume,
     clearEvents,
     open,
     close

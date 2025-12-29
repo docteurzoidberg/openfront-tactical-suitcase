@@ -26,10 +26,14 @@ OpenFront Tactical Suitcase (OTS) is a multi-component system bridging OpenFront
 
 The system uses WebSocket events with this flow:
 ```
-OpenFront.io Game → Userscript (100ms poll) → ots-server → Dashboard UI
-                                            ↓
-                                         Firmware (future)
+OpenFront.io Game → Userscript (100ms poll) → Firmware WS Server → Dashboard UI
+                                            ↑ (connects to)
 ```
+
+**Critical: Firmware is WebSocket SERVER, not client**
+- Userscript and dashboard are WebSocket **clients** connecting TO firmware
+- Firmware runs HTTP/HTTPS server on port 3000 with `/ws` endpoint
+- WSS (TLS) mode required for userscript on HTTPS pages (self-signed cert)
 
 **Key event types:** `NUKE_LAUNCHED`, `ALERT_ATOM`, `ALERT_HYDRO`, `ALERT_MIRV`, `ALERT_LAND`, `ALERT_NAVAL`, `NUKE_EXPLODED`, `NUKE_INTERCEPTED`
 
@@ -47,7 +51,8 @@ Critical implementation detail: Nukes are tracked by `unitID` (not timeouts):
 
 **Project modes:**
 - **Emulator mode**: Dashboard simulates hardware (development without physical device)
-- **Client mode** (future): Connects to real firmware WebSocket server
+- **Single WebSocket endpoint** (`/ws`): All connections (UI, userscript, future firmware) use same endpoint
+- Clients identify via handshake message with `clientType` field
 
 **Build/Dev:**
 ```bash
@@ -57,12 +62,12 @@ npm run dev     # Port 3000
 npm run build   # Production build
 ```
 
-**WebSocket handlers** (`server/routes/`):
-- `ws-script.ts`: Accepts userscript connections, broadcasts to "ui" channel
-- `ws-ui.ts`: Accepts dashboard connections, subscribes to "ui" channel
+**WebSocket architecture** (`server/routes/`):
+- Single endpoint `/ws` for all connection types (unified architecture)
+- Handshake-based client identification (`clientType: "ui" | "userscript" | "firmware"`)
+- Broadcast to all connected peers via `broadcast` channel
 - Use `defineWebSocketHandler` with Nitro's experimental WebSocket support
 - Store latest GameState in module-level variable for initial sync
-- Future: Add `ws-hardware.ts` for firmware client connections
 
 **Vue patterns:**
 - Use `<script setup lang="ts">` exclusively
@@ -98,11 +103,28 @@ pio run -t upload    # Flash device
 pio device monitor   # Serial output
 ```
 
-**Module architecture:**
+**Architecture:**
+- **Firmware acts as WebSocket SERVER** (not client) - userscript/dashboard connect TO firmware
+- **WSS support**: TLS-enabled WebSocket server (port 3000) for HTTPS page compatibility
+- Configure via `WS_USE_TLS` in `include/config.h` (WSS=1, WS=0)
+- Self-signed certificate in `certs/` (browsers show security warning)
+
+**Module system:**
 - All modules implement `hardware_module_t` interface: `init`, `update`, `handle_event`, `get_status`, `shutdown`
-- Event dispatcher routes events to all registered modules
+- Event dispatcher routes `internal_event_t` events to all registered modules
 - I/O via MCP23017 I2C expanders: Board 0 (0x20) = inputs, Board 1 (0x21) = outputs
 - Register new modules in `main.c` via `module_manager_register()`
+
+**Event system:**
+- **Game events** (`GAME_EVENT_*`): From protocol (nuke launches, alerts, etc.)
+- **Internal events** (`INTERNAL_EVENT_*`): System status (network, WebSocket, buttons)
+- Event dispatcher posts to FreeRTOS queue, modules handle via `handle_event()` callback
+
+**Hardware testing:**
+- **Test environments**: `test-i2c`, `test-outputs`, `test-inputs`, `test-adc`, `test-lcd`, `test-websocket`
+- Each test is standalone firmware (no menus) - flash, watch serial, verify hardware
+- Example: `pio run -e test-i2c -t upload && pio device monitor`
+- Automation tools in `tools/tests/` (Python scripts for WebSocket testing)
 
 **Nuke tracking:**
 - `nuke_tracker.c` manages state for up to 32 nukes by unitID
@@ -112,6 +134,9 @@ pio device monitor   # Serial output
 
 **Adding source files:**
 Must update `src/CMakeLists.txt` SRCS list when adding `.c` files.
+
+**Build warnings to ignore:**
+- `esp_idf_size: error: unrecognized arguments: --ng` - non-blocking, ignore unless debugging size tools
 
 ## Critical Workflows
 
@@ -249,7 +274,11 @@ ots/
 **Server:** `npm run dev` in `ots-server/`, check http://localhost:3000  
 **Userscript:** Install from `ots-userscript/build/`, check browser console (opens on Tampermonkey install)  
 **Firmware:** `pio device monitor` for serial logs, check LED states physically  
-**WebSocket:** Use browser DevTools Network tab (WS filter) to inspect frames  
+**Firmware tests:** Use `pio run -e test-<name> -t upload` for standalone hardware tests (see `docs/TESTING.md`)  
+**WebSocket debugging:** 
+- Browser DevTools Network tab (WS filter) for client-side inspection
+- Firmware serial logs show connection events (`INTERNAL_EVENT_WS_*`)
+- Python test scripts in `ots-fw-main/tools/tests/` for automated validation
 **Protocol sync:** Grep for event type across all repos to verify consistency
 
 ## Component-Specific Context

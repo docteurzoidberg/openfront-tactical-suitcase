@@ -16,6 +16,7 @@ This folder contains **AI prompt files** used when working on the firmware.
 - `NUKE_MODULE_PROMPT.md`
 - `ALERT_MODULE_PROMPT.md`
 - `TROOPS_MODULE_PROMPT.md`
+- `SOUND_MODULE_PROMPT.md`
 
 ## Reference Docs (not prompts)
 

@@ -74,9 +74,9 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
             rgb_status_set(RGB_STATUS_WIFI_ONLY);
         }
         
-        // Start OTA server
+        // Start HTTP OTA server
         if (ota_manager_start() != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to start OTA server");
+            ESP_LOGE(TAG, "Failed to start HTTP OTA server");
         }
         
         // Start WebSocket client
@@ -321,9 +321,9 @@ void app_main(void) {
     }
     network_manager_set_event_callback(handle_network_event);
     
-    // Initialize OTA manager
+    // Initialize OTA managers (HTTP and Arduino protocols)
     if (ota_manager_init(OTA_PORT, OTA_HOSTNAME) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize OTA manager!");
+        ESP_LOGE(TAG, "Failed to initialize HTTP OTA manager!");
         return;
     }
     

@@ -57,6 +57,14 @@ Modules (daughter boards)
 
 ## Modules
 
+Current module specifications:
+
+- Main Power Module: `modules/main-power-module.md`
+- Nuke Module: `modules/nuke-module.md`
+- Alert Module: `modules/alert-module.md`
+- Troops Module: `modules/troops-module.md`
+- Sound Module: `modules/sound-module.md`
+
 Modules will be documented as they are designed. Each module specification will include:
 - Physical dimensions and mounting
 - I2C/CAN addressing and protocol

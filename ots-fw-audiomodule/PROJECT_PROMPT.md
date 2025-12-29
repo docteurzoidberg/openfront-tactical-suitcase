@@ -1,12 +1,14 @@
-# OTS Audio Module Firmware - Project Prompt
+# OTS Sound Module Firmware (Audio) - Project Prompt
 
 ## Project Overview
 
-This is the **Audio Module Firmware** for the **OpenFront Tactical Suitcase (OTS)** project. It runs on an ESP32-A1S Audio Development Kit and provides audio playback capabilities as an external module controlled by the main controller board.
+This is the **Sound Module firmware** (formerly referred to as the "Audio Module") for the **OpenFront Tactical Suitcase (OTS)** project. It runs on an ESP32-A1S Audio Development Kit and provides audio playback capabilities as an external module controlled by the main controller board.
+
+This module is designed to be controlled primarily over **CAN bus** (planned). The hardware/module specification lives at `../ots-hardware/modules/sound-module.md`.
 
 ## Hardware
 
-**Board:** ESP32-A1S Audio Development Kit (AI Thinker)
+**Board:** ESP32-A1S Audio Development Kit (AI Thinker ESP32 Audio Kit v2.2)
 - **Chip:** ESP32-WROVER with PSRAM
 - **Audio Codec:** AC101 (I2S)
 - **Storage:** SD Card slot (SPI mode)
@@ -32,6 +34,34 @@ This is the **Audio Module Firmware** for the **OpenFront Tactical Suitcase (OTS
 - **Integration:** Connect to main controller in `../of-fw-main`
 - **Extended Commands:** More sophisticated command protocol
 - **Status Reporting:** Playback status, errors, ready states
+
+## CAN Protocol (Planned)
+
+Recommended defaults (keep in sync with `../ots-hardware/modules/sound-module.md` and `../prompts/protocol-context.md`):
+
+- CAN 2.0 classic, 500 kbps, standard 11-bit IDs
+- 8-byte payload frames
+- Little-endian multi-byte integers
+
+### CAN IDs
+
+- `0x420` PLAY_SOUND (main → sound)
+- `0x421` STOP_SOUND (main → sound)
+- `0x422` SOUND_STATUS (sound → main)
+- `0x423` SOUND_ACK (sound → main, optional)
+
+### PLAY_SOUND payload (`0x420`)
+
+- Byte0 `cmd=0x01`
+- Byte1 `flags`: bit0=interrupt, bit1=highPriority, bit2=loop
+- Byte2-3 `soundIndex` (u16)
+- Byte4 `volumeOverride` (u8, 0xFF=ignore/use pot)
+- Byte6-7 `requestId` (u16)
+
+### SD asset naming (recommended)
+
+- Directory: `/sounds/`
+- File: `NNNN.mp3` preferred, `NNNN.wav` fallback (example: `/sounds/0020.mp3`)
 
 ## Technology Stack
 
@@ -91,10 +121,12 @@ HELLO\n      → Plays /sdcard/hello.wav
 
 1. Format SD card as FAT32
 2. Copy WAV files to root directory
-3. Files should be:
-   - 16-bit PCM WAV format
-   - Mono or Stereo
-   - Sample rate: 44.1kHz or 48kHz (recommended)
+3. Files should be one of:
+    - **Preferred (if supported by firmware)**: MP3
+    - Fallback: 16-bit PCM WAV (mono or stereo)
+
+WAV recommendations:
+- Sample rate: 44.1kHz or 48kHz
 
 ## Integration with OTS Main Controller
 

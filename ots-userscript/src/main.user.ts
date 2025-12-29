@@ -39,13 +39,24 @@ const VERSION = '2025-12-20.1'
     // Create game bridge
     game = new GameBridge(ws, hud)
 
-    // Start everything
-    hud.ensure()
-    ws.connect()
-    game.init()
+    // Wait for page to be ready before connecting
+    function initialize() {
+      console.log('[OTS Userscript] Initializing...')
+      hud.ensure()
+      ws.connect()
+      game!.init()
 
-      // Expose for debugging
-      ; (window as any).otsShowHud = () => hud.ensure()
-      ; (window as any).otsWsClient = ws
-      ; (window as any).otsGameBridge = game
+        // Expose for debugging
+        ; (window as any).otsShowHud = () => hud.ensure()
+        ; (window as any).otsWsClient = ws
+        ; (window as any).otsGameBridge = game
+    }
+
+    // Start when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initialize)
+    } else {
+      // DOM already loaded
+      initialize()
+    }
   })()

@@ -22,6 +22,7 @@ export interface GameAPI {
   getTroopsToSend(): number | null
   // Game state
   isGameStarted(): boolean | null
+  hasSpawned(): boolean | null
   // Game updates (polling)
   getUpdatesSinceLastTick(): any | null
   // Game result
@@ -237,6 +238,23 @@ export function createGameAPI(): GameAPI {
         return null
       } catch (error) {
         console.error('[GameAPI] Error checking game started:', error)
+        return null
+      }
+    },
+
+    hasSpawned(): boolean | null {
+      try {
+        const myPlayer = this.getMyPlayer()
+        if (!myPlayer) return null
+
+        // Check if player has spawned (selected a spawn tile)
+        if (typeof myPlayer.hasSpawned === 'function') {
+          return myPlayer.hasSpawned()
+        }
+
+        return null
+      } catch (error) {
+        console.error('[GameAPI] Error checking hasSpawned:', error)
         return null
       }
     },

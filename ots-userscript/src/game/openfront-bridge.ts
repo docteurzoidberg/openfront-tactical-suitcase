@@ -155,15 +155,18 @@ export class GameBridge {
               if (myTeam !== null) {
                 if (winnerId === myTeam) {
                   this.ws.sendEvent('GAME_END', 'Your team won!', { victory: true, phase: 'game-won', method: 'team-victory', myTeam, winnerId })
+                  this.ws.sendEvent('SOUND_PLAY', 'Victory sound', { soundId: 'game_victory', priority: 'high' })
                   console.log('[GameBridge] ✓ Your team won!')
                 } else {
                   this.ws.sendEvent('GAME_END', `Team ${winnerId} won`, { victory: false, phase: 'game-lost', method: 'team-defeat', myTeam, winnerId })
+                  this.ws.sendEvent('SOUND_PLAY', 'Defeat sound', { soundId: 'game_defeat', priority: 'high' })
                   console.log(`[GameBridge] ✗ Team ${winnerId} won (you are team ${myTeam})`)
                 }
               } else {
                 // Fallback: team is null, assume defeat
                 console.warn('[GameBridge] myPlayer.team() returned null, assuming defeat')
                 this.ws.sendEvent('GAME_END', `Team ${winnerId} won`, { victory: false, phase: 'game-lost', method: 'team-defeat-fallback', myTeam: null, winnerId })
+                this.ws.sendEvent('SOUND_PLAY', 'Defeat sound', { soundId: 'game_defeat', priority: 'high' })
                 console.log(`[GameBridge] ✗ Team ${winnerId} won (unable to determine your team)`)
               }
             } else if (winnerType === 'player') {
@@ -174,9 +177,11 @@ export class GameBridge {
 
               if (myClientID !== null && winnerId === myClientID) {
                 this.ws.sendEvent('GAME_END', 'You won!', { victory: true, phase: 'game-won', method: 'solo-victory', myClientID, winnerId })
+                this.ws.sendEvent('SOUND_PLAY', 'Victory sound', { soundId: 'game_victory', priority: 'high' })
                 console.log('[GameBridge] ✓ You won!')
               } else {
                 this.ws.sendEvent('GAME_END', 'Another player won', { victory: false, phase: 'game-lost', method: 'solo-defeat', myClientID, winnerId })
+                this.ws.sendEvent('SOUND_PLAY', 'Defeat sound', { soundId: 'game_defeat', priority: 'high' })
                 console.log('[GameBridge] ✗ Another player won')
               }
             } else {
@@ -206,6 +211,7 @@ export class GameBridge {
       if (!isAlive && !inSpawnPhase && hasSpawned) {
         // Player died during the game - immediate detection
         this.ws.sendEvent('GAME_END', 'You died', { victory: false, phase: 'game-lost', reason: 'death' })
+        this.ws.sendEvent('SOUND_PLAY', 'Player death sound', { soundId: 'game_player_death', priority: 'high' })
         console.log('[GameBridge] ✗ You died!')
         this.hasProcessedWin = true
         this.inGame = false
@@ -222,9 +228,11 @@ export class GameBridge {
       // Game is over, send appropriate event
       if (winResult === true) {
         this.ws.sendEvent('GAME_END', 'Victory!', { victory: true, phase: 'game-won', method: 'gameOver-fallback' })
+        this.ws.sendEvent('SOUND_PLAY', 'Victory sound', { soundId: 'game_victory', priority: 'high' })
         console.log('[GameBridge] ✓ Game ended - VICTORY! (fallback method)')
       } else {
         this.ws.sendEvent('GAME_END', 'Defeat', { victory: false, phase: 'game-lost', method: 'gameOver-fallback' })
+        this.ws.sendEvent('SOUND_PLAY', 'Defeat sound', { soundId: 'game_defeat', priority: 'high' })
         console.log('[GameBridge] ✗ Game ended - DEFEAT (fallback method)')
       }
 
@@ -293,6 +301,11 @@ export class GameBridge {
         this.inGame = true
         this.inSpawning = false
         this.ws.sendEvent('GAME_START', 'Game started - countdown ended')
+        this.ws.sendEvent('SOUND_PLAY', 'Play game start sound', {
+          soundId: 'game_start',
+          priority: 'high',
+          interrupt: true
+        })
         console.log('[GameBridge] Game started - spawn countdown ended')
         this.clearTrackers() // Clear any stale state
 

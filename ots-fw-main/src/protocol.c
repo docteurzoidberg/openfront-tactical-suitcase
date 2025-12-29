@@ -7,6 +7,7 @@ const char* event_type_to_string(game_event_type_t type) {
         case GAME_EVENT_GAME_SPAWNING: return "GAME_SPAWNING";
         case GAME_EVENT_GAME_START: return "GAME_START";
         case GAME_EVENT_GAME_END: return "GAME_END";
+        case GAME_EVENT_SOUND_PLAY: return "SOUND_PLAY";
         case GAME_EVENT_NUKE_LAUNCHED: return "NUKE_LAUNCHED";
         case GAME_EVENT_NUKE_EXPLODED: return "NUKE_EXPLODED";
         case GAME_EVENT_NUKE_INTERCEPTED: return "NUKE_INTERCEPTED";
@@ -33,6 +34,7 @@ game_event_type_t string_to_event_type(const char *str) {
     if (strcmp(str, "GAME_SPAWNING") == 0) return GAME_EVENT_GAME_SPAWNING;
     if (strcmp(str, "GAME_START") == 0) return GAME_EVENT_GAME_START;
     if (strcmp(str, "GAME_END") == 0) return GAME_EVENT_GAME_END;
+    if (strcmp(str, "SOUND_PLAY") == 0) return GAME_EVENT_SOUND_PLAY;
     if (strcmp(str, "NUKE_LAUNCHED") == 0) return GAME_EVENT_NUKE_LAUNCHED;
     if (strcmp(str, "ALERT_NUKE") == 0) return GAME_EVENT_ALERT_NUKE;
     if (strcmp(str, "ALERT_HYDRO") == 0) return GAME_EVENT_ALERT_HYDRO;
