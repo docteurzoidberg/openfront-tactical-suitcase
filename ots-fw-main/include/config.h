@@ -9,6 +9,10 @@
 #define OTS_FIRMWARE_NAME       "ots-fw-main"
 #define OTS_FIRMWARE_VERSION    "2025-12-20.1"  // Updated by release.sh
 
+// Device Identity (for hardware diagnostic)
+#define OTS_DEVICE_SERIAL_NUMBER "OTS-FW-000001"  // Unique device serial number
+#define OTS_DEVICE_OWNER        "OpenFront Team"  // Device owner/organization
+
 // Wi-Fi Configuration (Fallback)
 //
 // Preferred workflow: provision via Improv Serial (stored in NVS).

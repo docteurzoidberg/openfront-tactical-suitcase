@@ -33,6 +33,13 @@ typedef struct {
 esp_err_t adc_handler_init(void);
 
 /**
+ * @brief Check if ADC handler is initialized
+ * 
+ * @return true if ADC was successfully initialized
+ */
+bool adc_handler_is_initialized(void);
+
+/**
  * @brief Scan all ADC channels and update state
  * 
  * Should be called periodically (e.g., every 100ms) from I/O task

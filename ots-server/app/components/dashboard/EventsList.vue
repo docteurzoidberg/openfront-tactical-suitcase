@@ -185,6 +185,38 @@
               — <span class="font-mono text-slate-200">{{ (event.data as any)?.soundId || 'unknown' }}</span>
             </span>
           </template>
+          <template v-else-if="event.type === 'HARDWARE_DIAGNOSTIC' && event.data && typeof event.data === 'object'">
+            <span class="font-semibold text-purple-400">🔧 HARDWARE DIAGNOSTIC</span>
+            <br />
+            <span class="text-slate-400">
+              Device: <span class="font-mono text-slate-200">{{ (event.data as any).deviceType || 'unknown' }}</span>
+              | Version: <span class="font-mono text-slate-200">{{ (event.data as any).version || 'N/A' }}</span>
+            </span>
+            <br />
+            <span class="text-slate-400">
+              Serial: <span class="font-mono text-slate-200">{{ (event.data as any).serialNumber || 'N/A' }}</span>
+              | Owner: <span class="text-slate-200">{{ (event.data as any).owner || 'N/A' }}</span>
+            </span>
+            <template v-if="(event.data as any).hardware">
+              <br />
+              <span class="text-slate-400">Components:</span>
+              <template v-for="(component, name) in (event.data as any).hardware" :key="name">
+                <span
+                  class="ml-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px]"
+                  :class="[
+                    component.present && component.working
+                      ? 'bg-emerald-500/20 text-emerald-300'
+                      : component.present && !component.working
+                      ? 'bg-yellow-500/20 text-yellow-300'
+                      : 'bg-red-500/20 text-red-300'
+                  ]"
+                >
+                  <span>{{ component.present && component.working ? '✓' : component.present ? '⚠' : '✗' }}</span>
+                  <span>{{ name }}</span>
+                </span>
+              </template>
+            </template>
+          </template>
           <template v-else>
             {{ event.message }}
           </template>
@@ -241,6 +273,7 @@ const eventFilters = ref<EventFilter[]>([
   { types: ['NUKE_LAUNCHED', 'NUKE_EXPLODED', 'NUKE_INTERCEPTED'], label: 'Nukes Sent', enabled: true, color: 'bg-orange-500' },
   { types: ['SOUND_PLAY'], label: 'Sounds', enabled: true, color: 'bg-cyan-500' },
   { types: ['CMD_SENT'], label: 'Commands', enabled: true, color: 'bg-blue-500' },
+  { types: ['HARDWARE_DIAGNOSTIC'], label: 'Hardware Diagnostic', enabled: true, color: 'bg-purple-500' },
   { types: ['TROOP_UPDATE'], label: 'Troop Updates', enabled: true, color: 'bg-purple-500' },
   { types: ['GAME_START', 'GAME_END'], label: 'Game Events', enabled: true, color: 'bg-emerald-500' },
   { types: ['INFO'], label: 'Info', enabled: true, color: 'bg-slate-500' },
@@ -418,6 +451,8 @@ const eventBadgeClass = (type: GameEventType) => {
     case 'GAME_END':
       return 'bg-rose-500/15 text-rose-300'
     case 'HARDWARE_TEST':
+      return 'bg-purple-500/20 text-purple-300'
+    case 'HARDWARE_DIAGNOSTIC':
       return 'bg-purple-500/20 text-purple-300'
     case 'ERROR':
       return 'bg-red-400/20 text-red-300 font-semibold'

@@ -95,12 +95,38 @@ const localSoundCandidatesForId = (soundId: string): string[] => {
 }
 
 let sharedAudio: HTMLAudioElement | null = null
+let audioContext: AudioContext | null = null
+
+const ensureAudioContext = async (): Promise<AudioContext | null> => {
+  if (typeof window === 'undefined') return null
+
+  try {
+    if (!audioContext) {
+      // @ts-ignore - AudioContext exists in browser
+      audioContext = new (window.AudioContext || window.webkitAudioContext)()
+    }
+
+    // Resume audio context if suspended (happens in background tabs)
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume()
+      console.log('[Sound] Audio context resumed from suspended state')
+    }
+
+    return audioContext
+  } catch (e) {
+    console.error('[Sound] Failed to initialize audio context:', e)
+    return null
+  }
+}
 
 const tryPlayLocalSound = async (soundId: string): Promise<{ status: SoundPlaybackStatus; fileUrl?: string; error?: string }> => {
   if (typeof window === 'undefined') return { status: 'missing', error: 'Not in browser context' }
 
   const candidates = localSoundCandidatesForId(soundId)
   if (!candidates.length) return { status: 'missing', error: `No local mapping for soundId: ${soundId}` }
+
+  // Ensure audio context is ready and not suspended
+  await ensureAudioContext()
 
   if (!sharedAudio) {
     sharedAudio = new Audio()
@@ -112,6 +138,8 @@ const tryPlayLocalSound = async (soundId: string): Promise<{ status: SoundPlayba
   for (const url of candidates) {
     sharedAudio.src = url
     try {
+      // Load the audio first (helps with reliability)
+      sharedAudio.load()
       await sharedAudio.play()
       return { status: 'playing', fileUrl: url }
     } catch (e: any) {
@@ -132,6 +160,33 @@ const tryPlayLocalSound = async (soundId: string): Promise<{ status: SoundPlayba
 }
 
 export function useGameSocket() {
+  // Initialize audio context on first user interaction (browser requirement)
+  if (typeof window !== 'undefined') {
+    const initAudio = () => {
+      ensureAudioContext().then(() => {
+        console.log('[Sound] Audio context initialized on user interaction')
+        // Remove listeners after first interaction
+        window.removeEventListener('click', initAudio)
+        window.removeEventListener('keydown', initAudio)
+        window.removeEventListener('touchstart', initAudio)
+      })
+    }
+
+    // Listen for any user interaction to unlock audio
+    window.addEventListener('click', initAudio, { once: true })
+    window.addEventListener('keydown', initAudio, { once: true })
+    window.addEventListener('touchstart', initAudio, { once: true })
+
+    // Resume audio context when tab becomes visible again
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && audioContext?.state === 'suspended') {
+        audioContext.resume().then(() => {
+          console.log('[Sound] Audio context resumed on tab visibility')
+        })
+      }
+    })
+  }
+
   const { status, data, send, open, close } = useWebSocket(WS_URL, {
     autoReconnect: {
       retries: 10,
@@ -140,18 +195,28 @@ export function useGameSocket() {
         // noop for now
       }
     },
+    immediate: true, // Process messages immediately without Vue reactivity throttling
     onConnected() {
       // Send handshake to identify as UI client
       send(JSON.stringify({ type: 'handshake', clientType: PROTOCOL_CONSTANTS.CLIENT_TYPE_UI }))
+    },
+    onMessage(ws, event) {
+      // Process messages synchronously to avoid browser throttling in background tabs
+      const raw = event.data
+      if (!raw) return
+
+      try {
+        const msg = JSON.parse(raw as string) as IncomingMessage
+        processMessage(msg)
+      } catch {
+        // ignore malformed messages
+      }
     }
   })
 
-  watchEffect(() => {
-    const raw = data.value
-    if (!raw) return
-
+  // Message processing function - called synchronously on message receipt
+  const processMessage = (msg: IncomingMessage) => {
     try {
-      const msg = JSON.parse(raw as string) as IncomingMessage
       if (msg.type === 'state') {
         // Handle game state updates
         if (msg.payload.troops) {
@@ -312,7 +377,7 @@ export function useGameSocket() {
     } catch {
       // ignore malformed messages
     }
-  })
+  }
 
   const trackNukeLaunch = (nukeUnitID: string, nukeType: 'atom' | 'hydro' | 'mirv') => {
     console.log(`[Nuke Tracking] Tracking ${nukeType} nuke: ${nukeUnitID}`)
@@ -369,14 +434,14 @@ export function useGameSocket() {
     if (!lastUserscriptHeartbeat.value) return 'UNKNOWN'
 
     const diff = Date.now() - lastUserscriptHeartbeat.value
-    if (diff < 10_000) {
+    if (diff < 30_000) {
       // If userscript is ONLINE but gamePhase is null, default to lobby
       if (gamePhase.value === null) {
         gamePhase.value = 'lobby'
       }
       return 'ONLINE'
     }
-    if (diff < 60_000) return 'STALE'
+    if (diff < 90_000) return 'STALE'
     return 'OFFLINE'
   })
 

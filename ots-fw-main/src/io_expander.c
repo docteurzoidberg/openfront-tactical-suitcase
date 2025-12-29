@@ -300,6 +300,13 @@ bool io_expander_is_initialized(void) {
     return io_initialized;
 }
 
+bool io_expander_is_board_present(uint8_t board) {
+    if (board >= MAX_MCP_BOARDS || board >= board_count) {
+        return false;
+    }
+    return boards[board].initialized && boards[board].health.healthy;
+}
+
 uint8_t io_expander_get_board_count(void) {
     return board_count;
 }

@@ -7,10 +7,12 @@
 // Game event types - must stay in sync with protocol-context.md and ots-shared/src/game.ts
 typedef enum {
     GAME_EVENT_INFO = 0,
+    GAME_EVENT_ERROR,
     GAME_EVENT_GAME_SPAWNING,
     GAME_EVENT_GAME_START,
     GAME_EVENT_GAME_END,
     GAME_EVENT_SOUND_PLAY,
+    GAME_EVENT_HARDWARE_DIAGNOSTIC,
     GAME_EVENT_NUKE_LAUNCHED,
     GAME_EVENT_NUKE_EXPLODED,
     GAME_EVENT_NUKE_INTERCEPTED,
@@ -19,6 +21,7 @@ typedef enum {
     GAME_EVENT_ALERT_MIRV,
     GAME_EVENT_ALERT_LAND,
     GAME_EVENT_ALERT_NAVAL,
+    GAME_EVENT_TROOP_UPDATE,
     GAME_EVENT_HARDWARE_TEST,
     // Internal-only events (not in protocol)
     INTERNAL_EVENT_NETWORK_CONNECTED,

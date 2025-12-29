@@ -15,6 +15,7 @@ export type GameEventType =
   | 'GAME_START'
   | 'GAME_END'
   | 'SOUND_PLAY'
+  | 'HARDWARE_DIAGNOSTIC'
   | 'NUKE_LAUNCHED'
   | 'NUKE_EXPLODED'
   | 'NUKE_INTERCEPTED'
@@ -66,6 +67,25 @@ export type SoundPlayEventData = {
 
 export type NukeSentEventData = {
   nukeType: NukeType
+}
+
+export type HardwareComponentStatus = {
+  present: boolean
+  working: boolean
+}
+
+export type HardwareDiagnosticData = {
+  version: string
+  deviceType: 'firmware' | 'simulator'
+  serialNumber: string
+  owner: string
+  hardware: {
+    lcd: HardwareComponentStatus
+    inputBoard: HardwareComponentStatus
+    outputBoard: HardwareComponentStatus
+    adc: HardwareComponentStatus
+    soundModule: HardwareComponentStatus
+  }
 }
 
 // ============================================================================

@@ -31,6 +31,13 @@ void lcd_backlight_off(void);
 esp_err_t lcd_init(uint8_t i2c_addr);
 
 /**
+ * @brief Check if LCD is initialized
+ * 
+ * @return true if LCD was successfully initialized
+ */
+bool lcd_is_initialized(void);
+
+/**
  * @brief Clear LCD display
  * 
  * @return esp_err_t ESP_OK on success

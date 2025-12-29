@@ -1,4 +1,4 @@
-import { Hud } from './hud/main-hud'
+import { Hud } from './hud/sidebar-hud'
 import { WsClient } from './websocket/client'
 import { GameBridge } from './game/openfront-bridge'
 import { loadWsUrl, saveWsUrl } from './storage/config'
@@ -10,6 +10,9 @@ const VERSION = '2025-12-20.1'
     console.log(`[OTS Userscript] Version ${VERSION}`)
     let currentWsUrl = loadWsUrl()
 
+    // Create WebSocket client early (will be initialized later)
+    let ws: WsClient
+
     const hud = new Hud(
       () => currentWsUrl,
       (url) => {
@@ -19,6 +22,22 @@ const VERSION = '2025-12-20.1'
       () => {
         ws.disconnect(4100, 'URL changed')
         ws.connect()
+      },
+      (action, params) => {
+        // Send command via WebSocket
+        if (ws) {
+          ws.sendCommand(action, params)
+        }
+      },
+      (soundId) => {
+        // Test sound by sending SOUND_PLAY event
+        if (ws) {
+          ws.sendEvent('SOUND_PLAY', `Test sound: ${soundId}`, {
+            soundId,
+            priority: 'high',
+            test: true
+          })
+        }
       }
     )
 
@@ -26,7 +45,7 @@ const VERSION = '2025-12-20.1'
     let game: GameBridge | null = null
 
     // Create WebSocket client with command handler
-    const ws = new WsClient(
+    ws = new WsClient(
       hud,
       () => currentWsUrl,
       (action, params) => {

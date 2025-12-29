@@ -1,0 +1,106 @@
+┌─────────────────────────────────────────────────────────────────┐
+│                    OTS SIDEBAR UI MOCKUP                        │
+└─────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+
+POSITION: TOP (Horizontal Bar)
+═════════════════════════════
+         ┌─────────────────────────────────┐
+         │ OTS Dashboard        [▼] [×]   │  ← Titlebar (Horizontal)
+         ├─────────────────────────────────┤
+         │ Status: ● Connected             │
+         │ Position: Top                   │  ← Content (Expanded)
+         │ Events: ...                     │
+         └─────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+
+POSITION: RIGHT (Vertical Sidebar)
+══════════════════════════════════
+                                           ┌──┐
+                                           │O │
+                                           │T │
+                                           │S │
+                                           │  │ ← Titlebar (Rotated 90°)
+                                           │D │
+                                           │a │
+                                           │s │
+                                           │h │
+                                  ┌────────┤▼ │
+                                  │Status: │× │
+                                  │● Conn. ├──┤
+                                  │Position│  │
+                                  │Right   │  │ ← Content
+                                  │Events: │  │
+                                  │...     │  │
+                                  └────────┴──┘
+
+═══════════════════════════════════════════════════════════════════
+
+POSITION: LEFT (Vertical Sidebar)
+═════════════════════════════════
+┌──┬────────┐
+│O │Status: │
+│T │● Conn. │
+│S │Position│
+│  │Left    │  ← Content & Titlebar
+│D │Events: │
+│a │...     │
+│s │        │
+│h │        │
+│▼ ├────────┘
+│× │
+└──┘
+
+═══════════════════════════════════════════════════════════════════
+
+POSITION: BOTTOM (Horizontal Bar)
+═════════════════════════════════
+         ┌─────────────────────────────────┐
+         │ Status: ● Connected             │
+         │ Position: Bottom                │
+         │ Events: ...                     │
+         ├─────────────────────────────────┤
+         │ OTS Dashboard        [▲] [×]   │  ← Titlebar
+         └─────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+
+DRAGGING BEHAVIOR:
+═════════════════
+
+1. Click and hold titlebar
+2. Move mouse toward any screen edge
+3. See blue dashed preview of snap position
+4. Release mouse to snap to nearest edge
+
+   Screen Edge Distance Detection:
+   
+        ↑ TOP
+        │
+   ←────┼────→  (Mouse position determines nearest edge)
+        │
+        ↓ BOTTOM
+
+═══════════════════════════════════════════════════════════════════
+
+COLLAPSED STATE:
+════════════════
+
+RIGHT (Collapsed):                    LEFT (Collapsed):
+                  ┌──┐                ┌──┐
+                  │O │                │O │
+                  │T │                │T │
+                  │S │                │S │
+                  │  │                │  │
+                  │▼ │                │▼ │
+                  │× │                │× │
+                  └──┘                └──┘
+
+TOP (Collapsed):                      BOTTOM (Collapsed):
+┌─────────────────────────┐           ┌─────────────────────────┐
+│ OTS Dashboard  [▼] [×] │           │ OTS Dashboard  [▲] [×] │
+└─────────────────────────┘           └─────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════

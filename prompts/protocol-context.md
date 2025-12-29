@@ -90,6 +90,7 @@ GameEventType =
   | "GAME_START"
   | "GAME_END"          // Game ended (see data.victory for win/loss)
   | "SOUND_PLAY"        // Request sound playback (userscript → server → firmware)
+  | "HARDWARE_DIAGNOSTIC" // Hardware diagnostic response from device
   | "NUKE_LAUNCHED"
   | "HYDRO_LAUNCHED"
   | "MIRV_LAUNCHED"
@@ -224,6 +225,51 @@ Set the troop deployment percentage (from hardware troops module).
 - Updates the visual slider position in the game UI
 - Recalculates troop deployment amount based on percentage
 - Updates any UI displays showing selected troop count
+
+#### `hardware-diagnostic`
+Request hardware diagnostic information from the device (firmware or ots-server simulator).
+
+**Flow**: Userscript → Server/Firmware → Response with `HARDWARE_DIAGNOSTIC` event
+
+```ts
+{
+  type: "cmd",
+  payload: {
+    action: "hardware-diagnostic",
+    params: {}  // no parameters needed
+  }
+}
+```
+
+**Device behavior**:
+1. Receive `hardware-diagnostic` command
+2. Gather diagnostic information about hardware/software status
+3. Respond with `HARDWARE_DIAGNOSTIC` event containing full diagnostic data
+
+**Response** (see `HARDWARE_DIAGNOSTIC` event definition below):
+```ts
+{
+  type: "event",
+  payload: {
+    type: "HARDWARE_DIAGNOSTIC",
+    timestamp: 1234567890,
+    message: "Hardware diagnostic report",
+    data: {
+      version: "2025-12-20.1",
+      deviceType: "firmware" | "simulator",
+      serialNumber: "OTS-FW-001234",
+      owner: "PUSH Team",
+      hardware: {
+        lcd: { present: true, working: true },
+        inputBoard: { present: true, working: true },
+        outputBoard: { present: true, working: true },
+        adc: { present: true, working: true },
+        soundModule: { present: false, working: false }
+      }
+    }
+  }
+}
+```
 
 ### Info / Status Events
 
@@ -703,6 +749,115 @@ Notes:
 | `game_player_death` | 2 | `/sounds/0002.mp3` (or `.wav`) | `ots-server/public/sounds/0002-game_player_death.mp3` |
 | `game_victory` | 3 | `/sounds/0003.mp3` (or `.wav`) | `ots-server/public/sounds/0003-game_victory.mp3` |
 | `game_defeat` | 4 | `/sounds/0004.mp3` (or `.wav`) | `ots-server/public/sounds/0004-game_defeat.mp3` |
+
+#### `HARDWARE_DIAGNOSTIC`
+Response event containing hardware diagnostic information from the device (firmware or simulator).
+
+**Flow**: Device/Simulator → Server → Userscript (display in HUD or log)
+
+```json
+{
+  "type": "event",
+  "payload": {
+    "type": "HARDWARE_DIAGNOSTIC",
+    "timestamp": 1234567890,
+    "message": "Hardware diagnostic report",
+    "data": {
+      "version": "2025-12-20.1",
+      "deviceType": "firmware",
+      "serialNumber": "OTS-FW-001234",
+      "owner": "PUSH Team",
+      "hardware": {
+        "lcd": { "present": true, "working": true },
+        "inputBoard": { "present": true, "working": true },
+        "outputBoard": { "present": true, "working": true },
+        "adc": { "present": true, "working": true },
+        "soundModule": { "present": false, "working": false }
+      }
+    }
+  }
+}
+```
+
+**Data Fields:**
+- `version` (string): Firmware version or software version (e.g., "2025-12-20.1")
+- `deviceType` (string): `"firmware"` for ESP32 device, `"simulator"` for ots-server
+- `serialNumber` (string): Unique device identifier (hardcoded, immutable)
+  - Format: `OTS-FW-XXXXXX` for firmware devices
+  - Format: `OTS-SIM-XXXXXX` for simulators
+- `owner` (string): Device owner name (hardcoded, immutable, e.g., "PUSH Team", "DrZoid")
+- `hardware` (object): Hardware component status
+  - `lcd` (object): LCD display status
+    - `present` (boolean): LCD hardware detected
+    - `working` (boolean): LCD functional/responding
+  - `inputBoard` (object): MCP23017 input board (buttons/sensors)
+    - `present` (boolean): Input board detected on I2C bus
+    - `working` (boolean): Input board responding correctly
+  - `outputBoard` (object): MCP23017 output board (LEDs/relays)
+    - `present` (boolean): Output board detected on I2C bus
+    - `working` (boolean): Output board responding correctly
+  - `adc` (object): ADS1015/ADS1115 ADC module
+    - `present` (boolean): ADC detected on I2C bus
+    - `working` (boolean): ADC providing valid readings
+  - `soundModule` (object): Audio playback module
+    - `present` (boolean): Sound module detected
+    - `working` (boolean): Sound module operational
+
+**Example - Firmware with sound module not yet implemented:**
+```json
+{
+  "type": "event",
+  "payload": {
+    "type": "HARDWARE_DIAGNOSTIC",
+    "timestamp": 1735482000000,
+    "message": "ESP32-S3 Hardware Diagnostic",
+    "data": {
+      "version": "2025-12-29.1",
+      "deviceType": "firmware",
+      "serialNumber": "OTS-FW-ESP001",
+      "owner": "DrZoid",
+      "hardware": {
+        "lcd": { "present": true, "working": true },
+        "inputBoard": { "present": true, "working": true },
+        "outputBoard": { "present": true, "working": true },
+        "adc": { "present": true, "working": true },
+        "soundModule": { "present": false, "working": false }
+      }
+    }
+  }
+}
+```
+
+**Example - ots-server simulator with all features:**
+```json
+{
+  "type": "event",
+  "payload": {
+    "type": "HARDWARE_DIAGNOSTIC",
+    "timestamp": 1735482000000,
+    "message": "OTS Simulator Diagnostic",
+    "data": {
+      "version": "2025-12-20.1",
+      "deviceType": "simulator",
+      "serialNumber": "OTS-SIM-000001",
+      "owner": "PUSH Team",
+      "hardware": {
+        "lcd": { "present": true, "working": true },
+        "inputBoard": { "present": true, "working": true },
+        "outputBoard": { "present": true, "working": true },
+        "adc": { "present": true, "working": true },
+        "soundModule": { "present": true, "working": true }
+      }
+    }
+  }
+}
+```
+
+**Usage:**
+- Userscript can request diagnostic via `hardware-diagnostic` command
+- Device responds with current hardware status
+- Useful for debugging hardware issues remotely
+- Serial number and owner are immutable identifiers set at compile time
 
 ### Nuke Outcome Events
 

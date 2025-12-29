@@ -303,6 +303,10 @@ esp_err_t lcd_init(uint8_t i2c_addr) {
     return ESP_OK;
 }
 
+bool lcd_is_initialized(void) {
+    return s_initialized;
+}
+
 esp_err_t lcd_show_splash(uint32_t delay_ms) {
     if (!s_initialized) {
         return ESP_ERR_INVALID_STATE;

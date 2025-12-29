@@ -64,6 +64,10 @@ esp_err_t adc_handler_init(void) {
     return ESP_OK;
 }
 
+bool adc_handler_is_initialized(void) {
+    return initialized;
+}
+
 esp_err_t adc_handler_scan(void) {
     if (!initialized) {
         return ESP_FAIL;

@@ -1,6 +1,6 @@
 import type { GameState, GameEventType, WsStatus } from '../../../ots-shared/src/game'
 import { PROTOCOL_CONSTANTS } from '../../../ots-shared/src/game'
-import type { Hud } from '../hud/main-hud'
+import type { Hud } from '../hud/sidebar-hud'
 
 type DashboardCommand = {
   type: 'cmd'
@@ -67,7 +67,7 @@ export class WsClient {
 
       this.sendInfo(PROTOCOL_CONSTANTS.INFO_MESSAGE_USERSCRIPT_CONNECTED, { url: window.location.href })
 
-      // Start periodic heartbeat (every 5 seconds)
+      // Start periodic heartbeat (every 15 seconds) for stale detection
       this.startHeartbeat()
     })
 
@@ -187,11 +187,21 @@ export class WsClient {
     this.sendEvent('INFO', message, data)
   }
 
+  sendCommand(action: string, params?: unknown) {
+    this.safeSend({
+      type: 'cmd',
+      payload: {
+        action,
+        params
+      }
+    })
+  }
+
   private startHeartbeat() {
     this.stopHeartbeat()
     this.heartbeatInterval = window.setInterval(() => {
       this.sendInfo('heartbeat')
-    }, 5000)
+    }, 15000) // Send heartbeat every 15 seconds
   }
 
   private stopHeartbeat() {

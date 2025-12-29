@@ -93,6 +93,36 @@ export default defineWebSocketHandler({
       // Check if it's an outgoing message (cmd from UI)
       else if (parsed.type === 'cmd') {
         const msg = parsed as OutgoingMessage
+
+        // Handle hardware-diagnostic command locally (simulator response)
+        if (msg.type === 'cmd' && msg.payload.action === 'hardware-diagnostic') {
+          const diagnostic = JSON.stringify({
+            type: 'event',
+            payload: {
+              type: 'HARDWARE_DIAGNOSTIC',
+              timestamp: Date.now(),
+              message: 'OTS Simulator Diagnostic',
+              data: {
+                version: '2025-12-20.1', // Should match package.json version
+                deviceType: 'simulator',
+                serialNumber: 'OTS-SIM-000001',
+                owner: 'PUSH Team',
+                hardware: {
+                  lcd: { present: true, working: true },
+                  inputBoard: { present: true, working: true },
+                  outputBoard: { present: true, working: true },
+                  adc: { present: true, working: true },
+                  soundModule: { present: true, working: true }
+                }
+              }
+            }
+          })
+          // Send diagnostic response back to requester and broadcast
+          peer.send(diagnostic)
+          peer.publish('broadcast', diagnostic)
+          return
+        }
+
         // Broadcast command to all peers (userscript will receive it)
         peer.publish('broadcast', text)
 

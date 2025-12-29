@@ -41,6 +41,8 @@ typedef void (*io_expander_recovery_callback_t)(uint8_t board, bool was_down);
 
 bool io_expander_begin(const uint8_t *addresses, uint8_t count);
 esp_err_t io_expander_reinit_board(uint8_t board);
+bool io_expander_is_initialized(void);
+bool io_expander_is_board_present(uint8_t board);
 bool io_expander_health_check(void);
 bool io_expander_get_health(uint8_t board, io_expander_health_t *status);
 void io_expander_set_recovery_callback(io_expander_recovery_callback_t callback);

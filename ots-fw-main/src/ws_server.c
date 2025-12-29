@@ -4,6 +4,7 @@
 #include "esp_http_server.h"
 #include "esp_https_server.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "cJSON.h"
 #include "config.h"
 #include <stdlib.h>
@@ -285,6 +286,9 @@ static esp_err_t ws_handler(httpd_req_t *req) {
         // No action needed.
     } else if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
         
+        // Log raw message for debugging
+        ESP_LOGI(TAG, "Received TEXT frame (len=%d): %.*s", ws_pkt.len, (int)ws_pkt.len, (char *)ws_pkt.payload);
+        
         // Parse message using protocol handler
         ws_message_t msg;
         ret = ws_protocol_parse((char *)ws_pkt.payload, ws_pkt.len, &msg);
@@ -346,6 +350,80 @@ static esp_err_t ws_handler(httpd_req_t *req) {
                     strncpy(evt.message, msg.payload.event.message, sizeof(evt.message) - 1);
                     strncpy(evt.data, msg.payload.event.data, sizeof(evt.data) - 1);
                     event_dispatcher_post(&evt);
+                }
+            } else if (msg.type == WS_MSG_COMMAND) {
+                ESP_LOGI(TAG, "Received command: %s", msg.payload.command.action);
+                
+                // Handle hardware-diagnostic command
+                if (strcmp(msg.payload.command.action, "hardware-diagnostic") == 0) {
+                    // Build diagnostic response
+                    cJSON *root = cJSON_CreateObject();
+                    if (root) {
+                        cJSON_AddStringToObject(root, "type", "event");
+                        
+                        cJSON *payload = cJSON_CreateObject();
+                        cJSON_AddStringToObject(payload, "type", "HARDWARE_DIAGNOSTIC");
+                        cJSON_AddNumberToObject(payload, "timestamp", esp_timer_get_time() / 1000);
+                        cJSON_AddStringToObject(payload, "message", "OTS Firmware Diagnostic");
+                        
+                        cJSON *data = cJSON_CreateObject();
+                        cJSON_AddStringToObject(data, "version", OTS_FIRMWARE_VERSION);
+                        cJSON_AddStringToObject(data, "deviceType", "firmware");
+                        cJSON_AddStringToObject(data, "serialNumber", OTS_DEVICE_SERIAL_NUMBER);
+                        cJSON_AddStringToObject(data, "owner", OTS_DEVICE_OWNER);
+                        
+                        // Hardware component detection
+                        cJSON *hardware = cJSON_CreateObject();
+                        
+                        // LCD: Check if initialized
+                        cJSON *lcd = cJSON_CreateObject();
+                        extern bool lcd_is_initialized(void);
+                        bool lcd_present = lcd_is_initialized();
+                        cJSON_AddBoolToObject(lcd, "present", lcd_present);
+                        cJSON_AddBoolToObject(lcd, "working", lcd_present);
+                        cJSON_AddItemToObject(hardware, "lcd", lcd);
+                        
+                        // Input Board (MCP23017 board 0)
+                        cJSON *inputBoard = cJSON_CreateObject();
+                        extern bool io_expander_is_board_present(uint8_t board);
+                        bool input_present = io_expander_is_board_present(0);
+                        cJSON_AddBoolToObject(inputBoard, "present", input_present);
+                        cJSON_AddBoolToObject(inputBoard, "working", input_present);
+                        cJSON_AddItemToObject(hardware, "inputBoard", inputBoard);
+                        
+                        // Output Board (MCP23017 board 1)
+                        cJSON *outputBoard = cJSON_CreateObject();
+                        bool output_present = io_expander_is_board_present(1);
+                        cJSON_AddBoolToObject(outputBoard, "present", output_present);
+                        cJSON_AddBoolToObject(outputBoard, "working", output_present);
+                        cJSON_AddItemToObject(hardware, "outputBoard", outputBoard);
+                        
+                        // ADC: Check if initialized
+                        cJSON *adc = cJSON_CreateObject();
+                        extern bool adc_handler_is_initialized(void);
+                        bool adc_present = adc_handler_is_initialized();
+                        cJSON_AddBoolToObject(adc, "present", adc_present);
+                        cJSON_AddBoolToObject(adc, "working", adc_present);
+                        cJSON_AddItemToObject(hardware, "adc", adc);
+                        
+                        // Sound Module: Not implemented yet
+                        cJSON *soundModule = cJSON_CreateObject();
+                        cJSON_AddBoolToObject(soundModule, "present", false);
+                        cJSON_AddBoolToObject(soundModule, "working", false);
+                        cJSON_AddItemToObject(hardware, "soundModule", soundModule);
+                        
+                        cJSON_AddItemToObject(data, "hardware", hardware);
+                        cJSON_AddItemToObject(payload, "data", data);
+                        cJSON_AddItemToObject(root, "payload", payload);
+                        
+                        char *response = cJSON_PrintUnformatted(root);
+                        if (response) {
+                            ESP_LOGI(TAG, "Sending hardware diagnostic response");
+                            ws_server_send_text(response, strlen(response));
+                            free(response);
+                        }
+                        cJSON_Delete(root);
+                    }
                 }
             }
 

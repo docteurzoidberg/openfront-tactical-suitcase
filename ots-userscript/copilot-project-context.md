@@ -13,11 +13,14 @@ This file documents the `ots-userscript` subproject. It is a TypeScript-based Ta
 - Inject a userscript into the game page (OpenFront.io at `https://openfront.io/*`).
 - Connect to the local OTS server over WebSocket and stream game state and events.
 - Monitor and report real-time troop data (current/max/ratio) to hardware modules.
-- Provide an in-page HUD for:
-  - WebSocket connection status.
-  - A rolling log of sent/received/info messages.
-  - Dragging and resizing the HUD window, with position/size persisted across page loads.
-  - An independent settings window for configuring the WebSocket URL at runtime, with the URL persisted across page loads.
+- Detect and report game events (nukes, alerts, game start/end, victory/defeat).
+- Provide an in-page **tabbed HUD** with:
+  - **Logs Tab**: Rolling log with collapsible JSON, advanced filtering (direction, event types, heartbeats, sounds)
+  - **Hardware Tab**: Real-time hardware diagnostic status display
+  - **Sound Tab**: Sound event toggles with remote testing buttons
+  - WebSocket and game connection status indicators
+  - Draggable and resizable window with position/size persistence
+  - Settings panel for WebSocket URL configuration
 
 ## Repo Layout (userscript-only)
 
@@ -192,9 +195,11 @@ Messages follow the shared types defined in `ots-shared/src/game.ts`:
     - Launch events: `NUKE_LAUNCHED`, `HYDRO_LAUNCHED`, `MIRV_LAUNCHED`
     - Outcome events: `NUKE_EXPLODED`, `NUKE_INTERCEPTED`
     - Game lifecycle: `GAME_START`, `GAME_END`, `WIN`, `LOOSE`
-    - Info events: `INFO`, `HARDWARE_TEST`
+    - Sound events: `SOUND_PLAY` (when sound toggles enabled)
+    - Info events: `INFO`, `HARDWARE_TEST`, `HARDWARE_DIAGNOSTIC`
 - Incoming:
   - `{ type: "cmd", payload: { action: string, params?: Record<string, unknown> } }`
+  - `{ type: "event", payload: GameEvent }` - Events from server (e.g., hardware diagnostic responses)
 
 The userscript currently implements commands from the dashboard:
 
@@ -203,30 +208,220 @@ The userscript currently implements commands from the dashboard:
 
 **Event-Driven Architecture**: The userscript uses polling trackers (NukeTracker, BoatTracker, LandAttackTracker) that detect game events every 100ms and emit protocol-compliant events. Alert events trigger LED indicators on hardware modules or in the dashboard emulator. Outcome events (exploded/intercepted) are logged for statistics and debugging.
 
+**Sound System**: The userscript sends `SOUND_PLAY` events to the server/firmware, but does NOT play sounds locally. Sound toggles in the Sound tab control whether events are sent. Each game event (start, victory, defeat, death) can be independently enabled/disabled. Test buttons allow remote sound testing without triggering game events.
+
 ## HUD UI
 
-The userscript injects a compact HUD element fixed to the top-right of the page:
+The userscript injects a **tabbed HUD** element fixed to the top-right of the page:
+
+### Main Window Structure
 
 - **Status header**:
-  - Two small pills:
+  - Two status pills:
     - `WS` pill with a colored dot for WebSocket status (`DISCONNECTED`, `CONNECTING`, `OPEN`, `ERROR`).
-    - `GAME` pill with a colored dot reserved for future game-state status (currently always red).
-  - Gear button (`⚙`) to open settings.
-  - Close button (`×`) to hide the HUD for the current page lifetime.
-- **Log area**:
-  - Shows a stream of log lines with tags:
-    - `SEND` — JSON messages sent to the server.
-    - `RECV` — messages received from the server.
-    - `INFO` — internal informational messages (connect, close, errors, URL changes, etc.).
-  - Log auto-scrolls to the latest entry.
-- **Drag**:
-  - Drag the header bar to move the HUD around the viewport.
-  - The HUD's position (left/top) is persisted via Tampermonkey storage under `ots-hud-pos` so it is restored on the next page load.
-- **Resize**:
-  - Bottom-right handle (diagonal lines) allows resizing; min width/height are enforced.
-  - The HUD's size (width/height) is persisted under `ots-hud-size` and restored on the next load.
+    - `GAME` pill with a colored dot for game connection status.
+  - Heartbeat indicator (blinks on server heartbeat, 15s interval)
+  - Gear button (`⚙`) to open settings panel
+  - Close button (`×`) to hide the HUD for the current page lifetime
+  
+- **Tab Navigation**:
+  - Three tabs: **Logs**, **Hardware**, **Sound**
+  - Active tab highlighted with blue background
+  - Tab switching preserves log history and settings
+
+### Logs Tab
+
+Main features:
+- **Message Stream**: Shows sent/received/info messages with color-coded tags
+  - `SEND` (blue) — Outgoing messages to server
+  - `RECV` (green) — Incoming messages from server  
+  - `INFO` (yellow) — Internal informational messages
+- **Advanced Filtering**: Comprehensive filter controls above log area
+  - **Direction filters**: Send, Recv, Info (checkboxes)
+  - **Event type filters**: Game Events, Nukes, Alerts, Troops, Sounds, System, Heartbeat
+  - Filters persist across page reloads (GM storage)
+  - Real-time log filtering without page refresh
+- **Collapsible JSON**:
+  - Event messages show summary text when collapsed
+  - Click to expand and show color-formatted JSON
+  - Syntax highlighting: keys (cyan), strings (green), numbers (orange), booleans (purple)
+  - Re-click to collapse back to summary
+- **Auto-scroll**: Automatically scrolls to newest entries
+- **Event type colors**: Different colors for different event types (cyan for hardware, yellow for sounds, etc.)
+
+### Hardware Tab
+
+Features:
+- **Real-time Diagnostic Display**: Shows hardware module status
+- **Diagnostic Request Button**: Sends `hardware-diagnostic` command to firmware
+- **Status Grid**: Displays responses in organized format:
+  - Module name and type
+  - Initialization status
+  - Pin configurations
+  - I2C addresses
+  - Error states
+- **Auto-update**: Refreshes when new diagnostic data received
+
+### Sound Tab
+
+Features:
+- **Sound Toggle Controls**: Enable/disable sound events per sound type
+  - `game_start` — Game start sound
+  - `game_player_death` — Player death sound
+  - `game_victory` — Victory sound
+  - `game_defeat` — Defeat sound
+- **Toggle Persistence**: Sound settings saved to GM storage
+- **Remote Test Buttons**: ▶ Test button for each sound
+  - Sends `SOUND_PLAY` event to server/firmware
+  - Tests actual hardware without triggering game events
+  - Includes `test: true` flag in event data
+  - Respects toggle state (won't send if sound disabled)
+- **Visual Feedback**: Hover effects on rows and test buttons
+
+### Dragging & Resizing
+
+- **Drag**: Click and drag the header bar to move the HUD around the viewport
+  - Position persisted via `GM_setValue` under `ots-hud-pos`
+  - Restored on page reload
+- **Resize**: Bottom-right handle (diagonal lines) allows resizing
+  - Min width/height enforced (320px × 240px)
+  - Size persisted under `ots-hud-size`
+  - Restored on page reload
+
+## Settings Panel
+
+The gear button opens a floating settings panel (above the main HUD):
+
+- **WebSocket URL Configuration**:
+  - Text input for WebSocket server URL
+  - Default: `ws://localhost:3000/ws`
+  - **Reset** button: Restores default URL (doesn't save)
+  - **Save** button: Validates and saves URL, then reconnects
+- **Panel Behavior**:
+  - Independent draggable window (doesn't move main HUD)
+  - Positioned near top-right initially
+  - Can be closed via `×` button
+  - URL changes logged to Info stream
+  - Auto-reconnect on URL save
+
+## Log Filtering System
+
+The Logs tab includes a comprehensive filtering system:
+
+### Filter Categories
+
+1. **Direction Filters** (left group):
+   - Send — Show outgoing messages
+   - Recv — Show incoming messages
+   - Info — Show internal messages
+
+2. **Event Type Filters** (right group):
+   - Game Events — Lifecycle events (start/end/win/lose)
+   - Nukes — Nuclear launch events
+   - Alerts — Incoming threat alerts
+   - Troops — Troop count updates
+   - Sounds — Sound play events
+   - System — Hardware diagnostic and test events
+   - Heartbeat — Periodic connection heartbeats (15s interval)
+
+### Filter Behavior
+
+- **Persistence**: All filter states saved to GM storage (`ots-log-filters`)
+- **Real-time**: Filters apply immediately without page reload
+- **Independent**: Each filter can be toggled independently
+- **Visual feedback**: Unchecked filters hide matching log entries
+- **Default state**: All filters enabled on first run
+
+## Sound Control System
+
+### Architecture
+
+The userscript acts as an **event sender only** — it does NOT play sounds locally:
+
+1. **Game events detected** → Check sound toggle state
+2. **If toggle enabled** → Send `SOUND_PLAY` event to server/firmware
+3. **Server/firmware** → Play actual sound on hardware/dashboard
+
+### Sound Toggle Implementation
+
+Each sound toggle:
+- Checkbox with label showing friendly name + sound ID
+- State persisted to GM storage (`ots-sound-toggles`)
+- Checked by default on first run
+- Prevents event sending when unchecked
+
+### Test Button Implementation
+
+Each sound row includes a **▶ Test** button:
+- Sends `SOUND_PLAY` event with `test: true` flag
+- Respects toggle state (won't send if sound disabled)
+- Blue hover effect (rgba(59,130,246,0.3))
+- Logs test action to Info stream
+- Priority set to 'high' for immediate playback
+
+### Game Event Integration
+
+Sound events are sent from `openfront-bridge.ts` at these triggers:
+- **Game start** → `game_start` sound (if enabled)
+- **Player death** → `game_player_death` sound (if enabled)
+- **Victory** → `game_victory` sound (if enabled)
+- **Defeat** → `game_defeat` sound (if enabled)
+
+All 9 sound event locations wrapped with `hud.isSoundEnabled(soundId)` checks.
+
+## Hardware Diagnostic Protocol
+
+### Outgoing Command
+
+Send to request diagnostic info:
+```json
+{
+  "type": "cmd",
+  "payload": {
+    "action": "hardware-diagnostic"
+  }
+}
+```
+
+### Incoming Response
+
+Server/firmware responds with:
+```json
+{
+  "type": "event",
+  "payload": {
+    "type": "HARDWARE_DIAGNOSTIC",
+    "timestamp": 1234567890,
+    "message": "Hardware diagnostic response",
+    "data": {
+      "modules": [
+        {
+          "name": "Alert Module",
+          "type": "alert",
+          "initialized": true,
+          "pins": {...},
+          "i2c_address": "0x20",
+          "error": null
+        },
+        // ... more modules
+      ]
+    }
+  }
+}
+```
+
+### Display Format
+
+Hardware tab shows diagnostic data in a clean grid:
+- Module name (bold)
+- Initialization status (✓ OK / ✗ FAILED)
+- Pin assignments
+- I2C addresses
+- Error messages (if any)
 
 ## Settings Window (WebSocket URL)
+
+The gear button opens a separate, floating settings window:
 
 The gear button opens a separate, floating settings window:
 
@@ -250,17 +445,51 @@ Both the main HUD window and the settings window reuse small internal classes fo
 - A `BaseWindow` class encapsulates the main HUD container and provides header-based drag handling.
 - A `FloatingPanel` class encapsulates the settings panel element and provides its own header-based drag handling without affecting the HUD.
 
-## Demo Event Generator
+## Code Architecture
 
-For now, the userscript does not read real game state from the page. Instead, it uses a demo hook:
+### Key Files
 
-- On startup, `demoHook()` sets up a `setInterval` every 5 seconds.
-- Each tick sends a `GameEvent` with a random type among `KILL`, `DEATH`, `OBJECTIVE`, and `INFO`, and a small payload with `random: Math.random()`.
+- `src/main.user.ts` — Entry point, initializes WsClient, GameBridge, and Hud
+- `src/hud/sidebar-hud.ts` — Main HUD implementation with tabs, filters, and sound controls
+- `src/hud/window.ts` — Base classes for draggable windows
+- `src/websocket/client.ts` — WebSocket client with auto-reconnect
+- `src/game/openfront-bridge.ts` — Game event detection and sound integration
+- `src/game/trackers/` — NukeTracker, BoatTracker, LandAttackTracker for event detection
 
-This is only to exercise the protocol and dashboard UI. When integrating with a real game:
+### Component Interactions
 
-- Replace `demoHook()` with logic that reads from the game DOM / JS globals.
-- Build a proper `GameState` snapshot and `GameEvent`s mapped to the shared types in `ots-shared/src/game.ts`.
+```
+main.user.ts
+  ├─> WsClient (WebSocket connection)
+  │     ├─> Auto-reconnect with exponential backoff
+  │     └─> Message send/receive
+  │
+  ├─> Hud (UI and state management)
+  │     ├─> Tabs (Logs, Hardware, Sound)
+  │     ├─> Log filtering and display
+  │     ├─> Sound toggle controls
+  │     ├─> Hardware diagnostic display
+  │     └─> Settings panel
+  │
+  └─> GameBridge (Game integration)
+        ├─> Event trackers (100ms polling)
+        ├─> Sound event sending (with toggle checks)
+        └─> Ghost structure targeting for nukes
+```
+
+### State Persistence
+
+Uses Tampermonkey `GM_setValue`/`GM_getValue`:
+- `ots-hud-pos` — HUD window position (left, top)
+- `ots-hud-size` — HUD window size (width, height)
+- `ots-hud-collapsed` — HUD collapsed state (boolean)
+- `ots-ws-url` — WebSocket server URL
+- `ots-log-filters` — Log filter states (JSON)
+- `ots-sound-toggles` — Sound toggle states (JSON)
+
+## Game Event Detection
+
+The userscript uses dedicated tracker classes that poll the game every 100ms:
 
 ## Implementation Notes
 
@@ -268,12 +497,56 @@ This is only to exercise the protocol and dashboard UI. When integrating with a 
 - All DOM manipulation is done with plain DOM APIs to keep the bundle small and dependency-free.
 - The HUD creation is lazy: any status/log update first calls `ensureHud()` so the HUD is created as soon as it is needed.
 - HUD and settings window drag behavior is implemented via the `BaseWindow` and `FloatingPanel` helper classes in `src/hud/window.ts`.
-- Persistent state (WS URL, HUD position, HUD size) is stored via `GM_setValue` and restored via `GM_getValue` on startup.
+- Persistent state (WS URL, HUD position, HUD size, filters, sound toggles) is stored via `GM_setValue` and restored via `GM_getValue` on startup.
+- Sound system is event-only: userscript sends `SOUND_PLAY` events, server/firmware play sounds
+- Log entries with JSON payloads are collapsible with syntax-highlighted expansion
+- Hardware diagnostics use a request/response pattern with dedicated display in Hardware tab
+
+## Key Features Summary
+
+### Tabbed Interface
+- **3 tabs**: Logs, Hardware, Sound
+- Tab state preserved during session
+- Each tab has dedicated functionality and controls
+- Smooth tab switching with visual feedback
+
+### Advanced Log Filtering
+- **Direction filters**: Send, Recv, Info
+- **Event type filters**: Game Events, Nukes, Alerts, Troops, Sounds, System, Heartbeat
+- Real-time filtering with instant UI updates
+- Filter states persist across page reloads
+- Collapsible JSON with color formatting for readability
+
+### Sound Control System
+- **4 sound types**: game_start, game_player_death, game_victory, game_defeat
+- Toggle switches control event sending (not local playback)
+- Remote testing via ▶ Test buttons
+- Test events marked with `test: true` flag
+- Sound toggle states persist across page reloads
+- Integration at 9 locations in game event detection
+
+### Hardware Diagnostics
+- Request button in Hardware tab
+- Real-time diagnostic data display
+- Module status grid with initialization state
+- Pin configuration display
+- I2C address information
+- Error state reporting
+
+### Window Management
+- Draggable main HUD window
+- Resizable with min dimensions (320×240px)
+- Independent draggable settings panel
+- Position/size persistence via GM storage
+- Collapsible/expandable with close button
 
 ## When Updating This Project
 
-When you add or change behavior in `src/main.user.ts`, remember to:
+When you add or change behavior in `src/main.user.ts` or other source files, remember to:
 
-- Update this file to reflect any new commands, message shapes, or HUD/settings behavior.
+- Update this file to reflect any new commands, message shapes, HUD features, or behavior changes.
 - Rebuild the userscript via `npm run build` and reinstall it in Tampermonkey.
-- Keep the description of the WebSocket protocol in sync with `ots-shared/src/game.ts`.
+- Keep the description of the WebSocket protocol in sync with `ots-shared/src/game.ts` and `/prompts/protocol-context.md`.
+- Update filter systems if adding new event types.
+- Add sound toggles if introducing new sound events.
+- Document any new tabs or UI sections in this file.
