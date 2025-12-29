@@ -248,12 +248,13 @@ void app_main(void) {
     // even when the MCP23017 I/O boards are absent.
     ESP_LOGI(TAG, "Registering hardware modules...");
     module_manager_register((hardware_module_t *)system_status_module_get());
+    // Troops is LCD-driven and should be available regardless of MCP23017 presence.
+    module_manager_register((hardware_module_t *)troops_module_get());
     
     if (io_expanders_ready) {
         module_manager_register(&nuke_module);
         module_manager_register(&alert_module);
         module_manager_register(&main_power_module);
-        module_manager_register((hardware_module_t *)troops_module_get()); // In-game troop display
 
         // Initialize all hardware modules (includes splash screen)
         if (module_manager_init_all() != ESP_OK) {

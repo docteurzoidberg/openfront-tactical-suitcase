@@ -127,38 +127,18 @@ static void display_game_end(bool victory) {
 **Event Handlers**:
 
 ```c
-case GAME_EVENT_WIN:
-    ESP_LOGI(TAG, "Player won!");
-    module_state.show_game_end = true;
-    module_state.player_won = true;
-    module_state.game_end_time = esp_timer_get_time() / 1000;
-    break;
-
-case GAME_EVENT_LOOSE:
-    ESP_LOGI(TAG, "Player lost!");
-    module_state.show_game_end = true;
-    module_state.player_won = false;
-    module_state.game_end_time = esp_timer_get_time() / 1000;
-    break;
+case GAME_EVENT_GAME_END:
+  // Expected JSON in event->data: {"victory": true|false|null}
+  // Victory/defeat screens persist until userscript disconnect/reconnect.
+  break;
 ```
 
 **Update Logic**:
 
 ```c
 static void system_status_update(void) {
-    // Check game end screen timeout (show for 5 seconds)
-    if (module_state.show_game_end) {
-        uint64_t now = esp_timer_get_time() / 1000;
-        if (now - module_state.game_end_time >= GAME_END_DISPLAY_TIME_MS) {
-            module_state.show_game_end = false;
-            // Return to system status screen
-        } else {
-            display_game_end(module_state.player_won);
-            return;
-        }
-    }
-    
-    // ... rest of update logic ...
+  // No timeout: if show_game_end is set, keep showing it.
+  // The end screen clears when the userscript disconnects/reconnects.
 }
 ```
 
@@ -182,9 +162,8 @@ static void system_status_update(void) {
 
 ## Configuration
 
-**Display Duration**: 5 seconds (5000ms)
-- Defined in `system_status_module.c` as `GAME_END_DISPLAY_TIME_MS`
-- After timeout, returns to normal system status screen
+**Display Duration**: No timeout
+- End screen persists until userscript disconnect/reconnect resets state
 
 ## Testing
 
@@ -192,15 +171,15 @@ static void system_status_update(void) {
 
 1. **Victory Test**:
    - Play OpenFront.io game until you win
-   - Verify userscript sends `WIN` event (check browser console)
-   - Verify firmware receives event (check serial monitor)
-   - Verify LCD displays "VICTORY!" for 5 seconds
+  - Verify userscript sends `GAME_END` with `data.victory: true`
+  - Verify firmware receives event (check serial monitor)
+  - Verify LCD displays "VICTORY!" and persists
 
 2. **Defeat Test**:
    - Play OpenFront.io game until you lose
-   - Verify userscript sends `LOOSE` event (check browser console)
-   - Verify firmware receives event (check serial monitor)
-   - Verify LCD displays "DEFEAT" for 5 seconds
+  - Verify userscript sends `GAME_END` with `data.victory: false`
+  - Verify firmware receives event (check serial monitor)
+  - Verify LCD displays "DEFEAT" and persists
 
 3. **Fallback Test**:
    - Simulate game end with unknown outcome
@@ -213,22 +192,18 @@ static void system_status_update(void) {
 ```
 [OpenFront Bridge] Game ended
 [GameAPI] Player won: true
-[WebSocket] Sending event: WIN
+[WebSocket] Sending event: GAME_END
 ```
 
 **Firmware** (serial monitor):
 ```
-I (12345) system_status: Player won!
-I (12345) system_status: Showing victory screen
-I (17345) system_status: Game end screen timeout, returning to status
+I (12345) system_status: Game ended - VICTORY!
 ```
 
 ## Protocol Reference
 
 **Event Types** (from `prompts/protocol-context.md`):
-- `GAME_EVENT_WIN` (firmware) / `WIN` (WebSocket): Player won
-- `GAME_EVENT_LOOSE` (firmware) / `LOOSE` (WebSocket): Player lost
-- `GAME_EVENT_GAME_END` (firmware) / `GAME_END` (WebSocket): Game ended (outcome unknown)
+- `GAME_EVENT_GAME_END` (firmware) / `GAME_END` (WebSocket): Game ended (outcome indicated by `data.victory`)
 
 **Event Data Format**:
 ```json

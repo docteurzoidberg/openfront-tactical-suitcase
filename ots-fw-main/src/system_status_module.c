@@ -15,6 +15,7 @@
 #include "game_state.h"
 #include "protocol.h"
 #include <esp_log.h>
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <string.h>
@@ -29,6 +30,16 @@ typedef struct {
     bool player_won;      // true = victory, false = defeat
     bool show_game_end;   // Show game end screen
     bool ws_connected;    // WebSocket connection status
+
+    // Waiting-for-connection scan animation (line 2)
+    uint8_t conn_anim_frame;
+    uint64_t conn_anim_last_ms;
+    char conn_last_line2[LCD_COLS + 1];
+
+    // Lobby scan animation (line 2)
+    uint8_t lobby_anim_frame;
+    uint64_t lobby_anim_last_ms;
+    char lobby_last_line2[LCD_COLS + 1];
 } system_status_state_t;
 
 static system_status_state_t module_state = {0};
@@ -50,15 +61,77 @@ static void display_waiting_connection(void) {
     lcd_set_cursor(0, 0);
     lcd_write_string(" Waiting for    ");
     lcd_set_cursor(0, 1);
-    lcd_write_string(" Connection...  ");
+    // Line 2 is animated by system_status_update(); start with frame 0.
+    lcd_write_string(" Connection   .  ");
 }
 
 static void display_lobby(void) {
     lcd_clear();
     lcd_set_cursor(0, 0);
     lcd_write_string(" Connected!     ");
+    // Lobby line 2 is animated by system_status_update(); start with frame 0.
     lcd_set_cursor(0, 1);
-    lcd_write_string(" Waiting Game...");
+    lcd_write_string(" Waiting Game.  ");
+}
+
+static void conn_anim_write_line2_if_changed(uint8_t frame) {
+    // Keep the message stable and move a single dot across the last 3 columns.
+    // 16 chars total: 13-char prefix + 3-char scan suffix.
+    // Single moving dot (no fixed dots).
+    // Frame 0 matches display_waiting_connection(): " Connection   .  "
+    static const char *prefix = " Connection   ";
+    static const char *suffixes[] = {
+        ".  ",
+        " . ",
+        "  .",
+        " . "
+    };
+
+    char line2[LCD_COLS + 1];
+    memset(line2, ' ', LCD_COLS);
+    line2[LCD_COLS] = '\0';
+
+    memcpy(line2, prefix, strlen(prefix));
+    const char *suffix = suffixes[frame % (sizeof(suffixes) / sizeof(suffixes[0]))];
+    memcpy(line2 + (LCD_COLS - 3), suffix, 3);
+
+    if (strncmp(module_state.conn_last_line2, line2, LCD_COLS) != 0) {
+        (void)lcd_write_line(1, line2);
+        memcpy(module_state.conn_last_line2, line2, LCD_COLS + 1);
+    }
+}
+
+static void lobby_anim_write_line2_if_changed(uint8_t frame) {
+    // Keep the message stable and move a single dot across the last 3 columns.
+    // 16 chars total: 13-char prefix + 3-char scan suffix.
+    static const char *prefix = " Waiting Game";
+    static const char *suffixes[] = {
+        ".  ",
+        " . ",
+        "  .",
+        " . "
+    };
+
+    char line2[LCD_COLS + 1];
+    memset(line2, ' ', LCD_COLS);
+    line2[LCD_COLS] = '\0';
+
+    memcpy(line2, prefix, strlen(prefix));
+    const char *suffix = suffixes[frame % (sizeof(suffixes) / sizeof(suffixes[0]))];
+    memcpy(line2 + (LCD_COLS - 3), suffix, 3);
+
+    if (strncmp(module_state.lobby_last_line2, line2, LCD_COLS) != 0) {
+        (void)lcd_write_line(1, line2);
+        memcpy(module_state.lobby_last_line2, line2, LCD_COLS + 1);
+    }
+}
+
+static void display_choose_spawn(void) {
+    lcd_clear();
+    lcd_set_cursor(0, 0);
+    lcd_write_string("   Spawning...  ");
+    lcd_set_cursor(0, 1);
+    lcd_write_string(" Get Ready!     ");
 }
 
 static void display_game_end(bool victory) {
@@ -105,21 +178,30 @@ static esp_err_t system_status_init(void) {
 
 static esp_err_t system_status_update(void) {
     if (!module_state.initialized) return ESP_OK;
-    
+
+    // If the game has transitioned to IN_GAME, ensure we yield LCD control even
+    // if SystemStatus isn't about to redraw.
+    if (module_state.display_active && module_state.ws_connected && !module_state.show_game_end) {
+        if (game_state_get_phase() == GAME_PHASE_IN_GAME) {
+            module_state.display_active = false;
+        }
+    }
+
     // Update display if dirty and we're in control
     if (module_state.display_dirty && module_state.display_active) {
         game_phase_t phase = game_state_get_phase();
-        
-        // Show game end screen if flag is set
-        if (module_state.show_game_end) {
-            display_game_end(module_state.player_won);
-            module_state.display_dirty = false;
-            return ESP_OK;
-        }
-        
+
         // Check connection status first - if not connected, always show waiting screen
         if (!module_state.ws_connected) {
             display_waiting_connection();
+            module_state.show_game_end = false;
+            module_state.display_dirty = false;
+            return ESP_OK;
+        }
+
+        // Show game end screen if flag is set
+        if (module_state.show_game_end) {
+            display_game_end(module_state.player_won);
             module_state.display_dirty = false;
             return ESP_OK;
         }
@@ -130,7 +212,7 @@ static esp_err_t system_status_update(void) {
                 display_lobby();
                 break;
             case GAME_PHASE_SPAWNING:
-                display_lobby();  // Still in lobby UI during spawn
+                display_choose_spawn();
                 break;
             case GAME_PHASE_IN_GAME:
                 // Yield control - don't touch LCD during game
@@ -139,7 +221,7 @@ static esp_err_t system_status_update(void) {
             case GAME_PHASE_WON:
             case GAME_PHASE_LOST:
             case GAME_PHASE_ENDED:
-                // Show game end screen for 5 seconds, then return to lobby
+                // Show game end screen until userscript disconnect/reconnect resets state.
                 module_state.show_game_end = true;
                 module_state.player_won = (phase == GAME_PHASE_WON);
                 display_game_end(module_state.player_won);
@@ -152,6 +234,29 @@ static esp_err_t system_status_update(void) {
         
         module_state.display_dirty = false;
     }
+
+    // Waiting-for-connection scan animation: when NOT connected, update line 2 periodically.
+    if (module_state.display_active && !module_state.ws_connected) {
+        const uint64_t now_ms = (uint64_t)(esp_timer_get_time() / 1000);
+        if (module_state.conn_anim_last_ms == 0 || (now_ms - module_state.conn_anim_last_ms) >= 250) {
+            module_state.conn_anim_last_ms = now_ms;
+            module_state.conn_anim_frame = (module_state.conn_anim_frame + 1) % 4;
+            conn_anim_write_line2_if_changed(module_state.conn_anim_frame);
+        }
+        return ESP_OK;
+    }
+
+    // Lobby scan animation: when connected and in LOBBY, update line 2 periodically.
+    if (module_state.display_active && module_state.ws_connected && !module_state.show_game_end) {
+        if (game_state_get_phase() == GAME_PHASE_LOBBY) {
+            const uint64_t now_ms = (uint64_t)(esp_timer_get_time() / 1000);
+            if (module_state.lobby_anim_last_ms == 0 || (now_ms - module_state.lobby_anim_last_ms) >= 250) {
+                module_state.lobby_anim_last_ms = now_ms;
+                module_state.lobby_anim_frame = (module_state.lobby_anim_frame + 1) % 4;
+                lobby_anim_write_line2_if_changed(module_state.lobby_anim_frame);
+            }
+        }
+    }
     
     return ESP_OK;
 }
@@ -162,24 +267,51 @@ static bool system_status_handle_event(const internal_event_t *event) {
     switch (event->type) {
         case INTERNAL_EVENT_WS_CONNECTED:
             ESP_LOGI(TAG, "WebSocket connected - showing lobby screen");
+            // Userscript reconnect usually means the browser page reloaded and any
+            // previous game session is no longer relevant. Reset the game phase so
+            // we don't keep showing stale end-game screens.
+            game_state_reset();
             module_state.ws_connected = true;
             module_state.display_active = true;
             module_state.display_dirty = true;
             module_state.show_game_end = false;  // Clear game end flag
+            module_state.lobby_anim_frame = 0;
+            module_state.lobby_anim_last_ms = 0;
+            memset(module_state.lobby_last_line2, 0, sizeof(module_state.lobby_last_line2));
+            module_state.conn_anim_frame = 0;
+            module_state.conn_anim_last_ms = 0;
+            memset(module_state.conn_last_line2, 0, sizeof(module_state.conn_last_line2));
             return true;
             
         case INTERNAL_EVENT_WS_DISCONNECTED:
             ESP_LOGI(TAG, "WebSocket disconnected - showing waiting screen");
+            // Clear stale game session state on disconnect.
+            game_state_reset();
             module_state.ws_connected = false;
             module_state.display_active = true;
             module_state.display_dirty = true;
             module_state.show_game_end = false;
+            module_state.lobby_anim_frame = 0;
+            module_state.lobby_anim_last_ms = 0;
+            memset(module_state.lobby_last_line2, 0, sizeof(module_state.lobby_last_line2));
+            module_state.conn_anim_frame = 0;
+            module_state.conn_anim_last_ms = 0;
+            memset(module_state.conn_last_line2, 0, sizeof(module_state.conn_last_line2));
             return true;
             
         case GAME_EVENT_GAME_START:
             ESP_LOGI(TAG, "Game started - yielding LCD control to troops module");
             module_state.display_active = false;
             module_state.show_game_end = false;  // Clear any previous game end
+            module_state.lobby_anim_last_ms = 0;
+            return true;
+
+        case GAME_EVENT_GAME_SPAWNING:
+            ESP_LOGI(TAG, "Game spawning - showing choose spawn screen");
+            module_state.display_active = true;
+            module_state.display_dirty = true;
+            module_state.show_game_end = false;
+            module_state.lobby_anim_last_ms = 0;
             return true;
             
         case GAME_EVENT_GAME_END:

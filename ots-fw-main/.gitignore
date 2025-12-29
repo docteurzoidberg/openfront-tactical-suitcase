@@ -8,6 +8,9 @@ build/
 *.elf
 *.map
 
+# Runtime logs
+logs/
+
 # IDE
 .vscode/
 .idea/

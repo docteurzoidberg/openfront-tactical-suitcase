@@ -32,7 +32,8 @@ typedef struct {
             game_event_type_t event_type;
             uint32_t timestamp;
             char message[64];
-            char data[128];
+            // TROOP_UPDATE carries JSON data; 128 bytes is too small and causes truncation.
+            char data[512];
         } event;
         
         struct {

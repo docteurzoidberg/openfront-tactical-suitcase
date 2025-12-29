@@ -27,6 +27,10 @@ static troops_module_state_t module_state = {
     .initialized = false
 };
 
+// Latest percent as reported by the game/userscript (attackRatio * 100)
+static bool s_have_game_percent = false;
+static uint8_t s_game_percent = 0;
+
 // Forward declarations
 static esp_err_t troops_init(void);
 static esp_err_t troops_update(void);
@@ -100,9 +104,22 @@ static void update_troop_display(void) {
     }
     
     // Line 2: "50% (60K)" (left-aligned)
-    uint32_t calculated = ((uint64_t)module_state.current_troops * module_state.slider_percent) / 100;
+    const uint8_t display_percent = s_have_game_percent ? s_game_percent : module_state.slider_percent;
+    uint32_t calculated = ((uint64_t)module_state.current_troops * display_percent) / 100;
     troops_format_count(calculated, calc_str, sizeof(calc_str));
-    snprintf(line2, sizeof(line2), "%d%% (%s)", module_state.slider_percent, calc_str);
+    int len2 = snprintf(line2, sizeof(line2), "%u%% (%s)", (unsigned)display_percent, calc_str);
+    if (len2 < 0) {
+        line2[0] = '\0';
+        len2 = 0;
+    }
+    if (len2 >= LCD_COLS) {
+        line2[LCD_COLS] = '\0';
+        len2 = LCD_COLS;
+    }
+    if (len2 < LCD_COLS) {
+        memset(line2 + len2, ' ', LCD_COLS - len2);
+        line2[LCD_COLS] = '\0';
+    }
     
     // Write to LCD using optimized batched I2C
     lcd_write_line(0, line1);
@@ -158,30 +175,27 @@ static esp_err_t troops_init(void) {
 
 static esp_err_t troops_update(void) {
     if (!module_state.initialized) return ESP_OK;
-    
-    // Only monitor slider during active game
-    game_phase_t phase = game_state_get_phase();
-    if (phase != GAME_PHASE_IN_GAME) {
-        return ESP_OK;
-    }
-    
-    // Query ADC value from handler (scanned by io_task)
-    adc_event_t adc_value;
-    if (adc_handler_get_value(ADC_CHANNEL_TROOPS_SLIDER, &adc_value) == ESP_OK) {
-        uint8_t new_percent = adc_value.percent;
-        module_state.slider_percent = new_percent;
-        
-        // Check for ≥1% change before sending command
-        int diff = abs((int)new_percent - (int)module_state.last_sent_percent);
-        if (diff >= TROOPS_CHANGE_THRESHOLD) {
-            send_percent_command(new_percent);
-            module_state.last_sent_percent = new_percent;
-            module_state.display_dirty = true;
+
+    // Only send slider commands during active game.
+    if (game_state_get_phase() == GAME_PHASE_IN_GAME) {
+        // Query ADC value from handler (scanned by io_task)
+        adc_event_t adc_value;
+        if (adc_handler_get_value(ADC_CHANNEL_TROOPS_SLIDER, &adc_value) == ESP_OK) {
+            uint8_t new_percent = adc_value.percent;
+            module_state.slider_percent = new_percent;
+            
+            // Check for ≥1% change before sending command
+            int diff = abs((int)new_percent - (int)module_state.last_sent_percent);
+            if (diff >= TROOPS_CHANGE_THRESHOLD) {
+                send_percent_command(new_percent);
+                module_state.last_sent_percent = new_percent;
+                module_state.display_dirty = true;
+            }
         }
     }
-    
-    // Update display if dirty (only during game)
-    if (module_state.display_dirty) {
+
+    // Update display if dirty (when allowed)
+    if (game_state_get_phase() == GAME_PHASE_IN_GAME && module_state.display_dirty) {
         update_troop_display();
         module_state.display_dirty = false;
     }
@@ -192,38 +206,50 @@ static esp_err_t troops_update(void) {
 static bool troops_handle_event(const internal_event_t *event) {
     if (!module_state.initialized || !event) return false;
     
-    // Only handle events during active game
-    game_phase_t phase = game_state_get_phase();
-    if (phase != GAME_PHASE_IN_GAME) {
-        return false;
-    }
-    
     // Parse event data for troop updates (from JSON payload)
-    if (event->data && strlen(event->data) > 0) {
+    if (event->type == GAME_EVENT_TROOP_UPDATE && event->data && strlen(event->data) > 0) {
         cJSON* root = cJSON_Parse(event->data);
         if (root) {
-            // Check for troops data in state message
-            cJSON* troops = cJSON_GetObjectItem(root, "troops");
-            if (troops) {
-                cJSON* current = cJSON_GetObjectItem(troops, "current");
-                cJSON* max = cJSON_GetObjectItem(troops, "max");
-                
-                if (current && cJSON_IsNumber(current)) {
-                    module_state.current_troops = (uint32_t)current->valueint;
-                }
-                if (max && cJSON_IsNumber(max)) {
-                    module_state.max_troops = (uint32_t)max->valueint;
-                }
-                
-                module_state.display_dirty = true;
-                ESP_LOGI(TAG, "Troop update: %lu / %lu", 
-                         (unsigned long)module_state.current_troops,
-                         (unsigned long)module_state.max_troops);
-                
-                cJSON_Delete(root);
-                return true;
+            // TROOP_UPDATE event format: {"currentTroops":2500,"maxTroops":12141,...}
+            cJSON* current = cJSON_GetObjectItem(root, "currentTroops");
+            cJSON* max = cJSON_GetObjectItem(root, "maxTroops");
+            cJSON* attack_ratio = cJSON_GetObjectItem(root, "attackRatio");
+            
+            if (current && cJSON_IsNumber(current)) {
+                module_state.current_troops = (uint32_t)current->valuedouble;
             }
+            if (max && cJSON_IsNumber(max)) {
+                module_state.max_troops = (uint32_t)max->valuedouble;
+            }
+
+            // Game slider value (0.0..1.0) -> percent
+            if (attack_ratio && cJSON_IsNumber(attack_ratio)) {
+                double ratio = attack_ratio->valuedouble;
+                if (ratio < 0.0) ratio = 0.0;
+                if (ratio > 1.0) ratio = 1.0;
+                s_game_percent = (uint8_t)lround(ratio * 100.0);
+                s_have_game_percent = true;
+            }
+
+            // If we are receiving TROOP_UPDATE with non-zero max troops, the game
+            // is effectively running. Use this as a fallback ONLY when we're still
+            // pre-game, in case GAME_START was dropped due to event queue pressure.
+            //
+            // IMPORTANT: Never force a return to IN_GAME after a match ends, or the
+            // end screen can get suppressed.
+            const game_phase_t phase = game_state_get_phase();
+            if (module_state.max_troops > 0 && (phase == GAME_PHASE_LOBBY || phase == GAME_PHASE_SPAWNING)) {
+                ESP_LOGW(TAG, "TROOP_UPDATE received while phase=%d; forcing GAME_START transition", (int)phase);
+                game_state_update(GAME_EVENT_GAME_START);
+            }
+            
+            module_state.display_dirty = true;
+            ESP_LOGD(TAG, "Troop update: %lu / %lu", 
+                     (unsigned long)module_state.current_troops,
+                     (unsigned long)module_state.max_troops);
+            
             cJSON_Delete(root);
+            return true;
         }
     }
     

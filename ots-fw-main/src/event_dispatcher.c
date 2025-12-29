@@ -176,8 +176,35 @@ esp_err_t event_dispatcher_post(const internal_event_t *event) {
     if (!event || !event_queue) {
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     if (xQueueSend(event_queue, event, 0) != pdTRUE) {
+        // Under heavy traffic (especially TROOP_UPDATE), we prefer to preserve
+        // critical lifecycle events like GAME_END.
+        const bool is_low_priority = (event->type == GAME_EVENT_INFO || event->type == GAME_EVENT_TROOP_UPDATE);
+        if (is_low_priority) {
+            ESP_LOGD(TAG, "Event queue full, dropping low-priority event type %d", event->type);
+            return ESP_ERR_NO_MEM;
+        }
+
+        const bool is_critical = (
+            event->type == GAME_EVENT_GAME_SPAWNING ||
+            event->type == GAME_EVENT_GAME_START ||
+            event->type == GAME_EVENT_GAME_END ||
+            event->type == INTERNAL_EVENT_WS_CONNECTED ||
+            event->type == INTERNAL_EVENT_WS_DISCONNECTED ||
+            event->type == INTERNAL_EVENT_WS_ERROR
+        );
+
+        if (is_critical) {
+            internal_event_t dropped = {0};
+            if (xQueueReceive(event_queue, &dropped, 0) == pdTRUE) {
+                ESP_LOGW(TAG, "Event queue full; dropped type %d to enqueue critical type %d", dropped.type, event->type);
+                if (xQueueSend(event_queue, event, 0) == pdTRUE) {
+                    return ESP_OK;
+                }
+            }
+        }
+
         ESP_LOGW(TAG, "Event queue full, dropping event type %d", event->type);
         return ESP_ERR_NO_MEM;
     }

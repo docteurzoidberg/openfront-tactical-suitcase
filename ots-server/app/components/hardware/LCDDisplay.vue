@@ -10,7 +10,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import type { TroopsData, GamePhase } from '../../../../ots-shared/src/game'
 
 interface Props {
@@ -24,6 +24,80 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   troops: null,
   sliderPercent: 0
+})
+
+// Waiting-for-connection loading/scan animation (line 2)
+// Keep the message stable and move a single dot across the last 3 columns.
+const CONN_ANIM_INTERVAL_MS = 250
+const connAnimFrame = ref(0)
+let connAnimTimer: ReturnType<typeof setInterval> | null = null
+
+function connectionLine2ForFrame(frame: number): string {
+  // 16 chars total: 13-char prefix + 3-char scan suffix
+  // Single moving dot (no fixed dots)
+  // Frame 0 matches: " Connection   .  "
+  const prefix = ' Connection   '
+  const suffixes = ['.  ', ' . ', '  .', ' . ']
+  return (prefix + suffixes[frame % suffixes.length])
+}
+
+function stopConnAnim() {
+  if (connAnimTimer) {
+    clearInterval(connAnimTimer)
+    connAnimTimer = null
+  }
+}
+
+function startConnAnim() {
+  if (connAnimTimer) return
+  connAnimTimer = setInterval(() => {
+    connAnimFrame.value = (connAnimFrame.value + 1) % 4
+  }, CONN_ANIM_INTERVAL_MS)
+}
+
+// Lobby loading/scan animation (line 2)
+// Keep the message stable and move a single dot across the last 3 columns.
+const LOBBY_ANIM_INTERVAL_MS = 250
+const lobbyAnimFrame = ref(0)
+let lobbyAnimTimer: ReturnType<typeof setInterval> | null = null
+
+function lobbyLine2ForFrame(frame: number): string {
+  // 16 chars total: 13-char prefix + 3-char scan suffix
+  const prefix = ' Waiting Game'
+  const suffixes = ['.  ', ' . ', '  .', ' . ']
+  return (prefix + suffixes[frame % suffixes.length])
+}
+
+function stopLobbyAnim() {
+  if (lobbyAnimTimer) {
+    clearInterval(lobbyAnimTimer)
+    lobbyAnimTimer = null
+  }
+}
+
+function startLobbyAnim() {
+  if (lobbyAnimTimer) return
+  lobbyAnimTimer = setInterval(() => {
+    lobbyAnimFrame.value = (lobbyAnimFrame.value + 1) % 4
+  }, LOBBY_ANIM_INTERVAL_MS)
+}
+
+const shouldAnimateConnection = computed(() => props.powered && !props.connected)
+const shouldAnimateLobby = computed(() => props.powered && props.connected && props.gamePhase === 'lobby')
+
+onMounted(() => {
+  watchEffect(() => {
+    if (shouldAnimateConnection.value) startConnAnim()
+    else stopConnAnim()
+
+    if (shouldAnimateLobby.value) startLobbyAnim()
+    else stopLobbyAnim()
+  })
+})
+
+onUnmounted(() => {
+  stopConnAnim()
+  stopLobbyAnim()
 })
 
 /**
@@ -126,7 +200,7 @@ const line2 = computed(() => {
 
   if (!props.connected) {
     // Waiting for connection screen
-    return ' Connection...  '
+    return connectionLine2ForFrame(connAnimFrame.value)
   }
 
   // Game phase determines screen
@@ -137,7 +211,7 @@ const line2 = computed(() => {
     
     case 'lobby':
       // Lobby screen
-      return ' Waiting Game...'
+      return lobbyLine2ForFrame(lobbyAnimFrame.value)
     
     case 'spawning':
       // Spawning phase - countdown active

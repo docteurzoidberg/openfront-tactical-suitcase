@@ -285,9 +285,9 @@ static esp_err_t ws_handler(httpd_req_t *req) {
     } else if (ws_pkt.type == HTTPD_WS_TYPE_PONG) {
         // No action needed.
     } else if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
-        
-        // Log raw message for debugging
-        ESP_LOGI(TAG, "Received TEXT frame (len=%d): %.*s", ws_pkt.len, (int)ws_pkt.len, (char *)ws_pkt.payload);
+        // Debug only: raw frames can be very frequent (e.g. TROOP_UPDATE every 100ms).
+        const int max_log = 160;
+        ESP_LOGD(TAG, "WS TEXT frame len=%d: %.*s", ws_pkt.len, ws_pkt.len > max_log ? max_log : (int)ws_pkt.len, (char *)ws_pkt.payload);
         
         // Parse message using protocol handler
         ws_message_t msg;

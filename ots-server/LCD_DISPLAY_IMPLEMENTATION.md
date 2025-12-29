@@ -21,8 +21,8 @@ The ots-server dashboard now includes a full LCD display emulator that mirrors t
 2. ✅ **Waiting for Connection** - When WebSocket disconnected
 3. ✅ **Lobby** - Connected, waiting for game
 4. ✅ **Troops Display** - In-game with troop counts and deployment percentage
-5. ✅ **Victory** - Game won (auto-timeout after 5s)
-6. ✅ **Defeat** - Game lost (auto-timeout after 5s)
+5. ✅ **Victory** - Game won (persists until userscript reconnect/reset)
+6. ✅ **Defeat** - Game lost (persists until userscript reconnect/reset)
 7. ✅ **Blank** - When powered off
 
 ### Updated Components
@@ -35,8 +35,7 @@ The ots-server dashboard now includes a full LCD display emulator that mirrors t
 
 #### `useGameSocket.ts` Composable
 - Added `gamePhase` tracking (null, lobby, in-game, game-won, game-lost)
-- Implemented 5-second timeout for victory/defeat screens
-- Returns to lobby automatically after game end display
+- Victory/defeat screens persist until userscript reconnect/reset
 - Exports `gamePhase` for use by display component
 
 #### `index.vue` Page
@@ -61,12 +60,10 @@ Power ON + WS Connected + gamePhase=in-game
   └─→ Troops display with counts and percentage
 
 Power ON + gamePhase=game-won
-  └─→ "VICTORY! / Good Game!" (5s timeout)
-  └─→ Returns to lobby
+  └─→ "VICTORY! / Good Game!" (persists)
 
 Power ON + gamePhase=game-lost
-  └─→ "DEFEAT / Good Game!" (5s timeout)
-  └─→ Returns to lobby
+  └─→ "DEFEAT / Good Game!" (persists)
 ```
 
 ## Text Formatting Examples
@@ -123,12 +120,12 @@ Implementation matches firmware logic exactly.
 
 ## Event-to-Phase Mapping
 
+`GAME_END` does **not** auto-return to `lobby` in the emulator. If `data.victory` is `true`/`false`, the LCD enters `game-won`/`game-lost` and stays there until a userscript reconnect/reset.
+
 | WebSocket Event | Game Phase Transition |
 |----------------|----------------------|
 | `GAME_START` | → `in-game` |
-| `GAME_END` | → `lobby` |
-| `WIN` | → `game-won` (5s) → `lobby` |
-| `LOOSE` | → `game-lost` (5s) → `lobby` |
+| `GAME_END` | → `game-won` / `game-lost` / `lobby` (based on `data.victory`) |
 | Userscript connect | → `lobby` |
 | Userscript disconnect | → `null` (unknown) |
 
@@ -160,8 +157,8 @@ Implementation matches firmware logic exactly.
 4. **Game start**: Transitions to troop display
 5. **Troop updates**: Numbers update in real-time
 6. **Slider changes**: Line 2 updates with calculated troops
-7. **Victory**: Shows "VICTORY!" for 5 seconds, then lobby
-8. **Defeat**: Shows "DEFEAT" for 5 seconds, then lobby
+7. **Victory**: Shows "VICTORY!" and persists until userscript reconnect/reset
+8. **Defeat**: Shows "DEFEAT" and persists until userscript reconnect/reset
 9. **Unit scaling**: Large numbers show with K/M/B suffixes
 
 ### Expected Behavior
@@ -169,7 +166,7 @@ Implementation matches firmware logic exactly.
 - Text should exactly match firmware strings (including spaces)
 - Transitions should be instant (no animations)
 - Slider should only be enabled during in-game phase
-- Game end screens should auto-clear after 5 seconds
+- Game end screens should persist until userscript reconnect/reset
 - All 16 characters per line should be visible
 
 ## Future Enhancements
@@ -177,7 +174,7 @@ Implementation matches firmware logic exactly.
 ### Short Term
 - Add splash screen on initial load (needs boot state)
 - Consider adding scan-line effect for more authentic LCD look
-- Add configurable timeout for game end screens
+
 
 ### Medium Term
 - Implement custom character support (if firmware uses them)

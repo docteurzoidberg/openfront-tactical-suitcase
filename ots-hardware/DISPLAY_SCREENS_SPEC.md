@@ -68,7 +68,11 @@ Line 2 (0,1): "  Booting...    "  // 2 spaces at start, 4 at end
 **Implementation**:
 ```c
 Line 1 (0,0): " Waiting for    "  // 1 space at start, 4 at end
-Line 2 (0,1): " Connection...  "  // 1 space at start, 2 at end
+// Line 2 is a small scan/loading animation using a SINGLE moving dot.
+// Prefix stays stable: " Connection" (with padding spaces; no fixed dots)
+// Dot moves across the last 3 columns every ~250ms: ".  " -> " . " -> "  ." -> " . " (repeat)
+// Example frame 0:
+Line 2 (0,1): " Connection   .  "
 ```
 
 **Display Trigger**: `INTERNAL_EVENT_WS_DISCONNECTED` or no WebSocket connection
@@ -78,23 +82,50 @@ Line 2 (0,1): " Connection...  "  // 1 space at start, 2 at end
 ### 3. Lobby Screen (Connected, No Game)
 
 **Module**: System Status  
-**Phase**: `GAME_PHASE_LOBBY`, `GAME_PHASE_SPAWNING`  
+**Phase**: `GAME_PHASE_LOBBY`  
 **Duration**: Until game starts
 
 ```
 ┌────────────────┐
 │ Connected!     │ (left-aligned with leading space)
-│ Waiting Game...│ (left-aligned with leading space)
+│ Waiting Game.  │ (left-aligned with leading space; animated)
 └────────────────┘
 ```
 
 **Implementation**:
 ```c
 Line 1 (0,0): " Connected!     "  // 1 space at start, 5 at end
-Line 2 (0,1): " Waiting Game..."  // 1 space at start, no trailing
+// Line 2 is a small scan/loading animation over the last 3 columns.
+// Prefix stays stable: " Waiting Game" (13 chars)
+// Suffix cycles every ~250ms: ".  " -> " . " -> "  ." -> " . " (repeat)
+// Example frame 0:
+Line 2 (0,1): " Waiting Game.  "
 ```
 
 **Display Trigger**: `INTERNAL_EVENT_WS_CONNECTED` or `GAME_PHASE_LOBBY`
+
+---
+
+### 3b. Spawning Screen
+
+**Module**: System Status  
+**Phase**: `GAME_PHASE_SPAWNING`  
+**Duration**: Until game starts
+
+```
+┌────────────────┐
+│   Spawning...  │
+│ Get Ready!     │
+└────────────────┘
+```
+
+**Implementation**:
+```c
+Line 1 (0,0): "   Spawning...  "  // 3 spaces at start, 2 at end
+Line 2 (0,1): " Get Ready!     "  // 1 space at start, 5 at end
+```
+
+**Display Trigger**: `GAME_EVENT_GAME_SPAWNING` or `GAME_PHASE_SPAWNING`
 
 ---
 
@@ -182,7 +213,7 @@ if (troops >= 1000000000) {
 
 **Module**: System Status  
 **Phase**: `GAME_PHASE_WON`  
-**Duration**: 5 seconds, then returns to lobby
+**Duration**: Persists until userscript disconnect/reconnect resets state
 
 ```
 ┌────────────────┐
@@ -197,8 +228,7 @@ Line 1 (0,0): "   VICTORY!     "  // 3 spaces at start, 5 at end
 Line 2 (0,1): " Good Game!     "  // 1 space at start, 5 at end
 ```
 
-**Display Trigger**: `GAME_EVENT_WIN`  
-**Auto-Clear**: After 5 seconds (5000ms timeout)
+**Display Trigger**: `GAME_EVENT_GAME_END` with `data.victory: true`
 
 ---
 
@@ -206,7 +236,7 @@ Line 2 (0,1): " Good Game!     "  // 1 space at start, 5 at end
 
 **Module**: System Status  
 **Phase**: `GAME_PHASE_LOST`  
-**Duration**: 5 seconds, then returns to lobby
+**Duration**: Persists until userscript disconnect/reconnect resets state
 
 ```
 ┌────────────────┐
@@ -221,8 +251,7 @@ Line 1 (0,0): "    DEFEAT      "  // 4 spaces at start, 6 at end
 Line 2 (0,1): " Good Game!     "  // 1 space at start, 5 at end
 ```
 
-**Display Trigger**: `GAME_EVENT_LOOSE` (note: protocol uses "LOOSE" not "LOSE")  
-**Auto-Clear**: After 5 seconds (5000ms timeout)
+**Display Trigger**: `GAME_EVENT_GAME_END` with `data.victory: false`
 
 ---
 
@@ -364,7 +393,7 @@ Line 2 (0,1): "                "  // All spaces (blank)
    - Track game phase state
    - Track WebSocket connection state
    - Track display ownership (system vs troops module)
-   - Track game end timeout (5 seconds)
+  - Track game end persistence (clears on userscript disconnect/reconnect)
 
 ### Example Vue Component Structure
 
@@ -404,12 +433,10 @@ const updateDisplay = (screen: string, data?: any) => {
     case 'victory':
       line1.value = '   VICTORY!     '
       line2.value = ' Good Game!     '
-      setTimeout(() => updateDisplay('lobby'), 5000)
       break
     case 'defeat':
       line1.value = '    DEFEAT      '
       line2.value = ' Good Game!     '
-      setTimeout(() => updateDisplay('lobby'), 5000)
       break
   }
 }
@@ -482,9 +509,9 @@ When implementing the emulator, verify:
 - [ ] Line 1 is right-aligned with proper spacing
 - [ ] Line 2 is left-aligned with proper spacing
 - [ ] Unit scaling works correctly (K/M/B)
-- [ ] Victory screen shows for 5 seconds after WIN event
-- [ ] Defeat screen shows for 5 seconds after LOOSE event
-- [ ] Screens return to lobby after game end timeout
+- [ ] Victory screen shows after GAME_END (data.victory=true)
+- [ ] Defeat screen shows after GAME_END (data.victory=false)
+- [ ] End screen clears on userscript disconnect/reconnect
 - [ ] All text exactly matches firmware (including spaces)
 - [ ] Display updates in real-time with state changes
 

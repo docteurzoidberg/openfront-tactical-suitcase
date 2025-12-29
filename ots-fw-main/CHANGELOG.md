@@ -43,14 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Victory/Defeat display on LCD**
   - Dedicated game end screen in `system_status_module`
   - Shows "VICTORY!" or "DEFEAT" based on game outcome
-  - Displays for 5 seconds after game ends
-  - Responds to `GAME_EVENT_WIN` and `GAME_EVENT_LOOSE` events
-  - Automatic return to system status after timeout
-- **Userscript game outcome detection**
-  - Added `didPlayerWin()` method to GameAPI
-  - Checks `myPlayer.eliminated()` and `game.gameOver()` state
-  - Sends specific `WIN` or `LOOSE` events instead of generic `GAME_END`
-  - Falls back to `GAME_END` if outcome cannot be determined
+  - Triggered by `GAME_EVENT_GAME_END` with `data.victory: true|false|null`
+
+### Changed - 2025-12-29 (Game End Screen Behavior)
+- **Removed end-screen timeout**
+  - Victory/defeat screens persist until userscript disconnect/reconnect resets state
+  - Improves reliability and avoids hiding game end in busy event conditions
 
 ### Added - 2025-12-19 (I/O Expander Error Recovery & WebSocket Disconnect Feedback)
 - **Comprehensive error recovery system for MCP23017 I/O expanders**
