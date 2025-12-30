@@ -1,10 +1,10 @@
 import { PROTOCOL_CONSTANTS } from '../../../ots-shared/src/game'
+import { STORAGE_KEYS } from './keys'
 
 const DEFAULT_WS_URL = PROTOCOL_CONSTANTS.DEFAULT_WS_URL
-const STORAGE_KEY_WS_URL = 'ots-ws-url'
 
 export function loadWsUrl(): string {
-  const saved = GM_getValue<string | null>(STORAGE_KEY_WS_URL, null)
+  const saved = GM_getValue<string | null>(STORAGE_KEYS.WS_URL, null)
   if (typeof saved === 'string' && saved.trim()) {
     return saved
   }
@@ -12,7 +12,7 @@ export function loadWsUrl(): string {
 }
 
 export function saveWsUrl(url: string) {
-  GM_setValue(STORAGE_KEY_WS_URL, url)
+  GM_setValue(STORAGE_KEYS.WS_URL, url)
 }
 
 export { DEFAULT_WS_URL }

@@ -161,7 +161,7 @@ export class TroopMonitor {
         })
       } else {
         // Input not found yet, try again in 500ms
-        setTimeout(attachInputListener, 500)
+        setTimeout(attachInputListener, INPUT_LISTENER_RETRY_DELAY_MS)
       }
     }
 

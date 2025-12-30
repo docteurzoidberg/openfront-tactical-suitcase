@@ -1,3 +1,5 @@
+import { GAME_INSTANCE_CHECK_INTERVAL_MS } from '../game/constants'
+
 export function waitForElement(selector: string, callback: (el: Element) => void) {
   const existing = document.querySelector(selector)
   if (existing) {
@@ -19,7 +21,7 @@ export function waitForElement(selector: string, callback: (el: Element) => void
   })
 }
 
-export function waitForGameInstance(controlPanel: any, callback: (game: any) => void, checkInterval = 100) {
+export function waitForGameInstance(controlPanel: any, callback: (game: any) => void, checkInterval = GAME_INSTANCE_CHECK_INTERVAL_MS) {
   const existing = (controlPanel as any).game
   if (existing) {
     callback(existing)

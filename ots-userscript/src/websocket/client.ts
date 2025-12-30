@@ -1,10 +1,30 @@
-import type { GameState, GameEventType, WsStatus } from '../../../ots-shared/src/game'
+import type {
+  CmdMessage,
+  EventMessage,
+  GameEventType,
+  GameState,
+  HandshakeMessage,
+  StateMessage,
+  WsMessage,
+  WsStatus
+} from '../../../ots-shared/src/game'
 import { PROTOCOL_CONSTANTS } from '../../../ots-shared/src/game'
 import type { Hud } from '../hud/sidebar-hud'
+import { DEFAULT_RECONNECT_DELAY_MS, MAX_RECONNECT_DELAY_MS } from '../game/constants'
 
-type DashboardCommand = {
-  type: 'cmd'
-  payload: { action: string; params?: unknown }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function parseWsMessage(raw: string): WsMessage | null {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!isRecord(parsed)) return null
+    if (typeof parsed.type !== 'string') return null
+    return parsed as WsMessage
+  } catch {
+    return null
+  }
 }
 
 function debugLog(...args: unknown[]) {
@@ -15,7 +35,7 @@ function debugLog(...args: unknown[]) {
 export class WsClient {
   private socket: WebSocket | null = null
   private reconnectTimeout: number | null = null
-  private reconnectDelay = 2000
+  private reconnectDelay = DEFAULT_RECONNECT_DELAY_MS
   private heartbeatInterval: number | null = null
   private shouldReconnect = true
 
@@ -60,10 +80,14 @@ export class WsClient {
       debugLog('WebSocket connected')
       this.hud.setWsStatus('OPEN')
       this.hud.pushLog('info', 'WebSocket connected')
-      this.reconnectDelay = 2000
+      this.reconnectDelay = DEFAULT_RECONNECT_DELAY_MS
 
       // Send handshake to identify as userscript client
-      this.safeSend({ type: 'handshake', clientType: 'userscript' })
+      const handshake: HandshakeMessage = {
+        type: 'handshake',
+        clientType: PROTOCOL_CONSTANTS.CLIENT_TYPE_USERSCRIPT
+      }
+      this.safeSend(handshake)
 
       this.sendInfo(PROTOCOL_CONSTANTS.INFO_MESSAGE_USERSCRIPT_CONNECTED, { url: window.location.href })
 
@@ -92,13 +116,9 @@ export class WsClient {
       // Try to extract event type from message for filtering
       let eventType: GameEventType | undefined
       if (typeof event.data === 'string') {
-        try {
-          const parsed = JSON.parse(event.data)
-          if (parsed.type === 'event' && parsed.payload?.type) {
-            eventType = parsed.payload.type
-          }
-        } catch {
-          // Not JSON or invalid format, ignore
+        const parsed = parseWsMessage(event.data)
+        if (parsed?.type === 'event') {
+          eventType = (parsed as EventMessage).payload.type
         }
       }
 
@@ -153,10 +173,10 @@ export class WsClient {
 
     // Extract event type for filtering if it's an event message
     let eventType: GameEventType | undefined
-    if (typeof msg === 'object' && msg !== null) {
-      const msgObj = msg as any
-      if (msgObj.type === 'event' && msgObj.payload?.type) {
-        eventType = msgObj.payload.type
+    if (isRecord(msg) && msg.type === 'event') {
+      const payload = msg.payload
+      if (isRecord(payload) && typeof payload.type === 'string') {
+        eventType = payload.type as GameEventType
       }
     }
 
@@ -165,14 +185,12 @@ export class WsClient {
   }
 
   sendState(state: GameState) {
-    this.safeSend({
-      type: 'state',
-      payload: state
-    })
+    const msg: StateMessage = { type: 'state', payload: state }
+    this.safeSend(msg)
   }
 
   sendEvent(type: GameEventType, message: string, data?: unknown) {
-    this.safeSend({
+    const msg: EventMessage = {
       type: 'event',
       payload: {
         type,
@@ -180,7 +198,8 @@ export class WsClient {
         message,
         data
       }
-    })
+    }
+    this.safeSend(msg)
   }
 
   sendInfo(message: string, data?: unknown) {
@@ -188,13 +207,8 @@ export class WsClient {
   }
 
   sendCommand(action: string, params?: unknown) {
-    this.safeSend({
-      type: 'cmd',
-      payload: {
-        action,
-        params
-      }
-    })
+    const msg: CmdMessage = { type: 'cmd', payload: { action, params } }
+    this.safeSend(msg)
   }
 
   private startHeartbeat() {
@@ -218,11 +232,9 @@ export class WsClient {
       return
     }
 
-    let msg: DashboardCommand
-    try {
-      msg = JSON.parse(raw) as DashboardCommand
-    } catch (e) {
-      debugLog('Invalid JSON from server', raw, e)
+    const msg = parseWsMessage(raw)
+    if (!msg) {
+      debugLog('Invalid JSON from server', raw)
       this.hud.pushLog('info', 'Invalid JSON from server')
       return
     }

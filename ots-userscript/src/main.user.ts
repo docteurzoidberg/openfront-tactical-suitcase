@@ -1,6 +1,6 @@
 import { Hud } from './hud/sidebar-hud'
 import { WsClient } from './websocket/client'
-import { GameBridge } from './game/openfront-bridge'
+import { GameBridge, WS_CLOSE_CODE_URL_CHANGED } from './game'
 import { loadWsUrl, saveWsUrl } from './storage/config'
 
 // Version (updated by release.sh)
@@ -20,7 +20,7 @@ const VERSION = '2025-12-29.1'
         saveWsUrl(url)
       },
       () => {
-        ws.disconnect(4100, 'URL changed')
+        ws.disconnect(WS_CLOSE_CODE_URL_CHANGED, 'URL changed')
         ws.connect()
       },
       (action, params) => {

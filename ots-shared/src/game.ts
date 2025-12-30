@@ -6,6 +6,23 @@ export type GamePhase = 'lobby' | 'spawning' | 'in-game' | 'game-won' | 'game-lo
 
 export type NukeType = 'atom' | 'hydro' | 'mirv'
 
+// ============================================================================
+// Command Types (UI/HW -> Userscript/Firmware)
+// ============================================================================
+
+export type KnownCommandParamsByAction = {
+  ping: undefined
+  'send-nuke': { nukeType: NukeType }
+  'set-attack-ratio': { ratio: number }
+}
+
+export type KnownCommandAction = keyof KnownCommandParamsByAction
+
+export type KnownCommandPayload<A extends KnownCommandAction = KnownCommandAction> = {
+  action: A
+  params?: KnownCommandParamsByAction[A]
+}
+
 export type WsStatus = 'DISCONNECTED' | 'CONNECTING' | 'OPEN' | 'ERROR'
 
 export type GameEventType =
@@ -91,6 +108,39 @@ export type HardwareDiagnosticData = {
 // ============================================================================
 // Protocol Message Types
 // ============================================================================
+
+export type ClientType =
+  | typeof PROTOCOL_CONSTANTS.CLIENT_TYPE_UI
+  | typeof PROTOCOL_CONSTANTS.CLIENT_TYPE_USERSCRIPT
+  | typeof PROTOCOL_CONSTANTS.CLIENT_TYPE_FIRMWARE
+
+export type HandshakeMessage = { type: 'handshake'; clientType: ClientType }
+
+export type HandshakeAckMessage = { type: 'handshake-ack'; clientType: ClientType }
+
+export type StateMessage = { type: 'state'; payload: GameState }
+
+export type EventMessage = { type: 'event'; payload: GameEvent }
+
+export type CmdPayload<Action extends string = string, Params = unknown> = {
+  action: Action
+  params?: Params
+}
+
+export type CmdMessage<Action extends string = string, Params = unknown> = {
+  type: 'cmd'
+  payload: CmdPayload<Action, Params>
+}
+
+export type AckMessage = { type: 'ack'; payload?: unknown }
+
+export type WsMessage =
+  | HandshakeMessage
+  | HandshakeAckMessage
+  | StateMessage
+  | EventMessage
+  | CmdMessage
+  | AckMessage
 
 export type IncomingMessage =
   | { type: 'state'; payload: GameState }

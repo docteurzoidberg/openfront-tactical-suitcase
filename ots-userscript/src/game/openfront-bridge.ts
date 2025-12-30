@@ -1,15 +1,31 @@
 import type { WsClient } from '../websocket/client'
 import type { Hud } from '../hud/sidebar-hud'
-import type { GameEvent } from '../../../ots-shared/src/game'
-import { waitForElement } from '../utils/dom'
+import type { GameEvent, KnownCommandPayload, NukeType } from '../../../ots-shared/src/game'
+import { waitForElement, createLogger } from '../utils'
 import { createGameAPI, getGameView } from './game-api'
-import { NukeTracker } from './nuke-tracker'
-import { BoatTracker } from './boat-tracker'
-import { LandAttackTracker } from './land-tracker'
+import { NukeTracker, BoatTracker, LandAttackTracker } from './trackers'
 import { TroopMonitor } from './troop-monitor'
+import { processWinUpdate } from './victory-handler'
+import {
+  CONTROL_PANEL_SELECTOR,
+  GAME_POLL_INTERVAL_MS,
+  GAME_INSTANCE_CHECK_INTERVAL_MS,
+  GAME_UPDATE_TYPE
+} from './constants'
 
-const CONTROL_PANEL_SELECTOR = 'control-panel'
-const POLL_INTERVAL_MS = 100
+const logger = createLogger('GameBridge')
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isSetAttackRatioParams(params: unknown): params is KnownCommandPayload<'set-attack-ratio'>['params'] {
+  return isRecord(params) && typeof params.ratio === 'number'
+}
+
+function isSendNukeParams(params: unknown): params is KnownCommandPayload<'send-nuke'>['params'] {
+  return isRecord(params) && (params.nukeType === 'atom' || params.nukeType === 'hydro' || params.nukeType === 'mirv')
+}
 
 export class GameBridge {
   private pollInterval: number | null = null
@@ -58,7 +74,7 @@ export class GameBridge {
         this.ws.sendEvent('INFO', 'Game instance detected', { timestamp: Date.now() })
         this.startPolling()
       }
-    }, 100)
+    }, GAME_INSTANCE_CHECK_INTERVAL_MS)
   }
 
   private pollForGameEnd(gameAPI: ReturnType<typeof createGameAPI>) {
@@ -71,15 +87,18 @@ export class GameBridge {
 
       // Debug: Log all available update types
       if (updates && Object.keys(updates).length > 0) {
-        const updateTypes = Object.keys(updates).filter(key => updates[key] && updates[key].length > 0)
+        const updateTypes = Object.keys(updates).filter((key) => {
+          const value = updates[key]
+          return Array.isArray(value) && value.length > 0
+        })
         if (updateTypes.length > 0) {
           console.log('[GameBridge] Update types this tick:', updateTypes.join(', '))
         }
       }
 
-      if (updates && updates[13]) { // GameUpdateType.Win = 13
-        const winUpdates = updates[13]
-        if (winUpdates && winUpdates.length > 0) {
+      if (updates && Array.isArray(updates[GAME_UPDATE_TYPE.WIN])) {
+        const winUpdates = updates[GAME_UPDATE_TYPE.WIN] as unknown[]
+        if (winUpdates.length > 0) {
           console.log('[GameBridge] Win updates detected (count: ' + winUpdates.length + '):', JSON.stringify(winUpdates))
 
           // Skip if already processed
@@ -90,9 +109,11 @@ export class GameBridge {
 
           // Log ALL win updates to find the right one
           console.log('[GameBridge] Inspecting all Win updates:')
-          winUpdates.forEach((update: any, index: number) => {
+          winUpdates.forEach((update: unknown, index: number) => {
             console.log(`[GameBridge] Win update [${index}]:`, update)
-            console.log(`[GameBridge] Win update [${index}] keys:`, Object.keys(update))
+            if (typeof update === 'object' && update !== null) {
+              console.log(`[GameBridge] Win update [${index}] keys:`, Object.keys(update as object))
+            }
           })
 
           // Try to find a win update with winner information
@@ -101,40 +122,42 @@ export class GameBridge {
           let winnerId = null
 
           for (const update of winUpdates) {
+            const u = (typeof update === 'object' && update !== null) ? (update as Record<string, unknown>) : null
             // Check multiple possible structures
-            if (update.winner) {
-              [winnerType, winnerId] = update.winner
-              winUpdate = update
+            if (u && Array.isArray(u.winner)) {
+              ;[winnerType, winnerId] = u.winner as unknown as [unknown, unknown]
+              winUpdate = u
               console.log('[GameBridge] Found winner in update.winner:', winnerType, winnerId)
               break
-            } else if (update.winnerType !== undefined && update.winnerId !== undefined) {
-              winnerType = update.winnerType
-              winnerId = update.winnerId
-              winUpdate = update
+            } else if (u && u.winnerType !== undefined && u.winnerId !== undefined) {
+              winnerType = u.winnerType
+              winnerId = u.winnerId
+              winUpdate = u
               console.log('[GameBridge] Found winner in separate fields:', winnerType, winnerId)
               break
-            } else if (update.emoji && update.emoji.winner) {
-              [winnerType, winnerId] = update.emoji.winner
-              winUpdate = update
+            } else if (u && typeof u.emoji === 'object' && u.emoji !== null && Array.isArray((u.emoji as any).winner)) {
+              const emoji = u.emoji as any
+                ;[winnerType, winnerId] = emoji.winner
+              winUpdate = u
               console.log('[GameBridge] Found winner in emoji.winner:', winnerType, winnerId)
               break
-            } else if (update.team !== undefined) {
+            } else if (u && u.team !== undefined) {
               winnerType = 'team'
-              winnerId = update.team
-              winUpdate = update
+              winnerId = u.team
+              winUpdate = u
               console.log('[GameBridge] Found winner in update.team:', winnerId)
               break
-            } else if (update.player !== undefined) {
+            } else if (u && u.player !== undefined) {
               winnerType = 'player'
-              winnerId = update.player
-              winUpdate = update
+              winnerId = u.player
+              winUpdate = u
               console.log('[GameBridge] Found winner in update.player:', winnerId)
               break
-            } else if (update.emoji && update.emoji.recipientID !== undefined) {
+            } else if (u && typeof u.emoji === 'object' && u.emoji !== null && (u.emoji as any).recipientID !== undefined) {
               // Maybe recipientID is the winning team?
               winnerType = 'team'
-              winnerId = update.emoji.recipientID
-              winUpdate = update
+              winnerId = (u.emoji as any).recipientID
+              winUpdate = u
               console.log('[GameBridge] Guessing winner from emoji.recipientID:', winnerId)
               break
             }
@@ -224,7 +247,7 @@ export class GameBridge {
         if (this.hud.isSoundEnabled('game_player_death')) {
           this.ws.sendEvent('SOUND_PLAY', 'Player death sound', { soundId: 'game_player_death', priority: 'high' })
         }
-        console.log('[GameBridge] ✗ You died!')
+        logger.failure('You died!')
         this.hasProcessedWin = true
         this.inGame = false
         this.inSpawning = false
@@ -344,7 +367,7 @@ export class GameBridge {
       } catch (e) {
         console.error('[GameBridge] Error in polling loop:', e)
       }
-    }, POLL_INTERVAL_MS)
+    }, GAME_POLL_INTERVAL_MS)
   }
 
   private handleTrackerEvent(event: GameEvent) {
@@ -360,25 +383,37 @@ export class GameBridge {
   }
 
   handleCommand(action: string, params?: unknown) {
-    console.log('[GameBridge] Received command:', action, params)
+    logger.log('Received command:', action, params)
 
     if (action === 'send-nuke') {
-      this.handleSendNuke(params)
+      if (!isSendNukeParams(params)) {
+        logger.error('send-nuke command missing nukeType parameter')
+        this.ws.sendEvent('ERROR', 'send-nuke failed: missing nukeType', { params })
+        return
+      }
+      // Type guard ensures params is defined and correctly typed
+      this.handleSendNuke(params!)
     } else if (action === 'set-attack-ratio') {
-      this.handleSetAttackRatio(params)
+      if (!isSetAttackRatioParams(params)) {
+        logger.error('set-attack-ratio command missing or invalid ratio parameter (expected 0-1)')
+        this.ws.sendEvent('ERROR', 'set-attack-ratio failed: invalid ratio', { params })
+        return
+      }
+      // Type guard ensures params is defined and correctly typed
+      this.handleSetAttackRatio(params!)
     } else if (action === 'ping') {
       // Ping is already handled by WsClient, but we can log it
-      console.log('[GameBridge] Ping received')
+      logger.log('Ping received')
     } else {
-      console.warn('[GameBridge] Unknown command:', action)
+      logger.warn('Unknown command:', action)
       this.ws.sendEvent('ERROR', `Unknown command: ${action}`, { action, params })
     }
   }
 
-  private handleSetAttackRatio(params?: unknown) {
-    const ratio = (params as any)?.ratio
+  private handleSetAttackRatio(params: NonNullable<KnownCommandPayload<'set-attack-ratio'>['params']>) {
+    const ratio = params.ratio
 
-    if (typeof ratio !== 'number' || ratio < 0 || ratio > 1) {
+    if (ratio < 0 || ratio > 1) {
       console.error('[GameBridge] set-attack-ratio command missing or invalid ratio parameter (expected 0-1)')
       this.ws.sendEvent('ERROR', 'set-attack-ratio failed: invalid ratio', { params })
       return
@@ -410,14 +445,8 @@ export class GameBridge {
     }
   }
 
-  private handleSendNuke(params?: unknown) {
-    const nukeType = (params as any)?.nukeType
-
-    if (!nukeType) {
-      console.error('[GameBridge] send-nuke command missing nukeType parameter')
-      this.ws.sendEvent('ERROR', 'send-nuke failed: missing nukeType', { params })
-      return
-    }
+  private handleSendNuke(params: NonNullable<KnownCommandPayload<'send-nuke'>['params']>) {
+    const nukeType: NukeType = params.nukeType
 
     // Map nukeType to unit type name (OpenFrontIO uses string names)
     let unitTypeName: string
