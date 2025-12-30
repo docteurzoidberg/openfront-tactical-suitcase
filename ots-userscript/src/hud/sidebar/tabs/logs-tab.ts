@@ -1,7 +1,7 @@
 import type { LogDirection, LogFilters } from '../types'
 import type { GameEventType } from '../../../../../ots-shared/src/game'
 import { shouldShowLogEntry } from '../utils/log-filtering'
-import { escapeHtml, formatJson } from '../utils/log-format'
+import { escapeHtml, formatJson, attachJsonEventListeners } from '../utils/log-format'
 import { MAX_LOG_ENTRIES } from '../constants'
 
 /**
@@ -122,10 +122,13 @@ export class LogsTab {
       directionLabel = 'INFO'
     }
 
-    const lines = []
+    const entryId = `ots-log-entry-${this.logCounter}`
+
+    // Build the collapsed summary line
+    const summaryParts = []
 
     // Direction tag
-    lines.push(`<span style="display:inline-block;font-weight:600;font-size:9px;padding:1px 4px;border-radius:3px;background:${directionColor};color:#0f172a;margin-right:6px;">${directionLabel}</span>`)
+    summaryParts.push(`<span style="display:inline-block;font-weight:600;font-size:9px;padding:1px 4px;border-radius:3px;background:${directionColor};color:#0f172a;margin-right:6px;">${directionLabel}</span>`)
 
     // Event type badge (if present)
     if (eventType) {
@@ -136,39 +139,69 @@ export class LogsTab {
       else if (eventType === 'SOUND_PLAY') eventColor = '#fbbf24' // yellow for sounds
       else if (eventType.includes('HARDWARE')) eventColor = '#06b6d4' // cyan for hardware
 
-      lines.push(`<span style="display:inline-block;font-size:9px;padding:1px 4px;border-radius:3px;background:${eventColor};color:white;margin-right:6px;">${eventType}</span>`)
+      summaryParts.push(`<span style="display:inline-block;font-size:9px;padding:1px 4px;border-radius:3px;background:${eventColor};color:white;margin-right:6px;">${eventType}</span>`)
     }
 
-    // Message text
-    lines.push(`<span style="color:#d1d5db;">${escapeHtml(text)}</span>`)
-
-    // JSON data (collapsible)
+    // If there's JSON data, extract meaningful summary. Otherwise show full text
+    let summary = text
     if (jsonData !== undefined) {
-      const jsonId = `ots-log-json-${this.logCounter}`
-      lines.push(`<div id="${jsonId}" style="margin-top:4px;padding:6px;background:rgba(0,0,0,0.3);border-radius:4px;cursor:pointer;overflow:hidden;max-height:24px;transition:max-height 0.2s;" data-collapsed="true">`)
-      lines.push(`<div style="font-size:10px;color:#9ca3af;margin-bottom:4px;">▶ JSON</div>`)
-      lines.push(`<pre style="margin:0;font-size:10px;line-height:1.4;color:#e5e7eb;white-space:pre-wrap;word-break:break-all;">${formatJson(jsonData as any)}</pre>`)
+      // Extract meaningful info from JSON data
+      const jsonObj = jsonData as any
+      if (jsonObj.type === 'event' && jsonObj.payload) {
+        // Event message: show type and message
+        summary = jsonObj.payload.message || jsonObj.payload.type || 'Event'
+      } else if (jsonObj.type === 'cmd' && jsonObj.payload) {
+        // Command message: show action
+        summary = `Command: ${jsonObj.payload.action || 'unknown'}`
+      } else if (jsonObj.type === 'state') {
+        // State message
+        summary = 'State update'
+      } else if (jsonObj.type === 'handshake') {
+        summary = `Handshake: ${jsonObj.clientType || 'unknown'}`
+      } else {
+        // Fallback: show first 50 chars of text
+        summary = text.length > 50 ? text.substring(0, 50) + '...' : text
+      }
+    }
+    summaryParts.push(`<span style="color:#d1d5db;">${escapeHtml(summary)}</span>`)
+
+    // Add expand arrow if there's JSON data
+    if (jsonData !== undefined) {
+      summaryParts.push(`<span id="ots-arrow-${this.logCounter}" style="display:inline-block;margin-left:6px;font-size:10px;color:#9ca3af;">▶</span>`)
+    }
+
+    const lines = []
+
+    // Summary line (always visible)
+    lines.push(`<div id="${entryId}-summary" style="cursor:${jsonData !== undefined ? 'pointer' : 'default'};">${summaryParts.join('')}</div>`)
+
+    // Expandable JSON section (initially hidden)
+    if (jsonData !== undefined) {
+      lines.push(`<div id="${entryId}-json" style="display:none;margin-top:6px;padding:8px;background:rgba(0,0,0,0.3);border-radius:4px;">`)
+      lines.push(`<pre style="margin:0;font-size:10px;line-height:1.4;white-space:pre-wrap;word-break:break-all;">${formatJson(jsonData as any)}</pre>`)
       lines.push(`</div>`)
 
       // Add click handler after rendering
       setTimeout(() => {
-        const jsonEl = document.getElementById(jsonId)
-        if (jsonEl) {
-          jsonEl.addEventListener('click', () => {
-            const collapsed = jsonEl.dataset.collapsed === 'true'
-            if (collapsed) {
-              jsonEl.style.maxHeight = 'none'
-              jsonEl.dataset.collapsed = 'false'
-              const arrow = jsonEl.querySelector('div')
-              if (arrow) arrow.textContent = '▼ JSON'
+        const summaryEl = document.getElementById(`${entryId}-summary`)
+        const jsonEl = document.getElementById(`${entryId}-json`)
+        const arrowEl = document.getElementById(`ots-arrow-${this.logCounter}`)
+
+        if (summaryEl && jsonEl && arrowEl) {
+          summaryEl.addEventListener('click', () => {
+            const isHidden = jsonEl.style.display === 'none'
+            if (isHidden) {
+              jsonEl.style.display = 'block'
+              arrowEl.textContent = '▼'
             } else {
-              jsonEl.style.maxHeight = '24px'
-              jsonEl.dataset.collapsed = 'true'
-              const arrow = jsonEl.querySelector('div')
-              if (arrow) arrow.textContent = '▶ JSON'
+              jsonEl.style.display = 'none'
+              arrowEl.textContent = '▶'
             }
           })
         }
+
+        // Attach event listeners to JSON toggle arrows
+        attachJsonEventListeners()
       }, 0)
     }
 

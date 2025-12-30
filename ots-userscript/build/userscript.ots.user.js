@@ -798,6 +798,8 @@
   }
 
   // src/hud/sidebar/utils/log-format.ts
+  var formatIdCounter = 0;
+  var pendingToggleIds = [];
   function escapeHtml(text) {
     const div = document.createElement("div");
     div.textContent = text;
@@ -808,29 +810,62 @@
     const nextIndent = "  ".repeat(indent + 1);
     if (obj === null) return '<span style="color:#f87171;">null</span>';
     if (obj === void 0) return '<span style="color:#f87171;">undefined</span>';
-    if (typeof obj === "boolean") return `<span style="color:#c084fc;">${obj}</span>`;
-    if (typeof obj === "number") return `<span style="color:#facc15;">${obj}</span>`;
-    if (typeof obj === "string") return `<span style="color:#4ade80;">"${escapeHtml(obj)}"</span>`;
+    if (typeof obj === "boolean") return `<span style="color:#a78bfa;">${obj}</span>`;
+    if (typeof obj === "number") return `<span style="color:#fbbf24;">${obj}</span>`;
+    if (typeof obj === "string") return `<span style="color:#86efac;">"${escapeHtml(obj)}"</span>`;
     if (Array.isArray(obj)) {
-      if (obj.length === 0) return '<span style="color:#94a3b8;">[]</span>';
+      if (obj.length === 0) return '<span style="color:#cbd5e1;">[]</span>';
+      const id = `json-arr-${formatIdCounter++}`;
+      pendingToggleIds.push(id);
       const items = obj.map((item) => `${nextIndent}${formatJson(item, indent + 1)}`).join(",\n");
-      return `<span style="color:#94a3b8;">[</span>
-${items}
-${indentStr}<span style="color:#94a3b8;">]</span>`;
+      const result = `<span style="color:#cbd5e1;">[</span><span id="${id}-toggle" style="cursor:pointer;color:#9ca3af;margin:0 4px;" data-json-toggle="${id}">\u25BC</span><span id="${id}-summary" style="display:none;color:#9ca3af;">${obj.length} items</span>
+<span id="${id}-content">${items}
+${indentStr}</span><span style="color:#cbd5e1;">]</span>`;
+      return result;
     }
     if (typeof obj === "object") {
       const record = obj;
       const keys = Object.keys(record);
-      if (keys.length === 0) return '<span style="color:#94a3b8;">{}</span>';
+      if (keys.length === 0) return '<span style="color:#cbd5e1;">{}</span>';
+      const id = `json-obj-${formatIdCounter++}`;
+      pendingToggleIds.push(id);
       const items = keys.map((key) => {
         const value = formatJson(record[key], indent + 1);
-        return `${nextIndent}<span style="color:#60a5fa;">"${escapeHtml(key)}"</span><span style="color:#94a3b8;">:</span> ${value}`;
+        return `${nextIndent}<span style="color:#60a5fa;">"${escapeHtml(key)}"</span><span style="color:#cbd5e1;">:</span> ${value}`;
       }).join(",\n");
-      return `<span style="color:#94a3b8;">{</span>
-${items}
-${indentStr}<span style="color:#94a3b8;">}</span>`;
+      const result = `<span style="color:#cbd5e1;">{</span><span id="${id}-toggle" style="cursor:pointer;color:#9ca3af;margin:0 4px;" data-json-toggle="${id}">\u25BC</span><span id="${id}-summary" style="display:none;color:#9ca3af;">${keys.length} keys</span>
+<span id="${id}-content">${items}
+${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
+      return result;
     }
     return String(obj);
+  }
+  function attachJsonEventListeners() {
+    const idsToAttach = [...pendingToggleIds];
+    pendingToggleIds.length = 0;
+    idsToAttach.forEach((id) => {
+      const toggle = document.getElementById(`${id}-toggle`);
+      if (toggle && !toggle.dataset.listenerAttached) {
+        toggle.dataset.listenerAttached = "true";
+        toggle.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const summary = document.getElementById(`${id}-summary`);
+          const content = document.getElementById(`${id}-content`);
+          if (summary && content) {
+            const isCollapsed = content.style.display === "none";
+            if (isCollapsed) {
+              content.style.display = "";
+              summary.style.display = "none";
+              toggle.textContent = "\u25BC";
+            } else {
+              content.style.display = "none";
+              summary.style.display = "inline";
+              toggle.textContent = "\u25B6";
+            }
+          }
+        });
+      }
+    });
   }
 
   // src/hud/sidebar/constants.ts
@@ -945,8 +980,9 @@ ${indentStr}<span style="color:#94a3b8;">}</span>`;
         directionColor = "#fcd34d";
         directionLabel = "INFO";
       }
-      const lines = [];
-      lines.push(`<span style="display:inline-block;font-weight:600;font-size:9px;padding:1px 4px;border-radius:3px;background:${directionColor};color:#0f172a;margin-right:6px;">${directionLabel}</span>`);
+      const entryId = `ots-log-entry-${this.logCounter}`;
+      const summaryParts = [];
+      summaryParts.push(`<span style="display:inline-block;font-weight:600;font-size:9px;padding:1px 4px;border-radius:3px;background:${directionColor};color:#0f172a;margin-right:6px;">${directionLabel}</span>`);
       if (eventType) {
         let eventColor = "#60a5fa";
         if (eventType.startsWith("ALERT_")) eventColor = "#f87171";
@@ -954,33 +990,50 @@ ${indentStr}<span style="color:#94a3b8;">}</span>`;
         else if (eventType.includes("TROOPS")) eventColor = "#4ade80";
         else if (eventType === "SOUND_PLAY") eventColor = "#fbbf24";
         else if (eventType.includes("HARDWARE")) eventColor = "#06b6d4";
-        lines.push(`<span style="display:inline-block;font-size:9px;padding:1px 4px;border-radius:3px;background:${eventColor};color:white;margin-right:6px;">${eventType}</span>`);
+        summaryParts.push(`<span style="display:inline-block;font-size:9px;padding:1px 4px;border-radius:3px;background:${eventColor};color:white;margin-right:6px;">${eventType}</span>`);
       }
-      lines.push(`<span style="color:#d1d5db;">${escapeHtml(text)}</span>`);
+      let summary = text;
       if (jsonData !== void 0) {
-        const jsonId = `ots-log-json-${this.logCounter}`;
-        lines.push(`<div id="${jsonId}" style="margin-top:4px;padding:6px;background:rgba(0,0,0,0.3);border-radius:4px;cursor:pointer;overflow:hidden;max-height:24px;transition:max-height 0.2s;" data-collapsed="true">`);
-        lines.push(`<div style="font-size:10px;color:#9ca3af;margin-bottom:4px;">\u25B6 JSON</div>`);
-        lines.push(`<pre style="margin:0;font-size:10px;line-height:1.4;color:#e5e7eb;white-space:pre-wrap;word-break:break-all;">${formatJson(jsonData)}</pre>`);
+        const jsonObj = jsonData;
+        if (jsonObj.type === "event" && jsonObj.payload) {
+          summary = jsonObj.payload.message || jsonObj.payload.type || "Event";
+        } else if (jsonObj.type === "cmd" && jsonObj.payload) {
+          summary = `Command: ${jsonObj.payload.action || "unknown"}`;
+        } else if (jsonObj.type === "state") {
+          summary = "State update";
+        } else if (jsonObj.type === "handshake") {
+          summary = `Handshake: ${jsonObj.clientType || "unknown"}`;
+        } else {
+          summary = text.length > 50 ? text.substring(0, 50) + "..." : text;
+        }
+      }
+      summaryParts.push(`<span style="color:#d1d5db;">${escapeHtml(summary)}</span>`);
+      if (jsonData !== void 0) {
+        summaryParts.push(`<span id="ots-arrow-${this.logCounter}" style="display:inline-block;margin-left:6px;font-size:10px;color:#9ca3af;">\u25B6</span>`);
+      }
+      const lines = [];
+      lines.push(`<div id="${entryId}-summary" style="cursor:${jsonData !== void 0 ? "pointer" : "default"};">${summaryParts.join("")}</div>`);
+      if (jsonData !== void 0) {
+        lines.push(`<div id="${entryId}-json" style="display:none;margin-top:6px;padding:8px;background:rgba(0,0,0,0.3);border-radius:4px;">`);
+        lines.push(`<pre style="margin:0;font-size:10px;line-height:1.4;white-space:pre-wrap;word-break:break-all;">${formatJson(jsonData)}</pre>`);
         lines.push(`</div>`);
         setTimeout(() => {
-          const jsonEl = document.getElementById(jsonId);
-          if (jsonEl) {
-            jsonEl.addEventListener("click", () => {
-              const collapsed = jsonEl.dataset.collapsed === "true";
-              if (collapsed) {
-                jsonEl.style.maxHeight = "none";
-                jsonEl.dataset.collapsed = "false";
-                const arrow = jsonEl.querySelector("div");
-                if (arrow) arrow.textContent = "\u25BC JSON";
+          const summaryEl = document.getElementById(`${entryId}-summary`);
+          const jsonEl = document.getElementById(`${entryId}-json`);
+          const arrowEl = document.getElementById(`ots-arrow-${this.logCounter}`);
+          if (summaryEl && jsonEl && arrowEl) {
+            summaryEl.addEventListener("click", () => {
+              const isHidden = jsonEl.style.display === "none";
+              if (isHidden) {
+                jsonEl.style.display = "block";
+                arrowEl.textContent = "\u25BC";
               } else {
-                jsonEl.style.maxHeight = "24px";
-                jsonEl.dataset.collapsed = "true";
-                const arrow = jsonEl.querySelector("div");
-                if (arrow) arrow.textContent = "\u25B6 JSON";
+                jsonEl.style.display = "none";
+                arrowEl.textContent = "\u25B6";
               }
             });
           }
+          attachJsonEventListeners();
         }, 0);
       }
       entry.innerHTML = lines.join("");
@@ -1707,11 +1760,11 @@ ${indentStr}<span style="color:#94a3b8;">}</span>`;
       if (!this.gameDot) return;
       this.gameDot.style.background = connected ? "#4ade80" : "#f97373";
     }
-    logSend(text) {
+    logSend(text, eventType, jsonData) {
       var _a;
-      (_a = this.logsTab) == null ? void 0 : _a.pushLog("send", text);
+      (_a = this.logsTab) == null ? void 0 : _a.pushLog("send", text, eventType, jsonData);
     }
-    logRecv(text, eventType) {
+    logRecv(text, eventType, jsonData) {
       var _a, _b, _c;
       if (eventType === "HARDWARE_DIAGNOSTIC") {
         const captured = tryCaptureHardwareDiagnostic(text);
@@ -1726,14 +1779,14 @@ ${indentStr}<span style="color:#94a3b8;">}</span>`;
           console.warn("[OTS HUD] Failed to capture HARDWARE_DIAGNOSTIC:", text);
         }
       }
-      (_c = this.logsTab) == null ? void 0 : _c.pushLog("recv", text, eventType);
+      (_c = this.logsTab) == null ? void 0 : _c.pushLog("recv", text, eventType, jsonData);
     }
     logInfo(text) {
       var _a;
       (_a = this.logsTab) == null ? void 0 : _a.pushLog("info", text);
     }
     // Alias for compatibility with WsClient
-    pushLog(direction, text, eventType) {
+    pushLog(direction, text, eventType, jsonData) {
       var _a, _b, _c;
       if (direction === "recv" && eventType === "HARDWARE_DIAGNOSTIC") {
         const captured = tryCaptureHardwareDiagnostic(text);
@@ -1748,7 +1801,7 @@ ${indentStr}<span style="color:#94a3b8;">}</span>`;
           console.warn("[OTS HUD] Failed to capture HARDWARE_DIAGNOSTIC:", text);
         }
       }
-      (_c = this.logsTab) == null ? void 0 : _c.pushLog(direction, text, eventType);
+      (_c = this.logsTab) == null ? void 0 : _c.pushLog(direction, text, eventType, jsonData);
     }
   };
 
@@ -1866,13 +1919,15 @@ ${indentStr}<span style="color:#94a3b8;">}</span>`;
       });
       this.socket.addEventListener("message", (event) => {
         let eventType;
+        let parsedData = void 0;
         if (typeof event.data === "string") {
           const parsed = parseWsMessage(event.data);
           if ((parsed == null ? void 0 : parsed.type) === "event") {
             eventType = parsed.payload.type;
           }
+          parsedData = parsed;
         }
-        this.hud.pushLog("recv", typeof event.data === "string" ? event.data : "[binary message]", eventType);
+        this.hud.pushLog("recv", typeof event.data === "string" ? event.data : "[binary message]", eventType, parsedData);
         this.handleServerMessage(event.data);
       });
     }
@@ -1921,7 +1976,7 @@ ${indentStr}<span style="color:#94a3b8;">}</span>`;
           eventType = payload.type;
         }
       }
-      this.hud.pushLog("send", json, eventType);
+      this.hud.pushLog("send", json, eventType, msg);
       this.socket.send(json);
     }
     sendState(state) {

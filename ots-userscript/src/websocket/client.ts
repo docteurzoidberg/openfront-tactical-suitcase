@@ -115,14 +115,16 @@ export class WsClient {
     this.socket.addEventListener('message', (event) => {
       // Try to extract event type from message for filtering
       let eventType: GameEventType | undefined
+      let parsedData: unknown = undefined
       if (typeof event.data === 'string') {
         const parsed = parseWsMessage(event.data)
         if (parsed?.type === 'event') {
           eventType = (parsed as EventMessage).payload.type
         }
+        parsedData = parsed
       }
 
-      this.hud.pushLog('recv', typeof event.data === 'string' ? event.data : '[binary message]', eventType)
+      this.hud.pushLog('recv', typeof event.data === 'string' ? event.data : '[binary message]', eventType, parsedData)
       this.handleServerMessage(event.data)
     })
   }
@@ -180,7 +182,7 @@ export class WsClient {
       }
     }
 
-    this.hud.pushLog('send', json, eventType)
+    this.hud.pushLog('send', json, eventType, msg)
     this.socket.send(json)
   }
 

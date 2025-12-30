@@ -344,11 +344,11 @@ export class Hud {
     this.gameDot.style.background = connected ? '#4ade80' : '#f97373'
   }
 
-  logSend(text: string) {
-    this.logsTab?.pushLog('send', text)
+  logSend(text: string, eventType?: GameEventType, jsonData?: unknown) {
+    this.logsTab?.pushLog('send', text, eventType, jsonData)
   }
 
-  logRecv(text: string, eventType?: GameEventType) {
+  logRecv(text: string, eventType?: GameEventType, jsonData?: unknown) {
     // Capture hardware diagnostic data
     if (eventType === 'HARDWARE_DIAGNOSTIC') {
       const captured = tryCaptureHardwareDiagnostic(text)
@@ -364,7 +364,7 @@ export class Hud {
         console.warn('[OTS HUD] Failed to capture HARDWARE_DIAGNOSTIC:', text)
       }
     }
-    this.logsTab?.pushLog('recv', text, eventType)
+    this.logsTab?.pushLog('recv', text, eventType, jsonData)
   }
 
   logInfo(text: string) {
@@ -372,7 +372,7 @@ export class Hud {
   }
 
   // Alias for compatibility with WsClient
-  pushLog(direction: LogDirection, text: string, eventType?: GameEventType) {
+  pushLog(direction: LogDirection, text: string, eventType?: GameEventType, jsonData?: unknown) {
     // Capture hardware diagnostic data (same logic as logRecv)
     if (direction === 'recv' && eventType === 'HARDWARE_DIAGNOSTIC') {
       const captured = tryCaptureHardwareDiagnostic(text)
@@ -387,6 +387,6 @@ export class Hud {
         console.warn('[OTS HUD] Failed to capture HARDWARE_DIAGNOSTIC:', text)
       }
     }
-    this.logsTab?.pushLog(direction, text, eventType)
+    this.logsTab?.pushLog(direction, text, eventType, jsonData)
   }
 }
