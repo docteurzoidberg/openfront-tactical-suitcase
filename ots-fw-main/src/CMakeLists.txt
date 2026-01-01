@@ -48,7 +48,7 @@ endif()
 # CMake binary dir name, NOT the existence of other env build folders.
 get_filename_component(PIO_ENV_NAME "${CMAKE_BINARY_DIR}" NAME)
 
-if(NOT TEST_BUILD AND (PIO_ENV_NAME STREQUAL "test-websocket" OR PIO_ENV_NAME STREQUAL "test-websocket-noimprov"))
+if(NOT TEST_BUILD AND PIO_ENV_NAME STREQUAL "test-websocket")
     set(TEST_BUILD TRUE)
     set(TEST_NAME "test-websocket")
 elseif(NOT TEST_BUILD AND PIO_ENV_NAME STREQUAL "test-i2c")
@@ -72,7 +72,7 @@ endif()
 # -DSDKCONFIG_DEFAULTS=sdkconfig.test-*, try to infer from that.
 if(NOT TEST_BUILD AND DEFINED SDKCONFIG_DEFAULTS)
     get_filename_component(SDKCONFIG_DEFAULTS_BASENAME "${SDKCONFIG_DEFAULTS}" NAME)
-    if(SDKCONFIG_DEFAULTS_BASENAME STREQUAL "sdkconfig.test-websocket" OR SDKCONFIG_DEFAULTS_BASENAME STREQUAL "sdkconfig.test-websocket-noimprov")
+    if(SDKCONFIG_DEFAULTS_BASENAME STREQUAL "sdkconfig.test-websocket")
         set(TEST_BUILD TRUE)
         set(TEST_NAME "test-websocket")
     elseif(SDKCONFIG_DEFAULTS_BASENAME STREQUAL "sdkconfig.test-i2c")
@@ -107,6 +107,11 @@ if(TEST_BUILD)
             "led_controller.c"
             "game_state.c"
             "network_manager.c"
+            "i2c_bus.c"
+            "io_expander.c"
+            "lcd_driver.c"
+            "adc_driver.c"
+            "adc_handler.c"
             "rgb_status.c"
             "ots_logging.c"
             "wifi_credentials.c"
@@ -200,6 +205,9 @@ else()
         "rgb_status.c"
         "ots_logging.c"
         "wifi_credentials.c"
+        "device_settings.c"
+        "wifi_config_server.c"
+        "serial_commands.c"
     )
     set(COMPONENT_REQUIRES
         espressif__mdns

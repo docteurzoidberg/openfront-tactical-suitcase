@@ -67,7 +67,7 @@ These lines are treated as the authoritative “state transition” indicators.
 
 ### TC1 — Userscript Connect
 **Steps**
-1. (Optional) flash firmware env `esp32-s3-dev-factory`.
+1. (Optional) flash firmware env `esp32-s3-dev`.
 2. Start serial capture.
 3. Connect WSS to `wss://<device-ip>:443/ws`.
 4. Send userscript handshake + INFO fallback.
@@ -94,7 +94,7 @@ From `ots-fw-main/`:
   - `python3 tools/test_ws_firmware.py --host <device-ip> --serial-port /dev/ttyACM1 --insecure`
 
 - Flash + run:
-  - `python3 tools/test_ws_firmware.py --upload --env esp32-s3-dev-factory --host <device-ip> --serial-port /dev/ttyACM1 --insecure`
+  - `python3 tools/test_ws_firmware.py --upload --env esp32-s3-dev --host <device-ip> --serial-port /dev/ttyACM1 --insecure`
 
 ## Expected Outcome
 - Script prints PASS/FAIL per test case.

@@ -31,6 +31,8 @@
 #include "rgb_status.h"
 #include "wifi_credentials.h"
 #include "ots_logging.h"
+#include "wifi_config_server.h"
+#include "serial_commands.h"
 
 static const char *TAG = "OTS_MAIN";
 
@@ -79,8 +81,21 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
             ESP_LOGE(TAG, "Failed to start HTTP OTA server");
         }
         
-        // Start WebSocket client
-        ws_server_start();
+        // Start WebSocket server only in normal STA mode.
+        if (!network_manager_is_portal_mode()) {
+            ws_server_start();
+        } else {
+            ESP_LOGW(TAG, "Portal mode active; WS server not started");
+        }
+    } else if (event_type == NETWORK_EVENT_PROVISIONING_REQUIRED) {
+        ESP_LOGW(TAG, "Provisioning required; switching to captive portal mode");
+
+        ws_server_stop();
+        (void)network_manager_stop();
+
+        wifi_config_server_set_mode(WIFI_CONFIG_MODE_PORTAL);
+        // Open AP (no password) for simplest provisioning.
+        (void)network_manager_start_captive_portal("OTS-SETUP", "");
     } else if (event_type == NETWORK_EVENT_DISCONNECTED) {
         ESP_LOGI(TAG, "Network disconnected");
         rgb_status_set(RGB_STATUS_DISCONNECTED);
@@ -199,15 +214,26 @@ void app_main(void) {
         ESP_LOGE(TAG, "Failed to initialize WiFi credentials!");
         return;
     }
+
+    // Enable serial WiFi commands (wifi-clear / wifi-provision)
+    (void)serial_commands_init();
     
-    // Get WiFi credentials (NVS or fallback to config.h)
+    const bool have_stored_creds = wifi_credentials_exist();
     wifi_credentials_t wifi_creds;
-    if (wifi_credentials_get(&wifi_creds) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to get WiFi credentials!");
-        return;
+    memset(&wifi_creds, 0, sizeof(wifi_creds));
+    if (have_stored_creds) {
+        if (wifi_credentials_load(&wifi_creds) != ESP_OK) {
+            ESP_LOGW(TAG, "Expected stored credentials but could not load; entering portal mode");
+        }
     }
-    
-    ESP_LOGI(TAG, "WiFi credentials loaded: SSID=%s", wifi_creds.ssid);
+
+    if (have_stored_creds) {
+        ESP_LOGI(TAG, "Stored WiFi credentials found: SSID=%s", wifi_creds.ssid);
+        wifi_config_server_set_mode(WIFI_CONFIG_MODE_NORMAL);
+    } else {
+        ESP_LOGW(TAG, "No stored WiFi credentials (NVS clear); starting captive portal mode");
+        wifi_config_server_set_mode(WIFI_CONFIG_MODE_PORTAL);
+    }
     
     // Initialize I/O expanders with error recovery
     ESP_LOGI(TAG, "Initializing I/O expanders...");
@@ -224,7 +250,7 @@ void app_main(void) {
             io_expanders_ready = false;
         }
     }
-    
+
     // Initialize event dispatcher
     if (event_dispatcher_init() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize event dispatcher!");
@@ -321,6 +347,11 @@ void app_main(void) {
         return;
     }
     network_manager_set_event_callback(handle_network_event);
+
+    // Start the WiFi config HTTP server (port 80) after ESP-NETIF/LWIP are initialized.
+    // It will be reachable in both portal (AP) mode and normal (STA) mode.
+    (void)wifi_config_server_init(80);
+    (void)wifi_config_server_start();
     
     // Initialize OTA managers (HTTP and Arduino protocols)
     if (ota_manager_init(OTA_PORT, OTA_HOSTNAME) != ESP_OK) {
@@ -342,10 +373,16 @@ void app_main(void) {
     ws_server_set_connection_callback(handle_ws_connection);
     
     // Start network services
-    rgb_status_set(RGB_STATUS_WIFI_CONNECTING);
-    if (network_manager_start() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start network!");
-        return;
+    if (!have_stored_creds || strlen(wifi_creds.ssid) == 0) {
+        // Portal mode: start AP only; do not start WS server.
+        rgb_status_set(RGB_STATUS_WIFI_ONLY);
+        (void)network_manager_start_captive_portal("OTS-SETUP", "");
+    } else {
+        rgb_status_set(RGB_STATUS_WIFI_CONNECTING);
+        if (network_manager_start() != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to start network!");
+            return;
+        }
     }
     
     // Start dedicated I/O task

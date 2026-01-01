@@ -10,7 +10,7 @@ Typical run (auto-discover IP from serial):
 
 Optional upload first:
   python3 tools/tests/userscript_connect_disconnect.py \
-    --upload --env esp32-s3-dev-factory --serial-port /dev/ttyACM0 --auto-host --insecure
+        --upload --env esp32-s3-dev --serial-port /dev/ttyACM0 --auto-host --insecure
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ def main() -> int:
     ap.add_argument("--insecure", action="store_true", help="Disable TLS verification (self-signed certs)")
 
     ap.add_argument("--upload", action="store_true")
-    ap.add_argument("--env", default="esp32-s3-dev-factory")
+    ap.add_argument("--env", default="esp32-s3-dev")
 
     ap.add_argument("--abrupt-close", action="store_true", help="Drop socket without CLOSE frame")
 

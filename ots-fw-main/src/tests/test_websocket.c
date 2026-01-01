@@ -353,9 +353,7 @@ void app_main(void) {
     // Start network (will trigger connection events)
     rgb_status_set(RGB_STATUS_WIFI_CONNECTING);
     ret = network_manager_start();
-    if (ret == ESP_ERR_INVALID_STATE) {
-        ESP_LOGW(TAG, "WiFi not started (awaiting Improv provisioning)");
-    } else if (ret != ESP_OK) {
+    if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start network: %s", esp_err_to_name(ret));
         rgb_status_set(RGB_STATUS_ERROR);
         vTaskDelay(pdMS_TO_TICKS(5000));
@@ -401,7 +399,7 @@ void app_main(void) {
             ESP_LOGW(TAG, "");
             ESP_LOGW(TAG, "Not connected - skipping message test");
             if (!test_state.wifi_connected) {
-                ESP_LOGW(TAG, "Provision WiFi via Improv Serial (USB /dev/ttyACM0). Close serial monitor first.");
+                ESP_LOGW(TAG, "WiFi not connected. Check stored WiFi credentials and signal.");
             } else {
                 ESP_LOGW(TAG, "Waiting for client connection");
                 ESP_LOGW(TAG, "Connect userscript to: %s<device-ip>:%d/ws", WS_PROTOCOL, WS_SERVER_PORT);

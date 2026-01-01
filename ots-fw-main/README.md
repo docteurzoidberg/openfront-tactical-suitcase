@@ -7,6 +7,7 @@ ESP-IDF firmware for the OpenFront Tactical Suitcase (OTS) hardware.
 - Connects to WiFi and exchanges events/commands over WebSocket with the OTS system.
 - Drives hardware modules (LEDs, buttons, LCD, ADC) through an event-driven module architecture.
 - Supports multiple PlatformIO build environments, including focused `test-*` images.
+- Supports WiFi provisioning via a captive portal + web UI + UART0 serial commands.
 
 ## Quick start
 
@@ -52,6 +53,8 @@ See docs/TESTING.md for the full test matrix and expected output.
 - docs/WSS_TEST_GUIDE.md
 - docs/RGB_LED_STATUS.md
 - docs/NAMING_CONVENTIONS.md
+- docs/WIFI_PROVISIONING.md
+- docs/OTS_DEVICE_TOOL.md
 - CHANGELOG.md
 
 ## Protocol changes

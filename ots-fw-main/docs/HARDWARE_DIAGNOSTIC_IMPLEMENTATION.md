@@ -30,7 +30,7 @@ Device responds with diagnostic data.
     "timestamp": 1735482000000,
     "message": "ESP32-S3 Hardware Diagnostic",
     "data": {
-      "version": "2025-12-29.1",
+      "version": "2025-12-31.1",
       "deviceType": "firmware",
       "serialNumber": "OTS-FW-ESP001",
       "owner": "DrZoid",
@@ -256,7 +256,7 @@ These values are compiled into the firmware and cannot be changed by users.
 
 ```
 [Hardware Diagnostic]
-Version: 2025-12-29.1
+Version: 2025-12-31.1
 Device: firmware
 Serial: OTS-FW-ESP001
 Owner: DrZoid

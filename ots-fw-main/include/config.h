@@ -7,7 +7,7 @@
 #define OTS_PROJECT_NAME        "OpenFront Tactical Suitcase"
 #define OTS_PROJECT_ABBREV      "OTS"
 #define OTS_FIRMWARE_NAME       "ots-fw-main"
-#define OTS_FIRMWARE_VERSION    "2025-12-29.1"  // Updated by release.sh
+#define OTS_FIRMWARE_VERSION    "2025-12-31.1"  // Updated by release.sh
 
 // Device Identity (for hardware diagnostic)
 #define OTS_DEVICE_SERIAL_NUMBER "OTS-FW-000001"  // Unique device serial number
@@ -15,8 +15,8 @@
 
 // Wi-Fi Configuration (Fallback)
 //
-// Preferred workflow: provision via Improv Serial (stored in NVS).
-// Leave these empty to force "Improv-only" behavior.
+// Credentials are normally provisioned via the captive portal and stored in NVS.
+// These values act only as a fallback when no credentials exist in NVS.
 #define WIFI_SSID "IOT"
 #define WIFI_PASSWORD "totoaimeliot"
 

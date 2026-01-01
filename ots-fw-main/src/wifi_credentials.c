@@ -114,20 +114,36 @@ bool wifi_credentials_exist(void) {
 }
 
 esp_err_t wifi_credentials_clear(void) {
+    ESP_LOGI(TAG, "=== Clearing WiFi credentials ===");
+    
     nvs_handle_t nvs_handle;
     esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
     if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS: %s", esp_err_to_name(ret));
         return ret;
     }
     
     // Erase both keys
-    nvs_erase_key(nvs_handle, NVS_KEY_SSID);
-    nvs_erase_key(nvs_handle, NVS_KEY_PASSWORD);
+    ESP_LOGI(TAG, "Erasing SSID key...");
+    esp_err_t ssid_ret = nvs_erase_key(nvs_handle, NVS_KEY_SSID);
+    ESP_LOGI(TAG, "SSID erase result: %s", esp_err_to_name(ssid_ret));
     
+    ESP_LOGI(TAG, "Erasing password key...");
+    esp_err_t pwd_ret = nvs_erase_key(nvs_handle, NVS_KEY_PASSWORD);
+    ESP_LOGI(TAG, "Password erase result: %s", esp_err_to_name(pwd_ret));
+    
+    ESP_LOGI(TAG, "Committing NVS changes...");
     ret = nvs_commit(nvs_handle);
+    ESP_LOGI(TAG, "NVS commit result: %s", esp_err_to_name(ret));
+    
     nvs_close(nvs_handle);
     
-    ESP_LOGI(TAG, "Cleared stored credentials");
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "✓ WiFi credentials cleared successfully");
+    } else {
+        ESP_LOGE(TAG, "✗ Failed to clear WiFi credentials: %s", esp_err_to_name(ret));
+    }
+    
     return ret;
 }
 

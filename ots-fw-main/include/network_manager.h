@@ -11,7 +11,8 @@
 typedef enum {
     NETWORK_EVENT_CONNECTED,
     NETWORK_EVENT_DISCONNECTED,
-    NETWORK_EVENT_GOT_IP
+    NETWORK_EVENT_GOT_IP,
+    NETWORK_EVENT_PROVISIONING_REQUIRED
 } network_event_type_t;
 
 /**
@@ -77,5 +78,18 @@ void network_manager_set_event_callback(network_event_callback_t callback);
  * @return ESP_OK on success
  */
 esp_err_t network_manager_reconnect(void);
+
+/**
+ * @brief Start captive portal WiFi AP mode (no STA)
+ *
+ * Starts an access point so the user can connect and provision credentials
+ * via the HTTP WiFi config server.
+ */
+esp_err_t network_manager_start_captive_portal(const char *ap_ssid, const char *ap_password);
+
+/**
+ * @brief Whether the network manager is currently in portal (AP) mode.
+ */
+bool network_manager_is_portal_mode(void);
 
 #endif // NETWORK_MANAGER_H

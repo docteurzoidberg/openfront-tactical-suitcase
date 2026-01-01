@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import base64
 import collections
+import http.client
 import os
 import re
 import socket
@@ -30,6 +31,47 @@ from typing import Deque, Optional
 
 class OtsTestError(RuntimeError):
     pass
+
+
+def _now_ts() -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
+
+def _list_serial_candidates() -> list[str]:
+    candidates: list[str] = []
+
+    by_id = "/dev/serial/by-id"
+    if os.path.isdir(by_id):
+        try:
+            for name in sorted(os.listdir(by_id)):
+                p = os.path.join(by_id, name)
+                if os.path.islink(p) or os.path.exists(p):
+                    candidates.append(p)
+        except Exception:
+            pass
+
+    # Common Linux device names.
+    for prefix in ("/dev/ttyACM", "/dev/ttyUSB"):
+        for i in range(0, 10):
+            p = f"{prefix}{i}"
+            if os.path.exists(p):
+                candidates.append(p)
+
+    # De-dupe preserving order.
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in candidates:
+        if p not in seen:
+            out.append(p)
+            seen.add(p)
+    return out
+
+
+def auto_detect_serial_port() -> str:
+    cands = _list_serial_candidates()
+    if not cands:
+        raise OtsTestError("No serial devices found. Pass --port explicitly (e.g. /dev/ttyACM0).")
+    return cands[0]
 
 
 def _recv_exact(sock: socket.socket, n: int) -> bytes:
@@ -399,3 +441,338 @@ def derive_ip_from_serial(watcher: SerialLogWatcher, timeout_s: float = 25.0) ->
 def maybe_pio_upload(env: str, serial_port: str) -> None:
     cmd = ["pio", "run", "-e", env, "-t", "upload", "--upload-port", serial_port]
     subprocess.check_call(cmd)
+
+
+class SerialPort:
+    """Very small stdlib-only serial helper (read/write lines)."""
+
+    def __init__(self, port: str, baud: int = 115200):
+        self.port = port
+        self.baud = baud
+        self._fd: Optional[int] = None
+
+    def open(self) -> None:
+        fd = os.open(self.port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        attrs = termios.tcgetattr(fd)
+
+        # Raw-ish mode.
+        attrs[0] &= ~(termios.IGNBRK | termios.BRKINT | termios.PARMRK | termios.ISTRIP | termios.INLCR | termios.IGNCR | termios.ICRNL | termios.IXON)
+        attrs[1] &= ~termios.OPOST
+        attrs[2] &= ~(termios.CSIZE | termios.PARENB)
+        attrs[2] |= termios.CS8
+        attrs[3] &= ~(termios.ECHO | termios.ECHONL | termios.ICANON | termios.ISIG | termios.IEXTEN)
+
+        baud_map = {
+            9600: termios.B9600,
+            19200: termios.B19200,
+            38400: termios.B38400,
+            57600: termios.B57600,
+            115200: termios.B115200,
+        }
+        if self.baud not in baud_map:
+            raise OtsTestError(f"Unsupported baud for stdlib termios: {self.baud}")
+
+        attrs[4] = baud_map[self.baud]
+        attrs[5] = baud_map[self.baud]
+        termios.tcsetattr(fd, termios.TCSANOW, attrs)
+
+        # For CDC ACM devices (e.g. ESP32-S3 USB-Serial/JTAG), the device may not
+        # transmit until the host asserts DTR. Also ensure RTS is deasserted to
+        # avoid holding the target in reset on some auto-reset circuits.
+        try:
+            import array
+            import fcntl
+
+            if hasattr(termios, "TIOCMGET") and hasattr(termios, "TIOCMSET"):
+                buf = array.array("i", [0])
+                fcntl.ioctl(fd, termios.TIOCMGET, buf, True)
+                status = int(buf[0])
+
+                if hasattr(termios, "TIOCM_DTR"):
+                    status |= termios.TIOCM_DTR
+                if hasattr(termios, "TIOCM_RTS"):
+                    status &= ~termios.TIOCM_RTS
+
+                buf[0] = status
+                fcntl.ioctl(fd, termios.TIOCMSET, buf, True)
+        except Exception:
+            # Best-effort; serial logging still works on classic UARTs.
+            pass
+
+        self._fd = fd
+
+    def close(self) -> None:
+        if self._fd is None:
+            return
+        try:
+            os.close(self._fd)
+        except Exception:
+            pass
+        self._fd = None
+
+    @property
+    def fd(self) -> int:
+        if self._fd is None:
+            raise OtsTestError("SerialPort not opened")
+        return self._fd
+
+    def write_line(self, line: str) -> None:
+        data = (line.rstrip("\r\n") + "\n").encode("utf-8")
+        try:
+            os.write(self.fd, data)
+        except BlockingIOError:
+            # Retry briefly.
+            end = time.time() + 1.0
+            while time.time() < end:
+                try:
+                    os.write(self.fd, data)
+                    return
+                except BlockingIOError:
+                    time.sleep(0.01)
+            raise
+
+    def iter_lines(self, stop_evt: threading.Event) -> "collections.abc.Iterator[str]":
+        buf = bytearray()
+        while not stop_evt.is_set():
+            try:
+                chunk = os.read(self.fd, 4096)
+            except BlockingIOError:
+                time.sleep(0.02)
+                continue
+            except Exception:
+                return
+
+            if not chunk:
+                time.sleep(0.02)
+                continue
+
+            buf.extend(chunk)
+            while b"\n" in buf:
+                line, _, rest = buf.partition(b"\n")
+                buf = bytearray(rest)
+                yield line.decode("utf-8", errors="ignore").rstrip("\r")
+
+
+def ota_upload(host: str, port: int, bin_path: str, timeout_s: float = 60.0) -> None:
+    if not os.path.exists(bin_path):
+        raise OtsTestError(f"Binary not found: {bin_path}")
+
+    size = os.path.getsize(bin_path)
+    conn = http.client.HTTPConnection(host, port, timeout=timeout_s)
+    try:
+        conn.putrequest("POST", "/update")
+        conn.putheader("Content-Type", "application/octet-stream")
+        conn.putheader("Content-Length", str(size))
+        conn.endheaders()
+
+        sent = 0
+        with open(bin_path, "rb") as f:
+            while True:
+                chunk = f.read(16 * 1024)
+                if not chunk:
+                    break
+                conn.send(chunk)
+                sent += len(chunk)
+                # best-effort progress
+                if size > 0:
+                    pct = int((sent * 100) / size)
+                    if pct % 10 == 0:
+                        pass
+
+        resp = conn.getresponse()
+        body = resp.read(1024)
+        if resp.status < 200 or resp.status >= 300:
+            raise OtsTestError(f"OTA upload failed: HTTP {resp.status} {resp.reason}: {body!r}")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _cli() -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser(description="OTS device tool (serial + OTA)")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    sp_serial = sub.add_parser("serial", help="Serial helpers (monitor/send/reboot)")
+    serial_sub = sp_serial.add_subparsers(dest="serial_cmd", required=True)
+
+    p_mon = serial_sub.add_parser("monitor", help="Stream serial logs")
+    p_mon.add_argument("--port", default="auto", help="Serial port path or 'auto'")
+    p_mon.add_argument("--baud", type=int, default=115200)
+    p_mon.add_argument("--log-file", default=None, help="Append logs to file")
+    p_mon.add_argument("--timestamps", action="store_true")
+
+    p_send = serial_sub.add_parser("send", help="Send one command line")
+    p_send.add_argument("--port", default="auto")
+    p_send.add_argument("--baud", type=int, default=115200)
+    p_send.add_argument("--cmd", required=True, dest="line")
+    p_send.add_argument("--monitor", action="store_true", help="Also print serial output for a short window")
+    p_send.add_argument("--monitor-seconds", type=float, default=2.0)
+
+    p_reboot = serial_sub.add_parser("reboot", help="Reboot device via serial command")
+    p_reboot.add_argument("--port", default="auto")
+    p_reboot.add_argument("--baud", type=int, default=115200)
+
+    sp_nvs = sub.add_parser("nvs", help="NVS helpers (set/clear owner name)")
+    nvs_sub = sp_nvs.add_subparsers(dest="nvs_cmd", required=True)
+
+    p_nvs_set = nvs_sub.add_parser("set-owner", help="Set owner name in NVS")
+    p_nvs_set.add_argument("--port", default="auto")
+    p_nvs_set.add_argument("--baud", type=int, default=115200)
+    p_nvs_set.add_argument("--name", required=True, help="Owner name to set")
+
+    p_nvs_clear = nvs_sub.add_parser("clear-owner", help="Clear owner name from NVS")
+    p_nvs_clear.add_argument("--port", default="auto")
+    p_nvs_clear.add_argument("--baud", type=int, default=115200)
+
+    sp_ota = sub.add_parser("ota", help="OTA helpers")
+    ota_sub = sp_ota.add_subparsers(dest="ota_cmd", required=True)
+
+    p_up = ota_sub.add_parser("upload", help="Upload firmware via HTTP OTA")
+    p_up.add_argument("--host", default=None)
+    p_up.add_argument("--port", type=int, default=3232)
+    p_up.add_argument("--bin", required=True)
+    p_up.add_argument("--timeout", type=float, default=120.0)
+    p_up.add_argument("--serial-port", default=None, help="Serial port for --auto-host")
+    p_up.add_argument("--serial-baud", type=int, default=115200)
+    p_up.add_argument("--auto-host", action="store_true", help="Derive host IP from serial logs")
+
+    args = ap.parse_args()
+
+    if os.getenv("OTS_DEVICE_TOOL_DEBUG"):
+        print(f"[DEBUG] args={args!r}")
+
+    if args.cmd == "serial":
+        port = args.port
+        if port == "auto":
+            port = auto_detect_serial_port()
+
+        if args.serial_cmd == "monitor":
+            sp = SerialPort(port=port, baud=args.baud)
+            sp.open()
+            stop_evt = threading.Event()
+            try:
+                out_f = None
+                if args.log_file:
+                    os.makedirs(os.path.dirname(args.log_file) or ".", exist_ok=True)
+                    out_f = open(args.log_file, "a", encoding="utf-8")
+
+                for line in sp.iter_lines(stop_evt):
+                    prefix = f"[{_now_ts()}] " if args.timestamps else ""
+                    text = prefix + line
+                    print(text, flush=True)
+                    if out_f:
+                        out_f.write(text + "\n")
+                        out_f.flush()
+            except KeyboardInterrupt:
+                return 0
+            finally:
+                stop_evt.set()
+                sp.close()
+                try:
+                    if out_f:
+                        out_f.close()
+                except Exception:
+                    pass
+            return 0
+
+        if args.serial_cmd == "send":
+            sp = SerialPort(port=port, baud=args.baud)
+            sp.open()
+            try:
+                sp.write_line(args.line)
+                if args.monitor:
+                    stop_evt = threading.Event()
+                    end = time.time() + args.monitor_seconds
+                    for line in sp.iter_lines(stop_evt):
+                        print(line, flush=True)
+                        if time.time() >= end:
+                            break
+            finally:
+                sp.close()
+            return 0
+
+        if args.serial_cmd == "reboot":
+            sp = SerialPort(port=port, baud=args.baud)
+            sp.open()
+            try:
+                sp.write_line("reboot")
+            finally:
+                sp.close()
+            return 0
+
+    if args.cmd == "nvs":
+        port = args.port
+        if not port or port == "auto":
+            port = auto_detect_serial_port()
+            if not port:
+                raise SystemExit("No serial port found. Use --port to specify.")
+
+        if args.nvs_cmd == "set-owner":
+            print(f"Setting owner name to: {args.name}")
+            sp = SerialPort(port=port, baud=args.baud)
+            sp.open()
+            try:
+                sp.write_line(f"nvs set owner_name {args.name}")
+                stop_evt = threading.Event()
+                end = time.time() + 2
+                for line in sp.iter_lines(stop_evt):
+                    print(line, flush=True)
+                    if "Owner name set" in line or "saved" in line:
+                        break
+                    if time.time() >= end:
+                        print("No confirmation received (may have succeeded anyway)")
+                        break
+            finally:
+                sp.close()
+            return 0
+
+        if args.nvs_cmd == "clear-owner":
+            print("Clearing owner name from NVS")
+            sp = SerialPort(port=port, baud=args.baud)
+            sp.open()
+            try:
+                sp.write_line("nvs erase owner_name")
+                stop_evt = threading.Event()
+                end = time.time() + 2
+                for line in sp.iter_lines(stop_evt):
+                    print(line, flush=True)
+                    if "erased" in line or "cleared" in line or "deleted" in line:
+                        break
+                    if time.time() >= end:
+                        print("No confirmation received (may have succeeded anyway)")
+                        break
+            finally:
+                sp.close()
+            return 0
+
+    if args.cmd == "ota":
+        host = args.host
+        if args.auto_host:
+            if not args.serial_port:
+                raise SystemExit("--auto-host requires --serial-port")
+            watcher = SerialLogWatcher(args.serial_port, baud=args.serial_baud)
+            watcher.start()
+            try:
+                host = derive_ip_from_serial(watcher)
+            finally:
+                watcher.stop()
+        if not host:
+            raise SystemExit("Provide --host or use --auto-host")
+
+        ota_upload(host=host, port=args.port, bin_path=args.bin, timeout_s=args.timeout)
+        print(f"OTA upload OK: http://{host}:{args.port}/update")
+        return 0
+
+    raise SystemExit("Unhandled command")
+
+
+def main() -> int:
+    return _cli()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

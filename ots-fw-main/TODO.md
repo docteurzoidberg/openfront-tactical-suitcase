@@ -31,7 +31,6 @@
 ## Features
 
 - [ ] implementing can bus protocol to send event to future modules (audio)
-- [ ] support improv wifi credentials provisioning
 
 ## Follow-ups
 

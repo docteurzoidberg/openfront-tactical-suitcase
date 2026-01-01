@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OTS Setup</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="header">
+        <div>
+          <h1 class="title">OTS Setup</h1>
+          <p class="subtitle">Onboarding, WiFi setup, and device info.</p>
+        </div>
+        <div class="status" id="statusPill">Loading…</div>
+      </header>
+
+      <section class="card" id="onboarding" hidden>
+        <h2 class="cardTitle">Welcome to your new OTS</h2>
+        <p class="hint">
+          Congrats on your cool new device. Lets do a quick setup: first well save your name, then well connect
+          the device to your home WiFi.
+        </p>
+
+        <div class="divider"></div>
+
+        <div class="wizard" id="ownerStep" hidden>
+          <div class="wizardTitle">Step 1  Owner name</div>
+          <div class="row row-gap">
+            <div class="field">
+              <label class="label" for="ownerName">Your name</label>
+              <input class="input" id="ownerName" name="ownerName" maxlength="63" placeholder="e.g. Alex" />
+              <div class="hint">Stored on the device (NVS) and shown later in diagnostics.</div>
+            </div>
+            <div class="actions actions-right">
+              <button class="button primary" id="saveOwnerBtn" type="button">Save name</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="wizard" id="wifiStep" hidden>
+          <div class="wizardTitle">Step 2  Connect WiFi</div>
+          <p class="hint">Pick your WiFi network, save credentials, and the device will reboot into STA mode.</p>
+          <div id="wifiSetupPane"></div>
+        </div>
+
+        <div class="msg" id="onboardingMsg" role="status" aria-live="polite"></div>
+      </section>
+
+      <section class="tabs" id="tabs" hidden>
+        <button class="tab" data-tab="wifi">WiFi Setup</button>
+        <button class="tab" data-tab="device">Device Info</button>
+        <button class="tab" data-tab="about">About</button>
+      </section>
+
+      <div class="tabPanel" id="tab-wifi" hidden>
+        <div id="wifiSetupPane2"></div>
+      </div>
+
+      <div class="tabPanel" id="tab-device" hidden>
+        <section class="card">
+          <h2 class="cardTitle">Device Info</h2>
+          <div class="kv">
+            <div class="kvRow"><div class="kvKey">Serial number</div><div class="kvVal mono" id="devSerial">-</div></div>
+            <div class="kvRow"><div class="kvKey">Owner</div><div class="kvVal" id="devOwner">-</div></div>
+            <div class="kvRow"><div class="kvKey">Firmware</div><div class="kvVal mono" id="devFw">-</div></div>
+            <div class="kvRow"><div class="kvKey">Mode</div><div class="kvVal mono" id="devMode">-</div></div>
+            <div class="kvRow"><div class="kvKey">IP</div><div class="kvVal mono" id="devIp">-</div></div>
+          </div>
+        </section>
+
+        <section class="card danger">
+          <div class="row">
+            <div>
+              <h2 class="cardTitle">Factory Reset</h2>
+              <p class="hint">Clears WiFi credentials and owner name, then reboots to onboarding mode.</p>
+            </div>
+            <button class="button danger" id="factoryResetBtn" type="button">Factory Reset</button>
+          </div>
+          <div class="msg" id="factoryResetMsg" role="status" aria-live="polite"></div>
+        </section>
+      </div>
+
+      <div class="tabPanel" id="tab-about" hidden>
+        <section class="card">
+          <h2 class="cardTitle">About OTS</h2>
+          <p class="hint">
+            OTS (OpenFront Tactical Suitcase) bridges OpenFront.io gameplay with physical hardware modules (lights, buttons,
+            displays). This page is served directly by the device.
+          </p>
+        </section>
+      </div>
+
+      <template id="wifiSetupTemplate">
+        <section class="card">
+          <div class="row row-gap">
+            <div class="field">
+              <label class="label" for="ssid">SSID</label>
+              <div class="row">
+                <select class="input" data-role="ssidSelect" aria-label="Select SSID"></select>
+                <input class="input" data-role="ssid" name="ssid" maxlength="31" placeholder="Enter SSID" />
+              </div>
+              <div class="hint" data-role="scanHint">&nbsp;</div>
+            </div>
+
+            <div class="field">
+              <label class="label" for="password">Password</label>
+              <input class="input" data-role="password" name="password" type="password" maxlength="63" placeholder="WiFi password" />
+              <div class="hint">Leave empty for open networks.</div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="button" data-role="scanBtn" type="button">Scan Networks</button>
+            <button class="button primary" data-role="saveBtn" type="button">Save &amp; Reboot</button>
+          </div>
+
+          <div class="msg" data-role="msg" role="status" aria-live="polite"></div>
+        </section>
+
+        <section class="card danger">
+          <div class="row">
+            <div>
+              <h2 class="cardTitle">Clear Stored WiFi</h2>
+              <p class="hint">This removes saved credentials and reboots into captive portal.</p>
+            </div>
+            <button class="button danger" data-role="clearBtn" type="button">Clear &amp; Reboot</button>
+          </div>
+        </section>
+      </template>
+
+      <footer class="footer">
+        <div class="mono" id="footerInfo">&nbsp;</div>
+        <div class="mono" id="buildHash" style="font-size: 0.75rem; color: #666; margin-top: 0.5rem;"></div>
+      </footer>
+    </main>
+
+    <script>window.OTS_BUILD_HASH = "__OTS_BUILD_HASH__";</script>
+    <script src="/app.js"></script>
+  </body>
+</html>

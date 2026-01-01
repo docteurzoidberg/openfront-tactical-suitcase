@@ -15,9 +15,17 @@ static bool has_ip = false;
 static char current_ip[16] = {0};
 static network_event_callback_t event_callback = NULL;
 
+static bool portal_mode = false;
+static uint8_t sta_fail_count = 0;
+
+#define NETWORK_MANAGER_MAX_STA_RETRIES 3
+
 static char wifi_ssid[32] = {0};
 static char wifi_password[64] = {0};
 static char mdns_hostname[32] = {0};
+
+static esp_netif_t *s_sta_netif = NULL;
+static esp_netif_t *s_ap_netif = NULL;
 
 // Forward declarations
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
@@ -40,7 +48,7 @@ esp_err_t network_manager_init(const char *ssid, const char *password, const cha
     // Initialize network interface
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_sta();
+    s_sta_netif = esp_netif_create_default_wifi_sta();
 
     // Initialize WiFi
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -58,6 +66,9 @@ esp_err_t network_manager_init(const char *ssid, const char *password, const cha
 
 esp_err_t network_manager_start(void) {
     ESP_LOGI(TAG, "Starting network services...");
+
+    portal_mode = false;
+    sta_fail_count = 0;
     
     wifi_config_t wifi_config = {
         .sta = {
@@ -80,15 +91,65 @@ esp_err_t network_manager_start(void) {
     return ESP_OK;
 }
 
+esp_err_t network_manager_start_captive_portal(const char *ap_ssid, const char *ap_password) {
+    if (!ap_ssid || strlen(ap_ssid) == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "Starting captive portal AP: %s", ap_ssid);
+
+    // Stop STA connection attempts if any.
+    (void)esp_wifi_stop();
+
+    // Create AP netif if needed.
+    if (s_ap_netif == NULL) {
+        s_ap_netif = esp_netif_create_default_wifi_ap();
+    }
+
+    wifi_config_t ap_config = {0};
+    strncpy((char *)ap_config.ap.ssid, ap_ssid, sizeof(ap_config.ap.ssid));
+    ap_config.ap.ssid_len = (uint8_t)strlen(ap_ssid);
+    ap_config.ap.channel = 1;
+    ap_config.ap.max_connection = 4;
+    ap_config.ap.beacon_interval = 100;
+
+    if (ap_password && strlen(ap_password) > 0) {
+        strncpy((char *)ap_config.ap.password, ap_password, sizeof(ap_config.ap.password));
+        ap_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    } else {
+        ap_config.ap.password[0] = '\0';
+        ap_config.ap.authmode = WIFI_AUTH_OPEN;
+    }
+
+    portal_mode = true;
+    is_connected = false;
+    has_ip = false;
+    sta_fail_count = 0;
+    led_controller_link_set(false);
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
+
+    ESP_LOGI(TAG, "Captive portal AP started (connect to SSID '%s')", ap_ssid);
+    return ESP_OK;
+}
+
 esp_err_t network_manager_stop(void) {
     ESP_LOGI(TAG, "Stopping network services...");
     
     esp_wifi_stop();
     is_connected = false;
     has_ip = false;
+    portal_mode = false;
+    sta_fail_count = 0;
     led_controller_link_set(false);
     
     return ESP_OK;
+}
+
+bool network_manager_is_portal_mode(void) {
+    return portal_mode;
 }
 
 bool network_manager_is_connected(void) {
@@ -134,6 +195,13 @@ static void mdns_init_service(void) {
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data) {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        if (portal_mode) {
+            // Captive portal runs AP-only, but we may temporarily enable APSTA to
+            // perform WiFi scans. Do not auto-connect while in portal mode.
+            ESP_LOGI(TAG, "[WiFi] STA_START (portal mode) - ignoring auto-connect");
+            return;
+        }
+
         ESP_LOGI(TAG, "[WiFi] STA_START - initiating connection...");
         esp_err_t ret = esp_wifi_connect();
         if (ret != ESP_OK) {
@@ -144,6 +212,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_CONNECTED) {
         ESP_LOGI(TAG, "[WiFi] STA_CONNECTED - WiFi connected to AP!");
         is_connected = true;
+        sta_fail_count = 0;
         // Don't turn on LED yet - wait for IP address
         
         // Notify callback about WiFi connection
@@ -187,6 +256,19 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
             event_callback(NETWORK_EVENT_DISCONNECTED, NULL);
         }
         
+        // If we can't connect to the stored SSID after several attempts, request provisioning.
+        if (!portal_mode && strlen(wifi_ssid) > 0) {
+            sta_fail_count++;
+            ESP_LOGW(TAG, "[WiFi] STA connect attempt failed (%u/%u)", (unsigned)sta_fail_count, (unsigned)NETWORK_MANAGER_MAX_STA_RETRIES);
+            if (sta_fail_count >= NETWORK_MANAGER_MAX_STA_RETRIES) {
+                ESP_LOGE(TAG, "[WiFi] Max retries reached; entering provisioning/portal mode");
+                if (event_callback) {
+                    event_callback(NETWORK_EVENT_PROVISIONING_REQUIRED, NULL);
+                }
+                return;
+            }
+        }
+
         esp_err_t ret = esp_wifi_connect();
         if (ret != ESP_OK) {
             ESP_LOGE(TAG, "[WiFi] Reconnect failed: %s (0x%x)", esp_err_to_name(ret), ret);
@@ -198,6 +280,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
         
         ESP_LOGI(TAG, "[IP] GOT_IP: %s", current_ip);
         has_ip = true;
+        sta_fail_count = 0;
         led_controller_link_set(true);
         
         // Initialize mDNS
