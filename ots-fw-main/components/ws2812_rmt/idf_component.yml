@@ -1,0 +1,2 @@
+version: "1.0.0"
+description: "WS2812 addressable LED driver using ESP32 RMT peripheral"

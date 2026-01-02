@@ -125,6 +125,7 @@ if(TEST_BUILD)
             hd44780_pcf8574
             ads1015_driver
             esp_http_server_core
+            ws2812_rmt
         )
     elseif(TEST_NAME STREQUAL "test-i2c")
         set(COMPONENT_SRCS
@@ -217,6 +218,7 @@ else()
         hd44780_pcf8574
         ads1015_driver
         esp_http_server_core
+        ws2812_rmt
     )
 endif()
 
