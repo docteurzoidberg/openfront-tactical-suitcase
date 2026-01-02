@@ -370,7 +370,7 @@ void app_main(void) {
         .cert_len = ots_server_cert_pem_len,
         .key_pem = (const uint8_t *)ots_server_key_pem,
         .key_len = ots_server_key_pem_len,
-        .max_open_sockets = 8,
+        .max_open_sockets = 4,  // ESP-IDF limit: 7 total (3 internal + 4 user)
         .max_uri_handlers = 32,
         .close_fn = NULL  // Auto-set by http_server from ws_handlers
     };
