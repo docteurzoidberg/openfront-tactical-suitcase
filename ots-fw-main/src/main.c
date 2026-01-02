@@ -208,6 +208,13 @@ void app_main(void) {
     }
     rgb_status_set(RGB_STATUS_DISCONNECTED);
     
+    // Initialize I2C bus early (required by LCD and I/O expanders)
+    ESP_LOGI(TAG, "Initializing I2C bus...");
+    if (ots_i2c_bus_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize I2C bus!");
+        return;
+    }
+    
     // Initialize WiFi credentials storage
     ESP_LOGI(TAG, "Initializing WiFi credentials...");
     if (wifi_credentials_init() != ESP_OK) {
