@@ -65,7 +65,7 @@ esp_err_t http_server_start(void) {
     esp_err_t ret;
 
     // If no close_fn provided, use WebSocket handler's callback for proper cleanup
-    httpd_close_func close_fn = s_config.close_fn;
+    httpd_close_func_t close_fn = s_config.close_fn;
     if (close_fn == NULL) {
 #if CONFIG_HTTPD_WS_SUPPORT
         close_fn = ws_handlers_get_session_close_callback();
@@ -123,6 +123,10 @@ esp_err_t http_server_start(void) {
     }
 
     return ESP_OK;
+}
+
+bool http_server_is_started(void) {
+    return s_server != NULL;
 }
 
 esp_err_t http_server_stop(void) {

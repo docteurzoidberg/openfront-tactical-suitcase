@@ -61,7 +61,7 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
     if (event_type == NETWORK_EVENT_CONNECTED) {
         // If a userscript is already connected (e.g. DHCP renew / reconnect edge cases),
         // keep the higher-priority purple state instead of overwriting it with yellow.
-        if (ws_server_has_userscript()) {
+        if (ws_handlers_has_userscript()) {
             rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
         } else {
             // Match test-websocket semantics: as soon as WiFi associates, show YELLOW.
@@ -86,16 +86,13 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
         // Trigger display refresh now that network is ready.
         ESP_LOGI(TAG, "Network ready - WebSocket server listening");
         system_status_refresh_display();
-        } else {
-            ESP_LOGW(TAG, "Portal mode active; WS server not started");
-        }
     } else if (event_type == NETWORK_EVENT_PROVISIONING_REQUIRED) {
         ESP_LOGW(TAG, "Provisioning required; switching to captive portal mode");
 
-        ws_server_stop();
+        // Stop network and switch to portal mode
         (void)network_manager_stop();
-
-        webapp_server_set_mode(WIFI_CONFIG_MODE_PORTAL);
+        webapp_handlers_set_mode(WEBAPP_MODE_CAPTIVE_PORTAL);
+        
         // Open AP (no password) for simplest provisioning.
         (void)network_manager_start_captive_portal("OTS-SETUP", "");
     } else if (event_type == NETWORK_EVENT_DISCONNECTED) {
@@ -107,10 +104,10 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
 // WebSocket connection handler
 static void handle_ws_connection(bool connected) {
     if (connected) {
-        ESP_LOGI(TAG, "WebSocket client connected (has_userscript=%s)", ws_server_has_userscript() ? "yes" : "no");
+        ESP_LOGI(TAG, "WebSocket client connected (has_userscript=%s)", ws_handlers_has_userscript() ? "yes" : "no");
         // Match test-websocket semantics: WS activity is reflected immediately,
         // even if the game had started (i.e. do not keep green).
-        if (ws_server_has_userscript()) {
+        if (ws_handlers_has_userscript()) {
             rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
         } else {
             // Some client connected (e.g. browser), but not userscript yet.
@@ -142,7 +139,7 @@ static void handle_io_expander_recovery(uint8_t board, bool was_down) {
         vTaskDelay(pdMS_TO_TICKS(2000)); // Show error for 2 seconds
         
         // Restore previous status based on the same semantics as test-websocket.
-        if (ws_server_has_userscript()) {
+        if (ws_handlers_has_userscript()) {
             rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
         } else if (network_manager_is_connected()) {
             rgb_status_set(RGB_STATUS_WIFI_ONLY);
@@ -172,7 +169,7 @@ static bool handle_event(const internal_event_t *event) {
             rgb_status_set(RGB_STATUS_GAME_STARTED);
         } else if (event->type == GAME_EVENT_GAME_END) {
             // Restore to purple/yellow based on current connectivity.
-            if (ws_server_has_userscript()) {
+            if (ws_handlers_has_userscript()) {
                 rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
             } else if (network_manager_is_connected()) {
                 rgb_status_set(RGB_STATUS_WIFI_ONLY);
@@ -231,10 +228,10 @@ void app_main(void) {
 
     if (have_stored_creds) {
         ESP_LOGI(TAG, "Stored WiFi credentials found: SSID=%s", wifi_creds.ssid);
-        webapp_server_set_mode(WIFI_CONFIG_MODE_NORMAL);
+        // Mode will be set later after HTTP server init
     } else {
         ESP_LOGW(TAG, "No stored WiFi credentials (NVS clear); starting captive portal mode");
-        webapp_server_set_mode(WIFI_CONFIG_MODE_PORTAL);
+        // Mode will be set later after HTTP server init
     }
     
     // Initialize I/O expanders with error recovery

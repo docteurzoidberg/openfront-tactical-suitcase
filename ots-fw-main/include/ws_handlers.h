@@ -105,7 +105,7 @@ esp_err_t ws_handlers_broadcast_text(const char *data, size_t len);
  * 
  * @return Function pointer for httpd_config_t.close_fn
  */
-httpd_close_func ws_handlers_get_session_close_callback(void);
+httpd_close_func_t ws_handlers_get_session_close_callback(void);
 
 #ifdef __cplusplus
 }

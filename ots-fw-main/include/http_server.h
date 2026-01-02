@@ -36,7 +36,7 @@ typedef struct {
     size_t key_len;                 // Private key length
     uint8_t max_open_sockets;       // Maximum concurrent connections
     uint16_t max_uri_handlers;      // Maximum number of URI handlers
-    httpd_close_func close_fn;      // Optional session close callback (for WebSocket cleanup)
+    httpd_close_func_t close_fn;    // Optional session close callback (for WebSocket cleanup)
 } http_server_config_t;
 
 /**
@@ -54,6 +54,13 @@ esp_err_t http_server_init(const http_server_config_t *config);
  * @return ESP_OK on success, error code otherwise
  */
 esp_err_t http_server_start(void);
+
+/**
+ * Check if server is started
+ * 
+ * @return true if server is running, false otherwise
+ */
+bool http_server_is_started(void);
 
 /**
  * Stop the HTTP server

@@ -3,7 +3,7 @@
 #include "button_handler.h"
 #include "led_controller.h"
 #include "nuke_tracker.h"
-#include "ws_server.h"
+#include "ws_handlers.h"
 #include "ots_common.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -94,7 +94,7 @@ static bool nuke_module_handle_event(const internal_event_t *event) {
         event_dispatcher_post_game_event(&game_event, EVENT_SOURCE_BUTTON);
         
         // Send to WebSocket server
-        ws_server_send_event(&game_event);
+        ws_handlers_send_event(&game_event);
         
         return true;
     }

@@ -1,6 +1,6 @@
 #include "troops_module.h"
 #include "protocol.h"
-#include "ws_server.h"
+#include "ws_handlers.h"
 #include "event_dispatcher.h"
 #include "led_controller.h"
 #include "lcd_driver.h"
@@ -147,7 +147,7 @@ static void send_percent_command(uint8_t percent) {
     
     char* json_str = cJSON_PrintUnformatted(root);
     if (json_str) {
-        ws_server_send_text(json_str, strlen(json_str));
+        ws_handlers_send_text(json_str, strlen(json_str));
         ESP_LOGI(TAG, "Sent troops percent: %d%%", percent);
         free(json_str);
     }

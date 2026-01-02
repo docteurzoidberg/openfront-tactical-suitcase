@@ -807,7 +807,7 @@ esp_err_t webapp_handlers_register(httpd_handle_t server) {
 
     // Forward declarations for handler functions
     esp_err_t webapp_handle_404_redirect(httpd_req_t *req, httpd_err_code_t err);
-    esp_err_t webapp_handle_get(httpd_req_t *req);
+    esp_err_t webapp_handle_webapp_get(httpd_req_t *req);
     esp_err_t webapp_handle_api_status(httpd_req_t *req);
     esp_err_t webapp_handle_api_scan(httpd_req_t *req);
     esp_err_t webapp_handle_device(httpd_req_t *req);
@@ -877,35 +877,35 @@ esp_err_t webapp_handlers_register(httpd_handle_t server) {
     static const httpd_uri_t root = {
         .uri = "/",
         .method = HTTP_GET,
-        .handler = webapp_handle_get,
+        .handler = webapp_handle_webapp_get,
         .user_ctx = NULL,
     };
 
     static const httpd_uri_t index_html = {
         .uri = "/index.html",
         .method = HTTP_GET,
-        .handler = webapp_handle_get,
+        .handler = webapp_handle_webapp_get,
         .user_ctx = NULL,
     };
 
     static const httpd_uri_t style_css = {
         .uri = "/style.css",
         .method = HTTP_GET,
-        .handler = webapp_handle_get,
+        .handler = webapp_handle_webapp_get,
         .user_ctx = NULL,
     };
 
     static const httpd_uri_t app_js = {
         .uri = "/app.js",
         .method = HTTP_GET,
-        .handler = webapp_handle_get,
+        .handler = webapp_handle_webapp_get,
         .user_ctx = NULL,
     };
 
     static const httpd_uri_t wifi_alias = {
         .uri = "/wifi",
         .method = HTTP_GET,
-        .handler = webapp_handle_get,
+        .handler = webapp_handle_webapp_get,
         .user_ctx = NULL,
     };
 

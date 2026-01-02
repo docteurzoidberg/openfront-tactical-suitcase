@@ -15,7 +15,7 @@
 #include "game_state.h"
 #include "protocol.h"
 #include "network_manager.h"
-#include "ws_server.h"
+#include "http_server.h"
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
@@ -171,7 +171,7 @@ static esp_err_t system_status_update(void) {
         }
         
         // Priority 2: Wait for WSS server to start (keep splash)
-        if (!ws_server_is_started()) {
+        if (!http_server_is_started()) {
             return ESP_OK;  // Keep splash, don't clear display_dirty
         }
         

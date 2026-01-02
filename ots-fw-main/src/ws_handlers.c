@@ -558,7 +558,7 @@ void ws_handlers_set_session_close_callback(httpd_handle_t server) {
 }
 
 // Public getter for session close callback (for http_server to use)
-httpd_close_func ws_handlers_get_session_close_callback(void) {
+httpd_close_func_t ws_handlers_get_session_close_callback(void) {
     return ws_session_close_cb;
 }
 
