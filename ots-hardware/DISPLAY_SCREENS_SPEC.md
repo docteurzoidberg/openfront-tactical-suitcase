@@ -32,8 +32,8 @@ The LCD is shared between two modules with a **yielding mechanism**:
 ### 1. Splash Screen (Boot)
 
 **Module**: System Status  
-**Phase**: Startup (before any connections)  
-**Duration**: ~2 seconds during firmware initialization
+**Phase**: Startup (before network ready)  
+**Duration**: Persists until captive portal starts OR WebSocket server starts
 
 ```
 ┌────────────────┐
@@ -48,11 +48,49 @@ Line 1 (0,0): "  OTS Firmware  "  // 2 spaces padding on each side
 Line 2 (0,1): "  Booting...    "  // 2 spaces at start, 4 at end
 ```
 
-**Display Trigger**: Shown immediately on module initialization
+**Display Trigger**: 
+- Shown immediately on module initialization
+- Persists until network enters a stable state:
+  - Portal mode activated → Switch to Captive Portal screen
+  - WebSocket server started (STA mode) → Switch to Waiting for Connection screen
+
+**Important**: The splash screen acts as a "holding screen" and remains visible until the firmware knows what network mode it's operating in. This prevents premature display of "Waiting for Connection" before the WebSocket server is actually ready.
 
 ---
 
-### 2. Waiting for Connection
+### 2. Captive Portal Setup Screen
+
+**Module**: System Status  
+**Phase**: Captive portal mode (no WiFi credentials stored)  
+**Duration**: Until WiFi credentials are configured
+
+```
+┌────────────────┐
+│   Setup WiFi   │ (centered)
+│  Read Manual   │ (centered)
+└────────────────┘
+```
+
+**Implementation**:
+```c
+Line 1 (0,0): "   Setup WiFi   "  // 3 spaces at start, 3 at end
+Line 2 (0,1): "  Read Manual   "  // 2 spaces at start, 3 at end
+```
+
+**Display Trigger**: 
+- Captive portal mode activated (no WiFi credentials)
+- LED Status: Blue (WIFI_CONNECTING state)
+- Shows when `network_manager_is_portal_mode()` returns true
+
+**Notes**:
+- NO connection animation on this screen (static text)
+- Blue LED indicates setup/configuration mode
+- User must connect to AP (SSID: "OTS-SETUP-XXXX") and configure WiFi via web interface
+- After WiFi configured, device reboots and enters normal mode
+
+---
+
+### 3. Waiting for Connection
 
 **Module**: System Status  
 **Phase**: Network connected, WebSocket disconnected  
@@ -79,7 +117,7 @@ Line 2 (0,1): " Connection   .  "
 
 ---
 
-### 3. Lobby Screen (Connected, No Game)
+### 4. Lobby Screen (Connected, No Game)
 
 **Module**: System Status  
 **Phase**: `GAME_PHASE_LOBBY`  
@@ -106,7 +144,7 @@ Line 2 (0,1): " Waiting Game.  "
 
 ---
 
-### 3b. Spawning Screen
+### 5. Spawning Screen
 
 **Module**: System Status  
 **Phase**: `GAME_PHASE_SPAWNING`  
@@ -129,7 +167,7 @@ Line 2 (0,1): " Get Ready!     "  // 1 space at start, 5 at end
 
 ---
 
-### 4. Troop Display (In-Game)
+### 6. Troop Display (In-Game)
 
 **Module**: Troops  
 **Phase**: `GAME_PHASE_IN_GAME`  
@@ -209,7 +247,7 @@ if (troops >= 1000000000) {
 
 ---
 
-### 5. Victory Screen
+### 7. Victory Screen
 
 **Module**: System Status  
 **Phase**: `GAME_PHASE_WON`  
@@ -232,7 +270,7 @@ Line 2 (0,1): " Good Game!     "  // 1 space at start, 5 at end
 
 ---
 
-### 6. Defeat Screen
+### 8. Defeat Screen
 
 **Module**: System Status  
 **Phase**: `GAME_PHASE_LOST`  
@@ -255,7 +293,7 @@ Line 2 (0,1): " Good Game!     "  // 1 space at start, 5 at end
 
 ---
 
-### 7. Shutdown Screen
+### 9. Shutdown Screen
 
 **Module**: System Status  
 **Phase**: Device shutdown  
@@ -283,43 +321,100 @@ Line 2 (0,1): "                "  // All spaces (blank)
 ```
    [BOOT]
      │
-     ├─→ Splash Screen (2s)
+     ├─→ Splash Screen ("OTS Firmware / Booting...")
+     │   (persists until network mode determined)
      │
      ↓
-[NO WS CONNECTION]
+[NETWORK MODE CHECK]
      │
-     ├─→ Waiting for Connection
+     ├───────────────────────┬─────────────────────────┐
+     │                       │                         │
+     ↓                       ↓                         ↓
+[NO WIFI CREDENTIALS]   [WIFI OK]              [WIFI FAIL]
+     │                       │                         │
+     ├─→ Captive Portal      ├─→ Connect to WiFi      ├─→ Retry...
+     │   "Setup WiFi /       │                         │
+     │    Read Manual"       ↓                         ↓
+     │   (Blue LED)      [START WSS SERVER]      [RECONNECT ATTEMPT]
+     │                       │
+     │                       ↓
+     │                  [NO WS CONNECTION]
+     │                       │
+     │                       ├─→ "Waiting for Connection..."
+     │                       │   (Yellow LED, animated)
+     │                       │
+     │                       ↓
+     │                  [WS CONNECTED]
+     │                       │
+     └─────────────────────→ ├─→ Lobby Screen
+                             │   "Connected! / Waiting Game..."
+                             │   (Purple LED)
+                             │
+                             ↓
+                        [GAME START]
+                             │
+                             ├─→ Troop Display (in-game)
+                             │   "{current} / {max}"
+                             │   "{percent}% ({calculated})"
+                             │   (Green LED when game active)
+                             │      ↓ (slider changes)
+                             │      ├─→ Update Line 2
+                             │      ↓ (troop data update)
+                             │      └─→ Update Line 1 & 2
+                              Notes |
+|-------|------------------|-------|
+| Module initialization | → Splash Screen | Persists until network mode determined |
+| Captive portal activated | Splash → Captive Portal Setup | Blue LED, no animation, `network_manager_is_portal_mode() == true` |
+| WebSocket server started | Splash → Waiting for Connection | Yellow LED, animated, requires `ws_server_is_started() == true` |
+| `INTERNAL_EVENT_WS_CONNECTED` | Waiting → Lobby | Purple LED |
+| `INTERNAL_EVENT_WS_DISCONNECTED` | Any → Waiting for Connection | Yellow LED, animated (only if WSS server running) |
+| `GAME_EVENT_GAME_START` | Lobby → Troop Display | Green LED when game active |
+| `GAME_EVENT_WIN` | Troop Display → Victory Screen | Persists until reconnect |
+| `GAME_EVENT_LOOSE` | Troop Display → Defeat Screen | Persists until reconnect |
+| `GAME_EVENT_GAME_END` | Troop Display → Lobby | Returns to waiting for next game |
+| Game end timeout (5s) | Victory/Defeat → Lobby | Automatic return to lobby |
+
+**Critical Implementation Details:**
+
+1. **Splash Screen Persistence**: The splash screen remains visible until the firmware knows what network mode it's in. This prevents premature "Waiting for Connection" display before the WebSocket server is actually running.
+
+2. **Portal Mode Check**: System Status module queries `network_manager_is_portal_mode()` before showing any other screen. If true, shows "Setup WiFi" regardless of other state.
+
+3. **WSS Server Check**: Before showing "Waiting for Connection", module checks `ws_server_is_started()`. If false, keeps splash screen. This ensures the display accurately reflects whether the server is ready to accept connections.
+
+4. **Connection Animation**: Only "Waiting for Connection" and "Waiting Game..." screens have animations. Captive Portal screen is static.
+                             └─→ Lobby Screen (if GAME_END unknown)
+                             │
+                             │ (after 5s timeout)
+                             │
+                             ↓
+                        [LOBBY]
+                             │
+                             └─→ Lobby Screen (repeat)
+
+[DISCONNECTION EVENTS]
      │
-     ↓
-[WS CONNECTED]
-     │
-     ├─→ Lobby Screen
-     │
-     ↓
-[GAME START]
-     │
-     ├─→ Troop Display (in-game)
-     │      ↓ (slider changes)
-     │      ├─→ Update Line 2
-     │      ↓ (troop data update)
-     │      └─→ Update Line 1 & 2
-     │
-     ↓
-[GAME END]
-     │
-     ├─→ Victory Screen (if WIN)
-     │   OR
-     ├─→ Defeat Screen (if LOOSE)
-     │   OR
-     └─→ Lobby Screen (if GAME_END unknown)
-     │
-     │ (after 5s timeout)
-     │
-     ↓
-[LOBBY]
-     │
-     └─→ Lobby Screen (repeat)
+     ├─→ WS Disconnect → "Waiting for Connection..." (Yellow LED)
+     └─→ WiFi Disconnect → Reconnect attempt → Splash/Portal/Waiting
 ```
+
+**Key Decision Points:**
+
+1. **Boot → Network Mode**: Splash persists until either:
+   - Portal mode activated (no credentials) → Show "Setup WiFi"
+   - WSS server started (STA mode) → Show "Waiting for Connection"
+
+2. **Portal vs Normal Mode**:
+   - Portal: Blue LED + "Setup WiFi / Read Manual" (static, no animation)
+   - Normal: Yellow LED + "Waiting for Connection..." (animated) when WSS ready
+
+3. **Display Logic Priority** (in `system_status_update()`):
+   ```c
+   if (portal_mode) → "Setup WiFi"
+   else if (!wss_server_started) → Keep splash
+   else if (!ws_connected) → "Waiting for Connection"
+   else → Show game phase screens
+   ```
 
 ## Event-to-Screen Mapping
 

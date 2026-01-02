@@ -1,60 +1,160 @@
-# LCD Display Modes - System Status & Troops Modules
+# LCD Display Modes - OTS Firmware
 
 ## Overview
 
-The OTS firmware implements intelligent LCD display mode switching across two modules:
-- **System Status Module**: Controls LCD during boot, connection, and lobby phases
-- **Troops Module**: Takes control during active gameplay to show troop counts
+The OTS firmware uses a **16×2 character LCD** to display system status, connection information, and game state. The LCD is shared between two modules:
 
-This division provides contextual information based on system state, with the System Status module acting as the primary display controller and yielding control to the Troops module during gameplay.
+1. **System Status Module** - Owns display by default (boot, connection, lobby, game end)
+2. **Troops Module** - Takes control during active gameplay (`GAME_PHASE_IN_GAME`)
+
+This document describes the display modes, state transitions, and implementation details.
 
 ## Display Modes
 
-### 1. WAITING_CLIENT Mode
-**Trigger:** Boot / WebSocket disconnected  
-**Event:** `INTERNAL_EVENT_WS_DISCONNECTED`
+### 1. SPLASH (Boot Screen)
+
+**Controller**: System Status Module  
+**Phase**: Firmware startup  
+**Duration**: Persists until network mode is determined
+
+```
+┌────────────────┐
+│  OTS Firmware  │
+│  Booting...    │
+└────────────────┘
+```
+
+**Purpose**: 
+- Initial boot screen shown immediately on module initialization
+- Acts as a "holding screen" until firmware determines network mode
+- Prevents premature display of "Waiting for Connection" before WebSocket server is ready
+
+**Display Logic**:
+```c
+// In system_status_update():
+// Splash persists until either:
+// 1. Portal mode activated (no WiFi credentials)
+// 2. WebSocket server started (normal STA mode)
+
+if (!network_manager_is_portal_mode() && !ws_server_is_started()) {
+    // Keep splash screen, don't mark display_dirty as done
+    return;
+}
+```
+
+**LED Status**: OFF (disconnected)
+
+---
+
+### 2. CAPTIVE_PORTAL (WiFi Setup)
+
+**Controller**: System Status Module  
+**Phase**: Captive portal mode (no WiFi credentials stored)  
+**Duration**: Until WiFi credentials are configured via web interface
+
+```
+┌────────────────┐
+│   Setup WiFi   │
+│  Read Manual   │
+└────────────────┘
+```
+
+**Purpose**:
+- Shown when device has no WiFi credentials (first boot or after WiFi clear)
+- Directs user to connect to AP and configure WiFi via captive portal
+- Static display (NO connection animation)
+
+**Display Logic**:
+```c
+// In system_status_update():
+bool in_portal_mode = network_manager_is_portal_mode();
+
+if (in_portal_mode) {
+    display_captive_portal();  // "Setup WiFi / Read Manual"
+    return;
+}
+```
+
+**Captive Portal Details**:
+- AP SSID: `OTS-SETUP-XXXX` (where XXXX = last 4 hex digits of MAC)
+- Web Interface: http://192.168.4.1
+- User configures WiFi credentials
+- Device reboots after configuration
+
+**LED Status**: Blue (WIFI_CONNECTING state)
+
+---
+
+### 3. WAITING_CLIENT (Waiting for Connection)
+
+**Controller**: System Status Module  
+**Phase**: WebSocket server running, no client connected  
+**Duration**: Until WebSocket client connects
 
 ```
 ┌────────────────┐
 │ Waiting for    │
-│ Connection...  │
+│ Connection...  │ (animated scan dot)
 └────────────────┘
 ```
 
-**When shown:**
-- System just booted up
-- WebSocket connection to server lost
-- Waiting for userscript to connect
+**Purpose**: 
+- Indicates device is ready and waiting for userscript/dashboard connection
+- Shows animated "scan" effect to indicate active waiting state
+- **Only shown when WebSocket server is actually running**
 
-**Purpose:** Clearly indicates the system is operational but not connected to the game server.
+**Display Logic**:
+```c
+// In system_status_update():
+bool wss_started = ws_server_is_started();
+
+if (!wss_started) {
+    // Keep splash screen until WSS server is ready
+    return;
+}
+
+if (!module_state.ws_connected) {
+    display_waiting_connection();  // Show animated waiting screen
+    return;
+}
+```
+
+**Animation**: 
+- Scan dot moves across last 3 columns every ~250ms
+- Frames: `".  "` → `" . "` → `"  ."` → `" . "` (repeat)
+- Only animates when NOT in portal mode
+
+**LED Status**: Yellow (WIFI_ONLY state - WiFi connected, no WebSocket)
 
 ---
 
-### 2. LOBBY Mode
-**Trigger:** WebSocket connected / Game ended  
-**Events:** `INTERNAL_EVENT_WS_CONNECTED`, `GAME_EVENT_GAME_END`  
-**Controlled By:** System Status Module
+### 4. LOBBY (Connected, Waiting for Game)
+
+**Controller**: System Status Module  
+**Phase**: `GAME_PHASE_LOBBY`  
+**Duration**: Until game starts
 
 ```
 ┌────────────────┐
 │ Connected!     │
-│ Waiting Game...│
+│ Waiting Game...│ (animated scan dot)
 └────────────────┘
 ```
 
-**When shown:**
-- WebSocket successfully connected to server
-- Game has ended (win/loss/disconnect)
-- Waiting for next game to start
+**Purpose**:
+- Confirms WebSocket connection is active
+- Indicates system is ready and waiting for game to start
+- Provides visual feedback via animated scan dot
 
-**Purpose:** Confirms connection is active and system is ready, waiting for game to begin.
+**LED Status**: Purple (USERSCRIPT_CONNECTED - WebSocket active, no game)
 
 ---
 
-### 3. IN_GAME Mode
-**Trigger:** Game started    
-**Controlled By:** Troops Module
-**Event:** `GAME_EVENT_GAME_START`
+### 5. IN_GAME (Troop Display)
+
+**Controller**: Troops Module  
+**Phase**: `GAME_PHASE_IN_GAME`  
+**Duration**: Entire game duration
 
 ```
 ┌────────────────┐
@@ -63,51 +163,186 @@ This division provides contextual information based on system state, with the Sy
 └────────────────┘
 ```
 
-**When shown:**
-- Active game in progress
-- Troop data available from server
+**Purpose**:
+- Real-time troop management during active gameplay
+- Shows current/max troop counts with intelligent unit scaling
+- Displays deployment slider percentage and calculated troops
 
-**Purpose:** Real-time troop management display with current/max counts and deployment slider.
+**Update Triggers**:
+- Troop data messages from server → Update Line 1 & 2
+- Slider position changes ≥1% → Update Line 2
+
+**LED Status**: Green (GAME_STARTED - active gameplay)
 
 ---
 
-## State Transitions
+### 6. GAME_END (Victory/Defeat Screens)
 
+**Controller**: System Status Module  
+**Phase**: `GAME_PHASE_WON` / `GAME_PHASE_LOST`  
+**Duration**: ~5 seconds, then auto-return to LOBBY
+
+**Victory Screen**:
 ```
-        BOOT
-          │
-          ▼
-  ┌─────────────────┐
-  │ WAITING_CLIENT  │◄────────┐
-  └─────────────────┘         │
-          │                   │
-    WS CONNECTED         WS DISCONNECTED
-          │                   │
-          ▼                   │
-     ┌────────┐               │
-     │ LOBBY  │───────────────┘
-     └────────┘
-          │      ▲
-    GAME START   │
-          │      │ GAME END/WIN/LOSS
-          ▼      │
-     ┌─────────┐ │
-     │ IN_GAME │─┘
-     └─────────┘
+┌────────────────┐
+│   VICTORY!     │
+│ Good Game!     │
+└────────────────┘
 ```
 
-## Event Handlers
+**Defeat Screen**:
+```
+┌────────────────┐
+│    DEFEAT      │
+│ Good Game!     │
+└────────────────┘
+```
+
+**Purpose**: Provides clear end-game feedback before returning to lobby
+
+---
+
+## State Transition Diagram
+
+```
+                    [DEVICE BOOT]
+                          │
+                          ↓
+                   [MODULE INIT]
+                          │
+                          ├─→ Splash Screen
+                          │   "OTS Firmware / Booting..."
+                          │   (LED: OFF)
+                          │
+                          ↓
+              [NETWORK MODE DETERMINATION]
+                          │
+        ├─────────────────┴──────────────────┐
+        │                                     │
+        ↓                                     ↓
+[NO WIFI CREDENTIALS]                [WIFI CREDENTIALS]
+        │                                     │
+        ├─→ Start Captive Portal              ├─→ Connect to WiFi
+        │                                     │
+        ↓                                     ↓
+   CAPTIVE_PORTAL                      [START WSS SERVER]
+   "Setup WiFi /                             │
+    Read Manual"                             │
+   (LED: Blue)                               ↓
+        │                              WAITING_CLIENT
+        │                              "Waiting for /
+        │                               Connection..."
+        │                              (LED: Yellow, animated)
+        │                                     │
+        │                                     ↓
+        │                            [WS CLIENT CONNECTS]
+        │                                     │
+        └─────────────────┬───────────────────┘
+                          │
+                          ↓
+                       LOBBY
+                  "Connected! /
+                   Waiting Game..."
+                  (LED: Purple)
+                          │
+                          ↓
+                  [GAME STARTS]
+                          │
+                          ↓
+                      IN_GAME
+                  "120K / 1.1M"
+                  "50% (60K)"
+               (Troops Module Control)
+                  (LED: Green)
+                          │
+                          ↓
+                   [GAME ENDS]
+                          │
+        ├─────────────────┼──────────────────┐
+        │                 │                   │
+        ↓                 ↓                   ↓
+    VICTORY           DEFEAT              [TIMEOUT]
+  "VICTORY! /      "DEFEAT /                 │
+   Good Game!"      Good Game!"              │
+        │                 │                   │
+        └─────────────────┴───────────────────┘
+                          │
+                          ↓
+                  [AFTER 5s TIMEOUT]
+                          │
+                          ↓
+                       LOBBY
+                  (repeat cycle)
+
+[CONNECTION LOSS EVENTS]
+    │
+    ├─→ WS Disconnect → WAITING_CLIENT (Yellow LED)
+    └─→ WiFi Disconnect → Reconnect → WAITING_CLIENT
+```
+
+**Key Decision Points:**
+
+1. **Splash → Portal or Waiting**:
+   - Splash persists until network mode determined
+   - Portal mode: Show "Setup WiFi" (blue LED, no animation)
+   - Normal mode: Wait for WSS server, then show "Waiting for Connection" (yellow LED, animated)
+
+2. **Display Logic Priority** (in `system_status_update()`):
+   ```c
+   // Check portal mode FIRST
+   if (network_manager_is_portal_mode()) {
+       display_captive_portal();
+       return;
+   }
+   
+   // Then check if WSS server is ready
+   if (!ws_server_is_started()) {
+       // Keep splash screen
+       return;
+   }
+   
+   // Then check WebSocket connection
+   if (!module_state.ws_connected) {
+       display_waiting_connection();
+       return;
+   }
+   
+   // Finally show game phase screens
+   switch (game_phase) { ... }
+   ```
+
+3. **Animation Control**:
+   - Splash: No animation (static)
+   - Captive Portal: No animation (static)
+   - Waiting Client: Animated scan dot (only when WSS running, not in portal mode)
+   - Lobby: Animated scan dot
+   - In-Game: Real-time troop updates
+   - Game End: No animation (static)
+
+---
+
+## Event-to-Mode Transitions
 Both modules listen for events to coordinate LCD control:
 
 | Event Type | From Mode | To Mode | Controller | Description |
 |------------|-----------|---------|------------|-------------|
+| Module init | - | SPLASH | System Status | Initial boot screen, persists until network ready |
+| Portal activated | SPLASH | CAPTIVE_PORTAL | System Status | No WiFi credentials, start AP mode |
+| WSS started | SPLASH | WAITING_CLIENT | System Status | WebSocket server ready, waiting for clients |
 | `INTERNAL_EVENT_WS_CONNECTED` | WAITING_CLIENT | LOBBY | System Status | WebSocket connection established |
-| `INTERNAL_EVENT_WS_DISCONNECTED` | Any | WAITING_CLIENT | System Status | WebSocket connection lost |
+| `INTERNAL_EVENT_WS_DISCONNECTED` | Any | WAITING_CLIENT | System Status | WebSocket connection lost (returns to waiting) |
 | `GAME_EVENT_GAME_START` | LOBBY | IN_GAME | Troops Module | Game started, show troop display |
 | `GAME_EVENT_GAME_END` | IN_GAME | LOBBY | System Status | Game ended (System Status reclaims control) |
+| `GAME_EVENT_WIN` | IN_GAME | VICTORY | System Status | Player won |
+| `GAME_EVENT_LOOSE` | IN_GAME | DEFEAT | System Status | Player lost |
+| Timeout (5s) | VICTORY/DEFEAT | LOBBY | System Status | Auto-return to lobby |
 
-**Note:** `WIN` and `LOOSE` events have been removed from the protocol. The system now uses `GAME_EVENT_GAME_END` with a `data.victory` field (true/false/null) to indicate game outcome.
-| `GAME_EVENT_LOOSE` | IN_GAME | LOBBY | Player lost |
+**Critical Event Handling:**
+
+1. **Portal Mode**: Checked via `network_manager_is_portal_mode()` function call (not event-based)
+2. **WSS Server**: Checked via `ws_server_is_started()` function call (not event-based)
+3. **WebSocket Connection**: Event-driven via `INTERNAL_EVENT_WS_CONNECTED/DISCONNECTED`
+4. **Game Phase**: Event-driven via `GAME_EVENT_*` events
 
 ## Implementation Details
 
@@ -137,6 +372,34 @@ static esp_err_t system_status_update(void) {
     if (!module_state.initialized) return ESP_OK;
     
     if (module_state.display_dirty && module_state.display_active) {
+        // *** CRITICAL: Check portal mode FIRST ***
+        bool in_portal_mode = network_manager_is_portal_mode();
+        
+        if (in_portal_mode) {
+            // Captive portal mode - show setup screen
+            display_captive_portal();  // "Setup WiFi / Read Manual"
+            module_state.display_dirty = false;
+            return ESP_OK;
+        }
+        
+        // *** CRITICAL: Check if WSS server is ready ***
+        bool wss_started = ws_server_is_started();
+        
+        if (!wss_started) {
+            // Keep splash screen until server is running
+            // Don't mark display_dirty as done - splash persists
+            return ESP_OK;
+        }
+        
+        // *** CRITICAL: Check connection status BEFORE game phase ***
+        if (!module_state.ws_connected) {
+            // WSS server running but no client connected
+            display_waiting_connection();  // "Waiting for / Connection..."
+            module_state.display_dirty = false;
+            return ESP_OK;
+        }
+        
+        // WebSocket connected - show screen based on game phase
         game_phase_t phase = game_state_get_phase();
         
         // Show game end screen if flag is set
@@ -146,18 +409,10 @@ static esp_err_t system_status_update(void) {
             return ESP_OK;
         }
         
-        // *** CRITICAL: Check connection status FIRST ***
-        if (!module_state.ws_connected) {
-            display_waiting_connection();
-            module_state.display_dirty = false;
-            return ESP_OK;
-        }
-        
-        // Connected - show screen based on game phase
         switch (phase) {
             case GAME_PHASE_LOBBY:
             case GAME_PHASE_SPAWNING:
-                display_lobby();
+                display_lobby();  // "Connected! / Waiting Game..."
                 break;
             case GAME_PHASE_IN_GAME:
                 // Yield control to troops module
@@ -178,21 +433,23 @@ static esp_err_t system_status_update(void) {
         module_state.display_dirty = false;
     }
     
+    // Handle connection animation (only when not in portal mode and not connected)
+    if (module_state.display_active && !module_state.ws_connected && !network_manager_is_portal_mode()) {
+        // Animate scan dot on "Waiting for Connection" screen
+        animate_connection_scan();
+    }
+    
     return ESP_OK;
 }
 ```
 
-**Key Points:**
-1. Connection state (`ws_connected`) is checked BEFORE game phase
-2. This ensures "Waiting for Connection..." shows when disconnected, even if `game_phase` is still `LOBBY`
-3. System Status yields control to Troops Module during `GAME_PHASE_IN_GAME`
-4. System Status reclaims control on game end or disconnect         display_in_game();
-            break;
-    }
-    
-    module_state.display_dirty = false;
-}
-```
+**Key Implementation Points:**
+
+1. **Query-Based Checks**: Portal mode and WSS server status are checked via function calls, not events
+2. **Splash Persistence**: When WSS server isn't ready, function returns WITHOUT marking `display_dirty = false`, keeping splash visible
+3. **Priority Order**: Portal → WSS Ready → Connection → Game Phase
+4. **Animation Control**: Only animate when display_active AND not connected AND not in portal mode
+5. **Display Refresh**: `system_status_refresh_display()` called after portal start and WSS start to trigger re-evaluation
 
 ## Benefits
 
@@ -259,16 +516,32 @@ static esp_err_t system_status_update(void) {
 - May need to restart firmware if event was missed
 
 ### Display never updates
-- Check `module_state.display_dirty` flag is set on events
-- Verify `system_status_update()` or `troops_update()` is being called
-- Check LCD driver initialization (`lcd_init()` in main)
-- Verify I2C bus is working (LCD at 0x27, ADC at 0x48)
+- **Symptom**: Screen remains on one mode regardless of state changes
+- **Cause**: `display_dirty` flag not being set or update function not called
+- **Check**: 
+  - `module_state.display_dirty` flag set on events
+  - `system_status_update()` or `troops_update()` being called in main loop
+  - LCD driver initialization (`lcd_init()` in main)
+  - I2C bus working (LCD at 0x27, ADC at 0x48)
+- **Fix**: Verify event handlers set `display_dirty = true`, check main loop execution
 
-### "Waiting for Connection" shows even when connected
-- **Root cause:** `ws_connected` flag not being set or event not received
-- Check `INTERNAL_EVENT_WS_CONNECTED` is posted by WebSocket client
-- Verify System Status module's event handler sets `ws_connected = true`
-- Check order of operations: connection state must be checked BEFORE game phase
+### Animation not working
+- **Symptom**: "Waiting for Connection" or "Waiting Game" scan dot not moving
+- **Cause**: Animation logic not executing
+- **Check**:
+  - Animation only runs when `display_active && !ws_connected && !portal_mode`
+  - Timer for animation updates (~250ms intervals)
+  - Portal mode does NOT animate (intentional)
+- **Fix**: Verify animation conditions, check timer implementation
+
+### Wrong screen in portal mode
+- **Symptom**: Shows "Waiting for Connection" instead of "Setup WiFi"
+- **Cause**: Portal mode check not being performed
+- **Check**:
+  - `network_manager_is_portal_mode()` called in update logic
+  - Portal mode checked BEFORE other display logic
+  - `display_captive_portal()` function implementation
+- **Fix**: Verify display logic priority order, check portal mode function
 
 ---
 

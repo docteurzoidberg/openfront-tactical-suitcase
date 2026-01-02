@@ -130,6 +130,41 @@ esp_err_t device_settings_get_serial(char *out, size_t out_len) {
     return ESP_OK;
 }
 
+esp_err_t device_settings_set_serial(const char *serial) {
+    if (!serial) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Keep it small and safe for later UI/JSON usage.
+    const size_t len = strnlen(serial, 63);
+    if (len == 0 || serial[0] == ' ') {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (len >= 63) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "nvs_open failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = nvs_set_str(handle, NVS_KEY_SERIAL, serial);
+    if (ret == ESP_OK) {
+        ret = nvs_commit(handle);
+    }
+    nvs_close(handle);
+
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "Serial number set: %s", serial);
+    } else {
+        ESP_LOGE(TAG, "Failed to set serial: %s", esp_err_to_name(ret));
+    }
+    return ret;
+}
+
 esp_err_t device_settings_factory_reset(void) {
     nvs_handle_t handle;
     esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);

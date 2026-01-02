@@ -14,6 +14,8 @@
 #include "lcd_driver.h"
 #include "game_state.h"
 #include "protocol.h"
+#include "network_manager.h"
+#include "ws_server.h"
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
@@ -23,6 +25,13 @@
 static const char *TAG = "SysStatus";
 
 // Module state
+// Animation state (shared for all animated screens)
+typedef struct {
+    uint8_t frame;
+    uint64_t last_update_ms;
+    char last_line2[LCD_COLS + 1];
+} animation_state_t;
+
 typedef struct {
     bool initialized;
     bool display_active;  // Are we controlling the display?
@@ -30,16 +39,7 @@ typedef struct {
     bool player_won;      // true = victory, false = defeat
     bool show_game_end;   // Show game end screen
     bool ws_connected;    // WebSocket connection status
-
-    // Waiting-for-connection scan animation (line 2)
-    uint8_t conn_anim_frame;
-    uint64_t conn_anim_last_ms;
-    char conn_last_line2[LCD_COLS + 1];
-
-    // Lobby scan animation (line 2)
-    uint8_t lobby_anim_frame;
-    uint64_t lobby_anim_last_ms;
-    char lobby_last_line2[LCD_COLS + 1];
+    animation_state_t animation;
 } system_status_state_t;
 
 static system_status_state_t module_state = {0};
@@ -48,102 +48,77 @@ static system_status_state_t module_state = {0};
 // Display Functions
 // ============================================================================
 
-static void display_splash(void) {
+// Helper to display simple two-line screens
+static void display_two_lines(const char *line1, const char *line2) {
     lcd_clear();
     lcd_set_cursor(0, 0);
-    lcd_write_string("  OTS Firmware  ");
+    lcd_write_string(line1);
     lcd_set_cursor(0, 1);
-    lcd_write_string("  Booting...    ");
+    lcd_write_string(line2);
+}
+
+static void display_splash(void) {
+    display_two_lines("  OTS Firmware  ", "  Booting...    ");
+}
+
+static void display_captive_portal(void) {
+    display_two_lines("   Setup WiFi   ", "  Read Manual   ");
 }
 
 static void display_waiting_connection(void) {
-    lcd_clear();
-    lcd_set_cursor(0, 0);
-    lcd_write_string(" Waiting for    ");
-    lcd_set_cursor(0, 1);
-    // Line 2 is animated by system_status_update(); start with frame 0.
-    lcd_write_string(" Connection   .  ");
+    // Line 2 animated by system_status_update(); starts at frame 0
+    display_two_lines(" Waiting for    ", " Connection   .  ");
 }
 
 static void display_lobby(void) {
-    lcd_clear();
-    lcd_set_cursor(0, 0);
-    lcd_write_string(" Connected!     ");
-    // Lobby line 2 is animated by system_status_update(); start with frame 0.
-    lcd_set_cursor(0, 1);
-    lcd_write_string(" Waiting Game.  ");
+    // Line 2 animated by system_status_update(); starts at frame 0
+    display_two_lines(" Connected!     ", " Waiting Game.  ");
 }
 
-static void conn_anim_write_line2_if_changed(uint8_t frame) {
-    // Keep the message stable and move a single dot across the last 3 columns.
-    // 16 chars total: 13-char prefix + 3-char scan suffix.
-    // Single moving dot (no fixed dots).
-    // Frame 0 matches display_waiting_connection(): " Connection   .  "
-    static const char *prefix = " Connection   ";
-    static const char *suffixes[] = {
-        ".  ",
-        " . ",
-        "  .",
-        " . "
-    };
-
+// Unified animation helper for all scan-dot animations
+static void animate_scan_line2(const char *prefix, uint8_t frame) {
+    static const char *suffixes[] = {".  ", " . ", "  .", " . "};
+    
     char line2[LCD_COLS + 1];
     memset(line2, ' ', LCD_COLS);
     line2[LCD_COLS] = '\0';
 
     memcpy(line2, prefix, strlen(prefix));
-    const char *suffix = suffixes[frame % (sizeof(suffixes) / sizeof(suffixes[0]))];
+    const char *suffix = suffixes[frame % 4];
     memcpy(line2 + (LCD_COLS - 3), suffix, 3);
 
-    if (strncmp(module_state.conn_last_line2, line2, LCD_COLS) != 0) {
-        (void)lcd_write_line(1, line2);
-        memcpy(module_state.conn_last_line2, line2, LCD_COLS + 1);
+    if (strncmp(module_state.animation.last_line2, line2, LCD_COLS) != 0) {
+        lcd_write_line(1, line2);
+        memcpy(module_state.animation.last_line2, line2, LCD_COLS + 1);
     }
 }
 
-static void lobby_anim_write_line2_if_changed(uint8_t frame) {
-    // Keep the message stable and move a single dot across the last 3 columns.
-    // 16 chars total: 13-char prefix + 3-char scan suffix.
-    static const char *prefix = " Waiting Game";
-    static const char *suffixes[] = {
-        ".  ",
-        " . ",
-        "  .",
-        " . "
-    };
-
-    char line2[LCD_COLS + 1];
-    memset(line2, ' ', LCD_COLS);
-    line2[LCD_COLS] = '\0';
-
-    memcpy(line2, prefix, strlen(prefix));
-    const char *suffix = suffixes[frame % (sizeof(suffixes) / sizeof(suffixes[0]))];
-    memcpy(line2 + (LCD_COLS - 3), suffix, 3);
-
-    if (strncmp(module_state.lobby_last_line2, line2, LCD_COLS) != 0) {
-        (void)lcd_write_line(1, line2);
-        memcpy(module_state.lobby_last_line2, line2, LCD_COLS + 1);
+// Update animation if enough time has passed
+static bool update_animation_if_needed(const char *prefix) {
+    const uint64_t now_ms = esp_timer_get_time() / 1000;
+    if (module_state.animation.last_update_ms == 0 || 
+        (now_ms - module_state.animation.last_update_ms) >= 250) {
+        module_state.animation.last_update_ms = now_ms;
+        module_state.animation.frame = (module_state.animation.frame + 1) % 4;
+        animate_scan_line2(prefix, module_state.animation.frame);
+        return true;
     }
+    return false;
+}
+
+static void reset_animation_state(void) {
+    module_state.animation.frame = 0;
+    module_state.animation.last_update_ms = 0;
+    memset(module_state.animation.last_line2, 0, sizeof(module_state.animation.last_line2));
 }
 
 static void display_choose_spawn(void) {
-    lcd_clear();
-    lcd_set_cursor(0, 0);
-    lcd_write_string("   Spawning...  ");
-    lcd_set_cursor(0, 1);
-    lcd_write_string(" Get Ready!     ");
+    display_two_lines("   Spawning...  ", " Get Ready!     ");
 }
 
 static void display_game_end(bool victory) {
-    lcd_clear();
-    lcd_set_cursor(0, 0);
-    if (victory) {
-        lcd_write_string("   VICTORY!     ");
-    } else {
-        lcd_write_string("    DEFEAT      ");
-    }
-    lcd_set_cursor(0, 1);
-    lcd_write_string(" Good Game!     ");
+    const char *line1 = victory ? "   VICTORY!     " : "    DEFEAT      ";
+    display_two_lines(line1, " Good Game!     ");
 }
 
 // ============================================================================
@@ -179,19 +154,28 @@ static esp_err_t system_status_init(void) {
 static esp_err_t system_status_update(void) {
     if (!module_state.initialized) return ESP_OK;
 
-    // If the game has transitioned to IN_GAME, ensure we yield LCD control even
-    // if SystemStatus isn't about to redraw.
-    if (module_state.display_active && module_state.ws_connected && !module_state.show_game_end) {
-        if (game_state_get_phase() == GAME_PHASE_IN_GAME) {
-            module_state.display_active = false;
-        }
+    // Auto-yield LCD control when game starts
+    if (module_state.display_active && module_state.ws_connected && 
+        !module_state.show_game_end && game_state_get_phase() == GAME_PHASE_IN_GAME) {
+        module_state.display_active = false;
     }
 
-    // Update display if dirty and we're in control
+    // Handle display updates when we're in control and display is dirty
     if (module_state.display_dirty && module_state.display_active) {
-        game_phase_t phase = game_state_get_phase();
-
-        // Check connection status first - if not connected, always show waiting screen
+        // Priority 1: Captive portal mode
+        if (network_manager_is_portal_mode()) {
+            display_captive_portal();
+            module_state.show_game_end = false;
+            module_state.display_dirty = false;
+            return ESP_OK;
+        }
+        
+        // Priority 2: Wait for WSS server to start (keep splash)
+        if (!ws_server_is_started()) {
+            return ESP_OK;  // Keep splash, don't clear display_dirty
+        }
+        
+        // Priority 3: Not connected - show waiting screen
         if (!module_state.ws_connected) {
             display_waiting_connection();
             module_state.show_game_end = false;
@@ -199,14 +183,15 @@ static esp_err_t system_status_update(void) {
             return ESP_OK;
         }
 
-        // Show game end screen if flag is set
+        // Priority 4: Game end screen takes precedence
         if (module_state.show_game_end) {
             display_game_end(module_state.player_won);
             module_state.display_dirty = false;
             return ESP_OK;
         }
         
-        // Connected - show screen based on game phase
+        // Priority 5: Connected - show screen based on game phase
+        game_phase_t phase = game_state_get_phase();
         switch (phase) {
             case GAME_PHASE_LOBBY:
                 display_lobby();
@@ -215,17 +200,14 @@ static esp_err_t system_status_update(void) {
                 display_choose_spawn();
                 break;
             case GAME_PHASE_IN_GAME:
-                // Yield control - don't touch LCD during game
-                module_state.display_active = false;
+                module_state.display_active = false;  // Yield to troops module
                 break;
             case GAME_PHASE_WON:
             case GAME_PHASE_LOST:
             case GAME_PHASE_ENDED:
-                // Show game end screen until userscript disconnect/reconnect resets state.
                 module_state.show_game_end = true;
                 module_state.player_won = (phase == GAME_PHASE_WON);
                 display_game_end(module_state.player_won);
-                module_state.display_active = true;
                 break;
             default:
                 display_waiting_connection();
@@ -235,27 +217,19 @@ static esp_err_t system_status_update(void) {
         module_state.display_dirty = false;
     }
 
-    // Waiting-for-connection scan animation: when NOT connected, update line 2 periodically.
-    if (module_state.display_active && !module_state.ws_connected) {
-        const uint64_t now_ms = (uint64_t)(esp_timer_get_time() / 1000);
-        if (module_state.conn_anim_last_ms == 0 || (now_ms - module_state.conn_anim_last_ms) >= 250) {
-            module_state.conn_anim_last_ms = now_ms;
-            module_state.conn_anim_frame = (module_state.conn_anim_frame + 1) % 4;
-            conn_anim_write_line2_if_changed(module_state.conn_anim_frame);
-        }
+    // Handle animations (only when display is active)
+    if (!module_state.display_active) return ESP_OK;
+    
+    // Animate waiting screen (not in portal mode)
+    if (!module_state.ws_connected && !network_manager_is_portal_mode()) {
+        update_animation_if_needed(" Connection   ");
         return ESP_OK;
     }
 
-    // Lobby scan animation: when connected and in LOBBY, update line 2 periodically.
-    if (module_state.display_active && module_state.ws_connected && !module_state.show_game_end) {
-        if (game_state_get_phase() == GAME_PHASE_LOBBY) {
-            const uint64_t now_ms = (uint64_t)(esp_timer_get_time() / 1000);
-            if (module_state.lobby_anim_last_ms == 0 || (now_ms - module_state.lobby_anim_last_ms) >= 250) {
-                module_state.lobby_anim_last_ms = now_ms;
-                module_state.lobby_anim_frame = (module_state.lobby_anim_frame + 1) % 4;
-                lobby_anim_write_line2_if_changed(module_state.lobby_anim_frame);
-            }
-        }
+    // Animate lobby screen
+    if (module_state.ws_connected && !module_state.show_game_end && 
+        game_state_get_phase() == GAME_PHASE_LOBBY) {
+        update_animation_if_needed(" Waiting Game");
     }
     
     return ESP_OK;
@@ -267,43 +241,28 @@ static bool system_status_handle_event(const internal_event_t *event) {
     switch (event->type) {
         case INTERNAL_EVENT_WS_CONNECTED:
             ESP_LOGI(TAG, "WebSocket connected - showing lobby screen");
-            // Userscript reconnect usually means the browser page reloaded and any
-            // previous game session is no longer relevant. Reset the game phase so
-            // we don't keep showing stale end-game screens.
             game_state_reset();
             module_state.ws_connected = true;
             module_state.display_active = true;
             module_state.display_dirty = true;
-            module_state.show_game_end = false;  // Clear game end flag
-            module_state.lobby_anim_frame = 0;
-            module_state.lobby_anim_last_ms = 0;
-            memset(module_state.lobby_last_line2, 0, sizeof(module_state.lobby_last_line2));
-            module_state.conn_anim_frame = 0;
-            module_state.conn_anim_last_ms = 0;
-            memset(module_state.conn_last_line2, 0, sizeof(module_state.conn_last_line2));
+            module_state.show_game_end = false;
+            reset_animation_state();
             return true;
             
         case INTERNAL_EVENT_WS_DISCONNECTED:
             ESP_LOGI(TAG, "WebSocket disconnected - showing waiting screen");
-            // Clear stale game session state on disconnect.
             game_state_reset();
             module_state.ws_connected = false;
             module_state.display_active = true;
             module_state.display_dirty = true;
             module_state.show_game_end = false;
-            module_state.lobby_anim_frame = 0;
-            module_state.lobby_anim_last_ms = 0;
-            memset(module_state.lobby_last_line2, 0, sizeof(module_state.lobby_last_line2));
-            module_state.conn_anim_frame = 0;
-            module_state.conn_anim_last_ms = 0;
-            memset(module_state.conn_last_line2, 0, sizeof(module_state.conn_last_line2));
+            reset_animation_state();
             return true;
             
         case GAME_EVENT_GAME_START:
             ESP_LOGI(TAG, "Game started - yielding LCD control to troops module");
             module_state.display_active = false;
-            module_state.show_game_end = false;  // Clear any previous game end
-            module_state.lobby_anim_last_ms = 0;
+            module_state.show_game_end = false;
             return true;
 
         case GAME_EVENT_GAME_SPAWNING:
@@ -311,38 +270,26 @@ static bool system_status_handle_event(const internal_event_t *event) {
             module_state.display_active = true;
             module_state.display_dirty = true;
             module_state.show_game_end = false;
-            module_state.lobby_anim_last_ms = 0;
             return true;
             
-        case GAME_EVENT_GAME_END:
-            // Parse victory status from event data
-            // Expected JSON: {"victory": true/false/null}
-            // For now, we'll check the data field for "victory" boolean
-            // TODO: Implement proper JSON parsing when cJSON is available
+        case GAME_EVENT_GAME_END: {
+            // Parse victory status: {"victory": true/false/null}
+            bool victory = event->data && strstr(event->data, "\"victory\":true");
+            bool defeat = event->data && strstr(event->data, "\"victory\":false");
             
-            // Simple string search for victory indication
-            bool victory_found = (event->data && strstr(event->data, "\"victory\":true") != NULL);
-            bool defeat_found = (event->data && strstr(event->data, "\"victory\":false") != NULL);
+            module_state.display_active = true;
+            module_state.display_dirty = true;
             
-            if (victory_found) {
-                ESP_LOGI(TAG, "Game ended - VICTORY!");
-                module_state.display_active = true;
+            if (victory || defeat) {
+                ESP_LOGI(TAG, "Game ended - %s", victory ? "VICTORY!" : "Defeat");
                 module_state.show_game_end = true;
-                module_state.player_won = true;
-                module_state.display_dirty = true;
-            } else if (defeat_found) {
-                ESP_LOGI(TAG, "Game ended - Defeat");
-                module_state.display_active = true;
-                module_state.show_game_end = true;
-                module_state.player_won = false;
-                module_state.display_dirty = true;
+                module_state.player_won = victory;
             } else {
-                ESP_LOGI(TAG, "Game ended (unknown outcome) - reclaiming LCD control");
-                module_state.display_active = true;
-                module_state.display_dirty = true;
+                ESP_LOGI(TAG, "Game ended (unknown outcome) - returning to lobby");
                 module_state.show_game_end = false;
             }
             return true;
+        }
             
         default:
             return false;
@@ -386,4 +333,13 @@ static const hardware_module_t system_status_module = {
 
 const hardware_module_t* system_status_module_get(void) {
     return &system_status_module;
+}
+
+void system_status_refresh_display(void) {
+    ESP_LOGI(TAG, "*** system_status_refresh_display() called, initialized=%d ***", module_state.initialized);
+    if (module_state.initialized) {
+        module_state.display_dirty = true;
+        module_state.display_active = true;
+        ESP_LOGI(TAG, "Display marked as dirty and active");
+    }
 }

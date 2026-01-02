@@ -31,6 +31,13 @@
 
     factoryResetBtn: document.getElementById('factoryResetBtn'),
     factoryResetMsg: document.getElementById('factoryResetMsg'),
+
+    otaFile: document.getElementById('otaFile'),
+    otaUploadBtn: document.getElementById('otaUploadBtn'),
+    otaMsg: document.getElementById('otaMsg'),
+    otaProgress: document.getElementById('otaProgress'),
+    otaProgressFill: document.getElementById('otaProgressFill'),
+    otaProgressText: document.getElementById('otaProgressText'),
   }
 
   /** @type {DeviceInfo | null} */
@@ -310,9 +317,95 @@
     }
   }
 
+  function setOtaMsg(text) {
+    if (el.otaMsg) el.otaMsg.textContent = text
+  }
+
+  function setOtaProgress(percent) {
+    if (el.otaProgressFill) el.otaProgressFill.style.width = percent + '%'
+    if (el.otaProgressText) el.otaProgressText.textContent = Math.round(percent) + '%'
+  }
+
+  async function uploadOta() {
+    if (!el.otaUploadBtn || !el.otaFile) return
+
+    const file = el.otaFile.files[0]
+    if (!file) {
+      setOtaMsg('Please select a firmware file')
+      return
+    }
+
+    if (!file.name.endsWith('.bin')) {
+      setOtaMsg('Invalid file type. Please select a .bin file')
+      return
+    }
+
+    el.otaUploadBtn.disabled = true
+    setOtaMsg('Uploading firmware...')
+    setHidden(el.otaProgress, false)
+    setOtaProgress(0)
+
+    try {
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percent = (e.loaded / e.total) * 100
+            setOtaProgress(percent)
+          }
+        })
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status === 200) {
+            resolve(xhr.responseText)
+          } else {
+            reject(new Error('Upload failed: HTTP ' + xhr.status))
+          }
+        })
+
+        xhr.addEventListener('error', () => {
+          reject(new Error('Network error during upload'))
+        })
+
+        xhr.addEventListener('abort', () => {
+          reject(new Error('Upload aborted'))
+        })
+
+        xhr.open('POST', '/ota/upload', true)
+        xhr.send(file)
+      })
+
+      setOtaProgress(100)
+      setOtaMsg('✓ Upload complete! Device is rebooting...')
+      
+      // Reset UI after delay
+      setTimeout(() => {
+        setHidden(el.otaProgress, true)
+        setOtaProgress(0)
+        if (el.otaFile) el.otaFile.value = ''
+        el.otaUploadBtn.disabled = true
+        setOtaMsg('Device will be back online shortly. Refresh page after ~30 seconds.')
+      }, 2000)
+    } catch (e) {
+      setOtaMsg('✗ ' + String(e && e.message ? e.message : e))
+      setHidden(el.otaProgress, true)
+      setOtaProgress(0)
+      el.otaUploadBtn.disabled = false
+    }
+  }
+
   // Wire UI
   if (el.saveOwnerBtn) el.saveOwnerBtn.addEventListener('click', saveOwner)
   if (el.factoryResetBtn) el.factoryResetBtn.addEventListener('click', factoryReset)
+  if (el.otaFile) {
+    el.otaFile.addEventListener('change', function() {
+      if (el.otaUploadBtn) {
+        el.otaUploadBtn.disabled = !el.otaFile.files.length
+      }
+    })
+  }
+  if (el.otaUploadBtn) el.otaUploadBtn.addEventListener('click', uploadOta)
   if (el.tabs) {
     el.tabs.addEventListener('click', function (ev) {
       const target = ev.target

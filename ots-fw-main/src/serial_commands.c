@@ -1,5 +1,6 @@
 #include "serial_commands.h"
 
+#include "config.h"
 #include "wifi_credentials.h"
 #include "device_settings.h"
 
@@ -103,6 +104,11 @@ static void handle_line(char *line) {
         return;
     }
 
+    if (strcmp(cmd, "version") == 0 || strcmp(cmd, "fw-version") == 0) {
+        ESP_LOGI(TAG, "Firmware: %s v%s", OTS_FIRMWARE_NAME, OTS_FIRMWARE_VERSION);
+        return;
+    }
+
     if (strcmp(cmd, "reboot") == 0 || strcmp(cmd, "reset") == 0) {
         ESP_LOGI(TAG, "%s: rebooting...", cmd);
         vTaskDelay(pdMS_TO_TICKS(200));
@@ -113,77 +119,116 @@ static void handle_line(char *line) {
     if (strcmp(cmd, "nvs") == 0) {
         char *subcmd = next_token(&cursor);
         if (!subcmd) {
-            ESP_LOGW(TAG, "Usage: nvs set owner_name <name> | nvs erase owner_name | nvs get owner_name");
+            ESP_LOGW(TAG, "Usage: nvs set <owner_name|serial_number> <value> | nvs erase <owner_name|serial_number> | nvs get <owner_name|serial_number>");
             return;
         }
 
         if (strcmp(subcmd, "set") == 0) {
             char *key = next_token(&cursor);
-            if (!key || strcmp(key, "owner_name") != 0) {
-                ESP_LOGW(TAG, "Usage: nvs set owner_name <name>");
+            if (!key) {
+                ESP_LOGW(TAG, "Usage: nvs set <owner_name|serial_number> <value>");
                 return;
             }
-            char *name = skip_ws(cursor); // rest of line is the name
-            if (!name || *name == '\0') {
-                ESP_LOGW(TAG, "Usage: nvs set owner_name <name>");
+            char *value = skip_ws(cursor); // rest of line is the value
+            if (!value || *value == '\0') {
+                ESP_LOGW(TAG, "Usage: nvs set <owner_name|serial_number> <value>");
                 return;
             }
-            esp_err_t ret = device_settings_set_owner(name);
-            if (ret == ESP_OK) {
-                ESP_LOGI(TAG, "Owner name set to: %s", name);
+            
+            if (strcmp(key, "owner_name") == 0) {
+                esp_err_t ret = device_settings_set_owner(value);
+                if (ret == ESP_OK) {
+                    ESP_LOGI(TAG, "Owner name set to: %s", value);
+                } else {
+                    ESP_LOGE(TAG, "Failed to set owner name: %s", esp_err_to_name(ret));
+                }
+            } else if (strcmp(key, "serial_number") == 0) {
+                esp_err_t ret = device_settings_set_serial(value);
+                if (ret == ESP_OK) {
+                    ESP_LOGI(TAG, "Serial number set to: %s", value);
+                } else {
+                    ESP_LOGE(TAG, "Failed to set serial number: %s", esp_err_to_name(ret));
+                }
             } else {
-                ESP_LOGE(TAG, "Failed to set owner name: %s", esp_err_to_name(ret));
+                ESP_LOGW(TAG, "Unknown key: %s", key);
+                ESP_LOGW(TAG, "Usage: nvs set <owner_name|serial_number> <value>");
             }
             return;
         }
 
         if (strcmp(subcmd, "erase") == 0) {
             char *key = next_token(&cursor);
-            if (!key || strcmp(key, "owner_name") != 0) {
-                ESP_LOGW(TAG, "Usage: nvs erase owner_name");
+            if (!key) {
+                ESP_LOGW(TAG, "Usage: nvs erase <owner_name|serial_number>");
                 return;
             }
+            
+            const char *nvs_key = NULL;
+            if (strcmp(key, "owner_name") == 0) {
+                nvs_key = "owner_name";
+            } else if (strcmp(key, "serial_number") == 0) {
+                nvs_key = "serial_number";
+            } else {
+                ESP_LOGW(TAG, "Unknown key: %s", key);
+                ESP_LOGW(TAG, "Usage: nvs erase <owner_name|serial_number>");
+                return;
+            }
+            
             // Directly erase the key from NVS
             nvs_handle_t handle;
             esp_err_t ret = nvs_open("device", NVS_READWRITE, &handle);
             if (ret == ESP_OK) {
-                ret = nvs_erase_key(handle, "owner_name");
+                ret = nvs_erase_key(handle, nvs_key);
                 if (ret == ESP_OK || ret == ESP_ERR_NVS_NOT_FOUND) {
                     ret = nvs_commit(handle);
                 }
                 nvs_close(handle);
             }
             if (ret == ESP_OK) {
-                ESP_LOGI(TAG, "Owner name cleared");
+                ESP_LOGI(TAG, "%s cleared", key);
             } else {
-                ESP_LOGE(TAG, "Failed to clear owner name: %s", esp_err_to_name(ret));
+                ESP_LOGE(TAG, "Failed to clear %s: %s", key, esp_err_to_name(ret));
             }
             return;
         }
 
         if (strcmp(subcmd, "get") == 0) {
             char *key = next_token(&cursor);
-            if (!key || strcmp(key, "owner_name") != 0) {
-                ESP_LOGW(TAG, "Usage: nvs get owner_name");
+            if (!key) {
+                ESP_LOGW(TAG, "Usage: nvs get <owner_name|serial_number>");
                 return;
             }
-            char name[64];
-            esp_err_t ret = device_settings_get_owner(name, sizeof(name));
-            if (ret == ESP_OK && name[0] != '\0') {
-                ESP_LOGI(TAG, "Owner name: %s", name);
+            
+            if (strcmp(key, "owner_name") == 0) {
+                char name[64];
+                esp_err_t ret = device_settings_get_owner(name, sizeof(name));
+                if (ret == ESP_OK && name[0] != '\0') {
+                    ESP_LOGI(TAG, "Owner name: %s", name);
+                } else {
+                    ESP_LOGI(TAG, "Owner name not set");
+                }
+            } else if (strcmp(key, "serial_number") == 0) {
+                char serial[64];
+                esp_err_t ret = device_settings_get_serial(serial, sizeof(serial));
+                if (ret == ESP_OK && serial[0] != '\0') {
+                    ESP_LOGI(TAG, "Serial number: %s", serial);
+                } else {
+                    ESP_LOGI(TAG, "Serial number not set");
+                }
             } else {
-                ESP_LOGI(TAG, "Owner name not set");
+                ESP_LOGW(TAG, "Unknown key: %s", key);
+                ESP_LOGW(TAG, "Usage: nvs get <owner_name|serial_number>");
             }
             return;
         }
 
         ESP_LOGW(TAG, "Unknown nvs subcommand: %s", subcmd);
-        ESP_LOGW(TAG, "Usage: nvs set owner_name <name> | nvs erase owner_name | nvs get owner_name");
+        ESP_LOGW(TAG, "Usage: nvs set <owner_name|serial_number> <value> | nvs erase <owner_name|serial_number> | nvs get <owner_name|serial_number>");
         return;
     }
 
     ESP_LOGW(TAG, "Unknown command: %s", cmd);
-    ESP_LOGW(TAG, "Supported: wifi-status | wifi-clear | wifi-provision <ssid> <password> | reboot | nvs set/erase/get owner_name");
+    ESP_LOGW(TAG, "Supported: wifi-status | wifi-clear | wifi-provision <ssid> <password> | version | reboot | nvs set/erase/get <owner_name|serial_number>");
 }
 
 static void serial_task(void *arg) {
@@ -255,6 +300,6 @@ esp_err_t serial_commands_init(void) {
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Serial commands ready (wifi-status, wifi-clear, wifi-provision, reboot, nvs)");
+    ESP_LOGI(TAG, "Serial commands ready (wifi-status, wifi-clear, wifi-provision, version, reboot, nvs)");
     return ESP_OK;
 }

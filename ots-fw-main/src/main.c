@@ -31,7 +31,7 @@
 #include "rgb_status.h"
 #include "wifi_credentials.h"
 #include "ots_logging.h"
-#include "wifi_config_server.h"
+#include "webapp_server.h"
 #include "serial_commands.h"
 
 static const char *TAG = "OTS_MAIN";
@@ -83,7 +83,10 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
         
         // Start WebSocket server only in normal STA mode.
         if (!network_manager_is_portal_mode()) {
+            ESP_LOGI(TAG, "Starting WebSocket server (STA mode)");
             ws_server_start();
+            // Trigger display refresh now that WSS server is started
+            system_status_refresh_display();
         } else {
             ESP_LOGW(TAG, "Portal mode active; WS server not started");
         }
@@ -93,7 +96,7 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
         ws_server_stop();
         (void)network_manager_stop();
 
-        wifi_config_server_set_mode(WIFI_CONFIG_MODE_PORTAL);
+        webapp_server_set_mode(WIFI_CONFIG_MODE_PORTAL);
         // Open AP (no password) for simplest provisioning.
         (void)network_manager_start_captive_portal("OTS-SETUP", "");
     } else if (event_type == NETWORK_EVENT_DISCONNECTED) {
@@ -229,10 +232,10 @@ void app_main(void) {
 
     if (have_stored_creds) {
         ESP_LOGI(TAG, "Stored WiFi credentials found: SSID=%s", wifi_creds.ssid);
-        wifi_config_server_set_mode(WIFI_CONFIG_MODE_NORMAL);
+        webapp_server_set_mode(WIFI_CONFIG_MODE_NORMAL);
     } else {
         ESP_LOGW(TAG, "No stored WiFi credentials (NVS clear); starting captive portal mode");
-        wifi_config_server_set_mode(WIFI_CONFIG_MODE_PORTAL);
+        webapp_server_set_mode(WIFI_CONFIG_MODE_PORTAL);
     }
     
     // Initialize I/O expanders with error recovery
@@ -348,10 +351,10 @@ void app_main(void) {
     }
     network_manager_set_event_callback(handle_network_event);
 
-    // Start the WiFi config HTTP server (port 80) after ESP-NETIF/LWIP are initialized.
-    // It will be reachable in both portal (AP) mode and normal (STA) mode.
-    (void)wifi_config_server_init(80);
-    (void)wifi_config_server_start();
+    // Start HTTP server on port 80 for easy access (redirects to HTTPS)
+    // The webapp is also served over HTTPS on port 3000 along with WebSocket
+    (void)webapp_server_init(80);
+    (void)webapp_server_start();
     
     // Initialize OTA managers (HTTP and Arduino protocols)
     if (ota_manager_init(OTA_PORT, OTA_HOSTNAME) != ESP_OK) {
@@ -375,8 +378,11 @@ void app_main(void) {
     // Start network services
     if (!have_stored_creds || strlen(wifi_creds.ssid) == 0) {
         // Portal mode: start AP only; do not start WS server.
-        rgb_status_set(RGB_STATUS_WIFI_ONLY);
+        rgb_status_set(RGB_STATUS_WIFI_CONNECTING);  // Blue for captive portal setup
         (void)network_manager_start_captive_portal("OTS-SETUP", "");
+        ESP_LOGI(TAG, "*** Captive portal started, calling system_status_refresh_display() ***");
+        // Trigger display refresh now that portal mode is active
+        system_status_refresh_display();
     } else {
         rgb_status_set(RGB_STATUS_WIFI_CONNECTING);
         if (network_manager_start() != ESP_OK) {

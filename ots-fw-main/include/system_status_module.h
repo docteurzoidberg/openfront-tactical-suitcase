@@ -22,4 +22,12 @@
  */
 const hardware_module_t* system_status_module_get(void);
 
+/**
+ * @brief Trigger a display refresh (mark display as dirty)
+ * 
+ * Call this to force the module to re-check connection/portal state
+ * and update the LCD display accordingly.
+ */
+void system_status_refresh_display(void);
+
 #endif // SYSTEM_STATUS_MODULE_H

@@ -72,7 +72,7 @@ Notes:
   - Supports `+` → space
   - Does not decode `%xx`
 
-Implementation: `wifi_config_server.c`.
+Implementation: `webapp_server.c`.
 
 ## Serial Commands (UART0)
 

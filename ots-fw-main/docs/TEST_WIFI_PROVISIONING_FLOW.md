@@ -44,8 +44,8 @@ The test relies on these log patterns:
   - `[WiFi] STA_CONNECTED` (or equivalent)
   - `[IP] GOT_IP: <ip>`
 
-- WiFi config web server:
-  - `WiFi config HTTP server started on port 80`
+- WebApp HTTP server:
+  - `WebApp HTTP server started on port 80`
 
 If these strings change in firmware, update the test regex patterns.
 

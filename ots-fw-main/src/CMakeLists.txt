@@ -206,7 +206,7 @@ else()
         "ots_logging.c"
         "wifi_credentials.c"
         "device_settings.c"
-        "wifi_config_server.c"
+        "webapp_server.c"
         "serial_commands.c"
     )
     set(COMPONENT_REQUIRES

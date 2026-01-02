@@ -616,7 +616,28 @@ def _cli() -> int:
     p_reboot.add_argument("--port", default="auto")
     p_reboot.add_argument("--baud", type=int, default=115200)
 
-    sp_nvs = sub.add_parser("nvs", help="NVS helpers (set/clear owner name)")
+    sp_wifi = sub.add_parser("wifi", help="WiFi helpers (provision/clear/status)")
+    wifi_sub = sp_wifi.add_subparsers(dest="wifi_cmd", required=True)
+
+    p_wifi_provision = wifi_sub.add_parser("provision", help="Provision WiFi credentials")
+    p_wifi_provision.add_argument("--port", default="auto")
+    p_wifi_provision.add_argument("--baud", type=int, default=115200)
+    p_wifi_provision.add_argument("--ssid", required=True, help="WiFi SSID")
+    p_wifi_provision.add_argument("--password", required=True, help="WiFi password")
+
+    p_wifi_clear = wifi_sub.add_parser("clear", help="Clear WiFi credentials")
+    p_wifi_clear.add_argument("--port", default="auto")
+    p_wifi_clear.add_argument("--baud", type=int, default=115200)
+
+    p_wifi_status = wifi_sub.add_parser("status", help="Get WiFi status")
+    p_wifi_status.add_argument("--port", default="auto")
+    p_wifi_status.add_argument("--baud", type=int, default=115200)
+
+    sp_version = sub.add_parser("version", help="Get firmware version")
+    sp_version.add_argument("--port", default="auto")
+    sp_version.add_argument("--baud", type=int, default=115200)
+
+    sp_nvs = sub.add_parser("nvs", help="NVS helpers (set/clear owner name and serial number)")
     nvs_sub = sp_nvs.add_subparsers(dest="nvs_cmd", required=True)
 
     p_nvs_set = nvs_sub.add_parser("set-owner", help="Set owner name in NVS")
@@ -627,6 +648,23 @@ def _cli() -> int:
     p_nvs_clear = nvs_sub.add_parser("clear-owner", help="Clear owner name from NVS")
     p_nvs_clear.add_argument("--port", default="auto")
     p_nvs_clear.add_argument("--baud", type=int, default=115200)
+
+    p_nvs_get_owner = nvs_sub.add_parser("get-owner", help="Get owner name from device")
+    p_nvs_get_owner.add_argument("--port", default="auto")
+    p_nvs_get_owner.add_argument("--baud", type=int, default=115200)
+
+    p_nvs_set_serial = nvs_sub.add_parser("set-serial", help="Set serial number in NVS")
+    p_nvs_set_serial.add_argument("--port", default="auto")
+    p_nvs_set_serial.add_argument("--baud", type=int, default=115200)
+    p_nvs_set_serial.add_argument("--serial", required=True, help="Serial number to set")
+
+    p_nvs_clear_serial = nvs_sub.add_parser("clear-serial", help="Clear serial number from NVS")
+    p_nvs_clear_serial.add_argument("--port", default="auto")
+    p_nvs_clear_serial.add_argument("--baud", type=int, default=115200)
+
+    p_nvs_get_serial = nvs_sub.add_parser("get-serial", help="Get serial number from device")
+    p_nvs_get_serial.add_argument("--port", default="auto")
+    p_nvs_get_serial.add_argument("--baud", type=int, default=115200)
 
     sp_ota = sub.add_parser("ota", help="OTA helpers")
     ota_sub = sp_ota.add_subparsers(dest="ota_cmd", required=True)
@@ -704,6 +742,95 @@ def _cli() -> int:
                 sp.close()
             return 0
 
+    if args.cmd == "wifi":
+        port = args.port
+        if not port or port == "auto":
+            port = auto_detect_serial_port()
+            if not port:
+                raise SystemExit("No serial port found. Use --port to specify.")
+
+        if args.wifi_cmd == "provision":
+            print(f"Provisioning WiFi: {args.ssid}")
+            sp = SerialPort(port=port, baud=args.baud)
+            sp.open()
+            try:
+                sp.write_line(f"wifi-provision {args.ssid} {args.password}")
+                stop_evt = threading.Event()
+                end = time.time() + 3
+                for line in sp.iter_lines(stop_evt):
+                    print(line, flush=True)
+                    if "wifi-provision:" in line or "saved" in line or "stored" in line:
+                        break
+                    if time.time() >= end:
+                        print("No confirmation received (may have succeeded anyway)")
+                        break
+            finally:
+                sp.close()
+            return 0
+
+        if args.wifi_cmd == "clear":
+            print("Clearing WiFi credentials")
+            sp = SerialPort(port=port, baud=args.baud)
+            sp.open()
+            try:
+                sp.write_line("wifi-clear")
+                stop_evt = threading.Event()
+                end = time.time() + 2
+                for line in sp.iter_lines(stop_evt):
+                    print(line, flush=True)
+                    if "wifi-clear:" in line or "cleared" in line or "erased" in line:
+                        break
+                    if time.time() >= end:
+                        print("No confirmation received (may have succeeded anyway)")
+                        break
+            finally:
+                sp.close()
+            return 0
+
+        if args.wifi_cmd == "status":
+            print("Getting WiFi status")
+            sp = SerialPort(port=port, baud=args.baud)
+            sp.open()
+            try:
+                sp.write_line("wifi-status")
+                stop_evt = threading.Event()
+                end = time.time() + 2
+                for line in sp.iter_lines(stop_evt):
+                    print(line, flush=True)
+                    if "wifi-status:" in line:
+                        break
+                    if time.time() >= end:
+                        print("No response received")
+                        break
+            finally:
+                sp.close()
+            return 0
+
+    if args.cmd == "version":
+        port = args.port
+        if not port or port == "auto":
+            port = auto_detect_serial_port()
+            if not port:
+                raise SystemExit("No serial port found. Use --port to specify.")
+
+        print("Getting firmware version")
+        sp = SerialPort(port=port, baud=args.baud)
+        sp.open()
+        try:
+            sp.write_line("version")
+            stop_evt = threading.Event()
+            end = time.time() + 2
+            for line in sp.iter_lines(stop_evt):
+                print(line, flush=True)
+                if "Firmware:" in line:
+                    break
+                if time.time() >= end:
+                    print("No response received")
+                    break
+        finally:
+            sp.close()
+        return 0
+
     if args.cmd == "nvs":
         port = args.port
         if not port or port == "auto":
@@ -744,6 +871,82 @@ def _cli() -> int:
                         break
                     if time.time() >= end:
                         print("No confirmation received (may have succeeded anyway)")
+                        break
+            finally:
+                sp.close()
+            return 0
+
+        if args.nvs_cmd == "get-owner":
+            print("Getting owner name from device")
+            sp = SerialPort(port=port, baud=args.baud)
+            sp.open()
+            try:
+                sp.write_line("nvs get owner_name")
+                stop_evt = threading.Event()
+                end = time.time() + 2
+                for line in sp.iter_lines(stop_evt):
+                    print(line, flush=True)
+                    if "Owner name:" in line:
+                        break
+                    if time.time() >= end:
+                        print("No response received")
+                        break
+            finally:
+                sp.close()
+            return 0
+
+        if args.nvs_cmd == "set-serial":
+            print(f"Setting serial number to: {args.serial}")
+            sp = SerialPort(port=port, baud=args.baud)
+            sp.open()
+            try:
+                sp.write_line(f"nvs set serial_number {args.serial}")
+                stop_evt = threading.Event()
+                end = time.time() + 2
+                for line in sp.iter_lines(stop_evt):
+                    print(line, flush=True)
+                    if "Serial number set" in line or "saved" in line:
+                        break
+                    if time.time() >= end:
+                        print("No confirmation received (may have succeeded anyway)")
+                        break
+            finally:
+                sp.close()
+            return 0
+
+        if args.nvs_cmd == "clear-serial":
+            print("Clearing serial number from NVS")
+            sp = SerialPort(port=port, baud=args.baud)
+            sp.open()
+            try:
+                sp.write_line("nvs erase serial_number")
+                stop_evt = threading.Event()
+                end = time.time() + 2
+                for line in sp.iter_lines(stop_evt):
+                    print(line, flush=True)
+                    if "erased" in line or "cleared" in line or "deleted" in line:
+                        break
+                    if time.time() >= end:
+                        print("No confirmation received (may have succeeded anyway)")
+                        break
+            finally:
+                sp.close()
+            return 0
+
+        if args.nvs_cmd == "get-serial":
+            print("Getting serial number from device")
+            sp = SerialPort(port=port, baud=args.baud)
+            sp.open()
+            try:
+                sp.write_line("nvs get serial_number")
+                stop_evt = threading.Event()
+                end = time.time() + 2
+                for line in sp.iter_lines(stop_evt):
+                    print(line, flush=True)
+                    if "Serial number:" in line:
+                        break
+                    if time.time() >= end:
+                        print("No response received")
                         break
             finally:
                 sp.close()

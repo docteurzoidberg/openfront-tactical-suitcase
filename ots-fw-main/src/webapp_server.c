@@ -1,4 +1,21 @@
-#include "wifi_config_server.h"
+/**
+ * @file webapp_server.c
+ * @brief OTS WebApp HTTP Server
+ * 
+ * Provides HTTP/HTTPS server for the OTS firmware web interface.
+ * Serves the configuration webapp and provides REST APIs for:
+ * - Device settings (serial number, owner name)
+ * - WiFi network configuration
+ * - Network status and scanning
+ * - OTA firmware updates
+ * - Factory reset
+ * 
+ * Supports two modes:
+ * - NORMAL: Standard web server on station interface
+ * - PORTAL: Captive portal mode with DNS redirect (for initial setup)
+ */
+
+#include "webapp_server.h"
 
 #include "wifi_credentials.h"
 #include "device_settings.h"
@@ -11,6 +28,8 @@
 #include "esp_log.h"
 #include "esp_wifi.h"
 #include "esp_system.h"
+#include "esp_ota_ops.h"
+#include "esp_app_format.h"
 
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
@@ -22,7 +41,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-static const char *TAG = "OTS_WIFI_CFG";
+static const char *TAG = "OTS_WEBAPP";
 
 static httpd_handle_t s_server = NULL;
 static uint16_t s_port = 80;
@@ -42,14 +61,16 @@ static volatile bool s_dns_running = false;
 static void dns_task(void *arg);
 static void captive_dns_start(void);
 static void captive_dns_stop(void);
-static esp_err_t handle_404_redirect(httpd_req_t *req, httpd_err_code_t err);
-
-static esp_err_t handle_webapp_get(httpd_req_t *req);
-static esp_err_t handle_api_status(httpd_req_t *req);
-static esp_err_t handle_api_scan(httpd_req_t *req);
-static esp_err_t handle_device_get(httpd_req_t *req);
-static esp_err_t handle_factory_reset(httpd_req_t *req);
-static esp_err_t handle_device_post(httpd_req_t *req);
+// Forward declarations (now exported - non-static)
+esp_err_t wifi_config_handle_404_redirect(httpd_req_t *req, httpd_err_code_t err);
+esp_err_t wifi_config_handle_webapp_get(httpd_req_t *req);
+esp_err_t wifi_config_handle_api_status(httpd_req_t *req);
+esp_err_t wifi_config_handle_api_scan(httpd_req_t *req);
+esp_err_t wifi_config_handle_device(httpd_req_t *req);
+esp_err_t wifi_config_handle_factory_reset(httpd_req_t *req);
+esp_err_t wifi_config_handle_wifi_post(httpd_req_t *req);
+esp_err_t wifi_config_handle_wifi_clear(httpd_req_t *req);
+esp_err_t wifi_config_handle_ota_upload(httpd_req_t *req);
 
 static bool form_get_value(const char *body, const char *key, char *out, size_t out_len) {
     if (!body || !key || !out || out_len == 0) {
@@ -103,7 +124,7 @@ static bool form_get_value(const char *body, const char *key, char *out, size_t 
     return false;
 }
 
-static esp_err_t handle_webapp_get(httpd_req_t *req) {
+esp_err_t wifi_config_handle_webapp_get(httpd_req_t *req) {
     const char *uri = (req && req->uri) ? req->uri : "/";
     const char *path = uri;
 
@@ -127,7 +148,7 @@ static esp_err_t handle_webapp_get(httpd_req_t *req) {
     return httpd_resp_send(req, (const char *)asset->data, (ssize_t)asset->len);
 }
 
-static esp_err_t handle_wifi_post(httpd_req_t *req) {
+esp_err_t wifi_config_handle_wifi_post(httpd_req_t *req) {
     const int content_len = req->content_len;
     if (content_len <= 0 || content_len > 512) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid body");
@@ -168,7 +189,7 @@ static esp_err_t handle_wifi_post(httpd_req_t *req) {
     return ESP_OK;
 }
 
-static esp_err_t handle_wifi_clear(httpd_req_t *req) {
+esp_err_t wifi_config_handle_wifi_clear(httpd_req_t *req) {
     (void)req;
 
     esp_err_t ret = wifi_credentials_clear();
@@ -186,7 +207,7 @@ static esp_err_t handle_wifi_clear(httpd_req_t *req) {
     return ESP_OK;
 }
 
-static esp_err_t handle_factory_reset(httpd_req_t *req) {
+esp_err_t wifi_config_handle_factory_reset(httpd_req_t *req) {
     ESP_LOGI(TAG, "=== Factory reset requested ===");
 
     // Clear WiFi credentials
@@ -217,7 +238,94 @@ static esp_err_t handle_factory_reset(httpd_req_t *req) {
     return ESP_OK;
 }
 
-static esp_err_t handle_404_redirect(httpd_req_t *req, httpd_err_code_t err) {
+esp_err_t wifi_config_handle_ota_upload(httpd_req_t *req) {
+    ESP_LOGI(TAG, "OTA upload started, content length: %d", req->content_len);
+
+    if (req->content_len <= 0 || req->content_len > 3 * 1024 * 1024) {
+        ESP_LOGW(TAG, "Invalid content length: %d", req->content_len);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid firmware size");
+        return ESP_OK;
+    }
+
+    // Initialize OTA
+    const esp_partition_t *update_partition = esp_ota_get_next_update_partition(NULL);
+    if (!update_partition) {
+        ESP_LOGE(TAG, "No OTA partition found");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No OTA partition");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "Writing to partition: %s at 0x%lx", update_partition->label, update_partition->address);
+
+    esp_ota_handle_t ota_handle;
+    esp_err_t ret = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &ota_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "esp_ota_begin failed: %s", esp_err_to_name(ret));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA begin failed");
+        return ESP_OK;
+    }
+
+    // Receive and write firmware data
+    char buf[1024];
+    int remaining = req->content_len;
+    int received = 0;
+
+    while (remaining > 0) {
+        int recv_len = httpd_req_recv(req, buf, (remaining < sizeof(buf)) ? remaining : sizeof(buf));
+        if (recv_len < 0) {
+            if (recv_len == HTTPD_SOCK_ERR_TIMEOUT) {
+                continue;
+            }
+            ESP_LOGE(TAG, "Receive failed: %d", recv_len);
+            esp_ota_abort(ota_handle);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Upload failed");
+            return ESP_OK;
+        } else if (recv_len > 0) {
+            ret = esp_ota_write(ota_handle, buf, recv_len);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "esp_ota_write failed: %s", esp_err_to_name(ret));
+                esp_ota_abort(ota_handle);
+                httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Write failed");
+                return ESP_OK;
+            }
+            remaining -= recv_len;
+            received += recv_len;
+
+            // Log progress every ~256KB
+            if ((received % (256 * 1024)) < 1024) {
+                ESP_LOGI(TAG, "OTA progress: %d / %d bytes", received, req->content_len);
+            }
+        }
+    }
+
+    ESP_LOGI(TAG, "OTA write complete: %d bytes", received);
+
+    // Finalize OTA
+    ret = esp_ota_end(ota_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "esp_ota_end failed: %s", esp_err_to_name(ret));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA end failed");
+        return ESP_OK;
+    }
+
+    // Set boot partition
+    ret = esp_ota_set_boot_partition(update_partition);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "esp_ota_set_boot_partition failed: %s", esp_err_to_name(ret));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Set boot partition failed");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "OTA update successful, rebooting...");
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_sendstr(req, "Upload successful. Rebooting...\n");
+
+    vTaskDelay(pdMS_TO_TICKS(500));
+    esp_restart();
+    return ESP_OK;
+}
+
+esp_err_t wifi_config_handle_404_redirect(httpd_req_t *req, httpd_err_code_t err) {
     (void)err;
 
     // In portal mode, redirect *any* unknown path to the WiFi config page.
@@ -287,7 +395,7 @@ static size_t json_escape(const char *in, char *out, size_t out_len) {
     return o;
 }
 
-static esp_err_t handle_api_status(httpd_req_t *req) {
+esp_err_t wifi_config_handle_api_status(httpd_req_t *req) {
     const char *mode_str = (s_mode == WIFI_CONFIG_MODE_PORTAL) ? "portal" : "normal";
     const bool has_creds = wifi_credentials_exist();
 
@@ -318,6 +426,7 @@ static esp_err_t handle_api_status(httpd_req_t *req) {
     return httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
 }
 
+// Helper function for GET requests (internal)
 static esp_err_t handle_device_get(httpd_req_t *req) {
     const char *mode_str = (s_mode == WIFI_CONFIG_MODE_PORTAL) ? "portal" : "normal";
     const bool has_creds = wifi_credentials_exist();
@@ -377,6 +486,7 @@ static esp_err_t handle_device_get(httpd_req_t *req) {
     return httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
 }
 
+// Helper function for combined GET/POST requests (internal)
 static esp_err_t handle_device(httpd_req_t *req) {
     // Combined GET/POST handler for /device
     if (req->method == HTTP_GET) {
@@ -442,7 +552,12 @@ static esp_err_t handle_device(httpd_req_t *req) {
     return ESP_OK;
 }
 
-static esp_err_t handle_api_scan(httpd_req_t *req) {
+// Public wrapper for handle_device
+esp_err_t wifi_config_handle_device(httpd_req_t *req) {
+    return handle_device(req);
+}
+
+esp_err_t wifi_config_handle_api_scan(httpd_req_t *req) {
     // In portal mode, WiFi is AP-only; enable APSTA for scans.
     if (s_mode == WIFI_CONFIG_MODE_PORTAL) {
         esp_err_t mode_ret = esp_wifi_set_mode(WIFI_MODE_APSTA);
@@ -681,12 +796,12 @@ static void dns_task(void *arg) {
     vTaskDelete(NULL);
 }
 
-esp_err_t wifi_config_server_init(uint16_t port) {
+esp_err_t webapp_server_init(uint16_t port) {
     s_port = (port == 0) ? 80 : port;
     return ESP_OK;
 }
 
-esp_err_t wifi_config_server_start(void) {
+esp_err_t webapp_server_start(void) {
     if (s_server) {
         return ESP_OK;
     }
@@ -695,6 +810,7 @@ esp_err_t wifi_config_server_start(void) {
     config.server_port = s_port;
     config.ctrl_port = s_port + 1;
     config.max_uri_handlers = 16;  // Increase from default (8) to accommodate all handlers
+    config.uri_match_fn = httpd_uri_match_wildcard;  // Enable wildcard matching
 
     esp_err_t ret = httpd_start(&s_server, &config);
     if (ret != ESP_OK) {
@@ -703,112 +819,171 @@ esp_err_t wifi_config_server_start(void) {
         return ret;
     }
 
-    httpd_uri_t root = {
-        .uri = "/",
-        .method = HTTP_GET,
-        .handler = handle_webapp_get,
-        .user_ctx = NULL,
-    };
-
-    httpd_uri_t index_html = {
-        .uri = "/index.html",
-        .method = HTTP_GET,
-        .handler = handle_webapp_get,
-        .user_ctx = NULL,
-    };
-
-    httpd_uri_t style_css = {
-        .uri = "/style.css",
-        .method = HTTP_GET,
-        .handler = handle_webapp_get,
-        .user_ctx = NULL,
-    };
-
-    httpd_uri_t app_js = {
-        .uri = "/app.js",
-        .method = HTTP_GET,
-        .handler = handle_webapp_get,
-        .user_ctx = NULL,
-    };
-
-    httpd_uri_t wifi_get = {
-        .uri = "/wifi",
-        .method = HTTP_GET,
-        .handler = handle_webapp_get,
-        .user_ctx = NULL,
-    };
-
-    httpd_uri_t api_status = {
+    // API endpoints (highest priority - must match before wildcards)
+    static const httpd_uri_t api_status = {
         .uri = "/api/status",
         .method = HTTP_GET,
-        .handler = handle_api_status,
+        .handler = wifi_config_handle_api_status,
         .user_ctx = NULL,
     };
 
-    httpd_uri_t api_scan = {
+    static const httpd_uri_t api_scan = {
         .uri = "/api/scan",
         .method = HTTP_GET,
-        .handler = handle_api_scan,
+        .handler = wifi_config_handle_api_scan,
         .user_ctx = NULL,
     };
 
-    // Combined GET/POST handler for /device (register both methods)
-    httpd_uri_t device_get_handler = {
+    static const httpd_uri_t device_get = {
         .uri = "/device",
         .method = HTTP_GET,
-        .handler = handle_device,
+        .handler = wifi_config_handle_device,
         .user_ctx = NULL,
     };
     
-    httpd_uri_t device_post_handler = {
+    static const httpd_uri_t device_post = {
         .uri = "/device",
         .method = HTTP_POST,
-        .handler = handle_device,
+        .handler = wifi_config_handle_device,
         .user_ctx = NULL,
     };
 
-    httpd_uri_t wifi_post = {
+    static const httpd_uri_t wifi_post = {
         .uri = "/wifi",
         .method = HTTP_POST,
-        .handler = handle_wifi_post,
+        .handler = wifi_config_handle_wifi_post,
         .user_ctx = NULL,
     };
 
-    httpd_uri_t wifi_clear = {
+    static const httpd_uri_t wifi_clear = {
         .uri = "/wifi/clear",
         .method = HTTP_POST,
-        .handler = handle_wifi_clear,
+        .handler = wifi_config_handle_wifi_clear,
         .user_ctx = NULL,
     };
 
-    httpd_uri_t factory_reset = {
+    static const httpd_uri_t factory_reset = {
         .uri = "/factory-reset",
         .method = HTTP_POST,
-        .handler = handle_factory_reset,
+        .handler = wifi_config_handle_factory_reset,
         .user_ctx = NULL,
     };
 
-    (void)httpd_register_uri_handler(s_server, &root);
-    (void)httpd_register_uri_handler(s_server, &index_html);
-    (void)httpd_register_uri_handler(s_server, &style_css);
-    (void)httpd_register_uri_handler(s_server, &app_js);
-    (void)httpd_register_uri_handler(s_server, &wifi_get);
-    (void)httpd_register_uri_handler(s_server, &api_status);
-    (void)httpd_register_uri_handler(s_server, &api_scan);
-    ESP_LOGI(TAG, "Registering /device GET handler");
-    esp_err_t reg_ret = httpd_register_uri_handler(s_server, &device_get_handler);
-    ESP_LOGI(TAG, "GET handler result: %s", esp_err_to_name(reg_ret));
-    ESP_LOGI(TAG, "Registering /device POST handler");
-    reg_ret = httpd_register_uri_handler(s_server, &device_post_handler);
-    ESP_LOGI(TAG, "POST handler result: %s", esp_err_to_name(reg_ret));
-    (void)httpd_register_uri_handler(s_server, &wifi_post);
-    (void)httpd_register_uri_handler(s_server, &wifi_clear);
-    ESP_LOGI(TAG, "Registering /factory-reset POST handler");
-    reg_ret = httpd_register_uri_handler(s_server, &factory_reset);
-    ESP_LOGI(TAG, "POST handler result: %s", esp_err_to_name(reg_ret));
+    static const httpd_uri_t ota_upload = {
+        .uri = "/ota/upload",
+        .method = HTTP_POST,
+        .handler = wifi_config_handle_ota_upload,
+        .user_ctx = NULL,
+    };
+
+    // Webapp static files (specific paths)
+    static const httpd_uri_t root = {
+        .uri = "/",
+        .method = HTTP_GET,
+        .handler = wifi_config_handle_webapp_get,
+        .user_ctx = NULL,
+    };
+
+    static const httpd_uri_t index_html = {
+        .uri = "/index.html",
+        .method = HTTP_GET,
+        .handler = wifi_config_handle_webapp_get,
+        .user_ctx = NULL,
+    };
+
+    static const httpd_uri_t style_css = {
+        .uri = "/style.css",
+        .method = HTTP_GET,
+        .handler = wifi_config_handle_webapp_get,
+        .user_ctx = NULL,
+    };
+
+    static const httpd_uri_t app_js = {
+        .uri = "/app.js",
+        .method = HTTP_GET,
+        .handler = wifi_config_handle_webapp_get,
+        .user_ctx = NULL,
+    };
+
+    static const httpd_uri_t wifi_alias = {
+        .uri = "/wifi",
+        .method = HTTP_GET,
+        .handler = wifi_config_handle_webapp_get,
+        .user_ctx = NULL,
+    };
+
+    // Register handlers in order of specificity (most specific first)
+    ret = httpd_register_uri_handler(s_server, &api_status);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register /api/status: %s", esp_err_to_name(ret));
+    }
+
+    ret = httpd_register_uri_handler(s_server, &api_scan);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register /api/scan: %s", esp_err_to_name(ret));
+    }
+
+    ret = httpd_register_uri_handler(s_server, &device_get);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register /device GET: %s", esp_err_to_name(ret));
+    }
+
+    ret = httpd_register_uri_handler(s_server, &device_post);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register /device POST: %s", esp_err_to_name(ret));
+    }
+
+    ret = httpd_register_uri_handler(s_server, &wifi_post);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register /wifi POST: %s", esp_err_to_name(ret));
+    }
+
+    ret = httpd_register_uri_handler(s_server, &wifi_clear);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register /wifi/clear: %s", esp_err_to_name(ret));
+    }
+
+    ret = httpd_register_uri_handler(s_server, &factory_reset);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register /factory-reset: %s", esp_err_to_name(ret));
+    }
+
+    ret = httpd_register_uri_handler(s_server, &ota_upload);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register /ota/upload: %s", esp_err_to_name(ret));
+    }
+
+    // Register webapp handlers (less specific, should come after API endpoints)
+    ret = httpd_register_uri_handler(s_server, &root);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register /: %s", esp_err_to_name(ret));
+    }
+
+    ret = httpd_register_uri_handler(s_server, &index_html);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register /index.html: %s", esp_err_to_name(ret));
+    }
+
+    ret = httpd_register_uri_handler(s_server, &style_css);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register /style.css: %s", esp_err_to_name(ret));
+    }
+
+    ret = httpd_register_uri_handler(s_server, &app_js);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register /app.js: %s", esp_err_to_name(ret));
+    }
+
+    ret = httpd_register_uri_handler(s_server, &wifi_alias);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register /wifi GET: %s", esp_err_to_name(ret));
+    }
 
     // In portal mode, redirect all unknown paths to /.
-    (void)httpd_register_err_handler(s_server, HTTPD_404_NOT_FOUND, handle_404_redirect);
+    ret = httpd_register_err_handler(s_server, HTTPD_404_NOT_FOUND, wifi_config_handle_404_redirect);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to register 404 handler: %s", esp_err_to_name(ret));
+    }
 
     // Only start captive DNS once the HTTP server (and thus LWIP/esp-netif) is up.
     // This avoids early-boot LWIP asserts when socket() is called too soon.
@@ -816,11 +991,12 @@ esp_err_t wifi_config_server_start(void) {
         captive_dns_start();
     }
 
-    ESP_LOGI(TAG, "WiFi config HTTP server started on port %u", (unsigned)s_port);
+    ESP_LOGI(TAG, "HTTP server started on port %u with %d handlers registered", 
+             (unsigned)s_port, 13);
     return ESP_OK;
 }
 
-esp_err_t wifi_config_server_stop(void) {
+esp_err_t webapp_server_stop(void) {
     if (!s_server) {
         return ESP_OK;
     }
@@ -830,13 +1006,13 @@ esp_err_t wifi_config_server_stop(void) {
     return ESP_OK;
 }
 
-void wifi_config_server_set_mode(wifi_config_mode_t mode) {
+void webapp_server_set_mode(wifi_config_mode_t mode) {
     const wifi_config_mode_t prev = s_mode;
     s_mode = mode;
 
     // Start/stop captive DNS based on portal mode, but only once the HTTP server
     // is running (i.e. after LWIP is initialized). When called early during boot,
-    // defer DNS startup to wifi_config_server_start().
+    // defer DNS startup to webapp_server_start().
     if (!s_server) {
         return;
     }
@@ -848,6 +1024,6 @@ void wifi_config_server_set_mode(wifi_config_mode_t mode) {
     }
 }
 
-wifi_config_mode_t wifi_config_server_get_mode(void) {
+wifi_config_mode_t webapp_server_get_mode(void) {
     return s_mode;
 }

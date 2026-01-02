@@ -17,6 +17,7 @@ esp_err_t device_settings_get_owner(char *out, size_t out_len);
 esp_err_t device_settings_set_owner(const char *owner);
 
 esp_err_t device_settings_get_serial(char *out, size_t out_len);
+esp_err_t device_settings_set_serial(const char *serial);
 
 // Factory reset: clear all device settings (owner, serial).
 esp_err_t device_settings_factory_reset(void);

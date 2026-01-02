@@ -1,6 +1,7 @@
 #include "ws_server.h"
 #include "ws_protocol.h"
 #include "event_dispatcher.h"
+#include "webapp_server.h"
 #include "esp_http_server.h"
 #include "esp_https_server.h"
 #include "esp_log.h"
@@ -169,30 +170,6 @@ static void ws_session_close_cb(httpd_handle_t hd, int sockfd) {
 
 bool ws_server_has_userscript(void) {
     return userscript_clients > 0;
-}
-
-static esp_err_t root_handler(httpd_req_t *req) {
-    char body[512];
-    const int written = snprintf(
-        body,
-        sizeof(body),
-        "OTS test firmware\n"
-        "\n"
-        "- WebSocket endpoint: /ws\n"
-        "- This server uses a self-signed certificate.\n"
-        "\n"
-        "Recommended URLs (pick one):\n"
-        "- wss://<device-ip>:%d/ws\n"
-        "- wss://ots-fw-main.local:%d/ws\n"
-        "\n",
-        (int)WS_SERVER_PORT,
-        (int)WS_SERVER_PORT);
-
-    httpd_resp_set_type(req, "text/plain");
-    if (written < 0) {
-        return httpd_resp_send(req, "OTS test firmware\n", HTTPD_RESP_USE_STRLEN);
-    }
-    return httpd_resp_send(req, body, HTTPD_RESP_USE_STRLEN);
 }
 
 static esp_err_t ws_handler(httpd_req_t *req) {
@@ -490,6 +467,8 @@ esp_err_t ws_server_start(void) {
     config.port_secure = server_port;
     config.httpd.ctrl_port = server_port + 1;
     config.httpd.max_open_sockets = MAX_CLIENTS + 2;
+    config.httpd.max_uri_handlers = 16;  // Increased for webapp endpoints
+    // Note: max_req_hdr_len is set via CONFIG_HTTPD_MAX_REQ_HDR_LEN in platformio.ini (1024 bytes)
     config.httpd.lru_purge_enable = true;
     config.httpd.close_fn = ws_session_close_cb;
     
@@ -517,6 +496,8 @@ esp_err_t ws_server_start(void) {
     config.server_port = server_port;
     config.ctrl_port = server_port + 1;
     config.max_open_sockets = MAX_CLIENTS + 2;
+    config.max_uri_handlers = 16;  // Increased for webapp endpoints
+    // Note: max_req_hdr_len is set via CONFIG_HTTPD_MAX_REQ_HDR_LEN in platformio.ini (1024 bytes)
     config.lru_purge_enable = true;
     config.close_fn = ws_session_close_cb;
     
@@ -529,14 +510,114 @@ esp_err_t ws_server_start(void) {
     ESP_LOGI(TAG, "HTTP server started successfully");
 #endif
 
-    // Register a simple root page (helps accept self-signed cert in browser)
+    // Register webapp handlers (from WiFi config server)
     httpd_uri_t root = {
         .uri = "/",
         .method = HTTP_GET,
-        .handler = root_handler,
+        .handler = wifi_config_handle_webapp_get,
         .user_ctx = NULL,
     };
     (void)httpd_register_uri_handler(server, &root);
+
+    httpd_uri_t index_html = {
+        .uri = "/index.html",
+        .method = HTTP_GET,
+        .handler = wifi_config_handle_webapp_get,
+        .user_ctx = NULL,
+    };
+    (void)httpd_register_uri_handler(server, &index_html);
+
+    httpd_uri_t style_css = {
+        .uri = "/style.css",
+        .method = HTTP_GET,
+        .handler = wifi_config_handle_webapp_get,
+        .user_ctx = NULL,
+    };
+    (void)httpd_register_uri_handler(server, &style_css);
+
+    httpd_uri_t app_js = {
+        .uri = "/app.js",
+        .method = HTTP_GET,
+        .handler = wifi_config_handle_webapp_get,
+        .user_ctx = NULL,
+    };
+    (void)httpd_register_uri_handler(server, &app_js);
+
+    httpd_uri_t wifi_page = {
+        .uri = "/wifi",
+        .method = HTTP_GET,
+        .handler = wifi_config_handle_webapp_get,
+        .user_ctx = NULL,
+    };
+    (void)httpd_register_uri_handler(server, &wifi_page);
+
+    // Register API handlers
+    httpd_uri_t api_status = {
+        .uri = "/api/status",
+        .method = HTTP_GET,
+        .handler = wifi_config_handle_api_status,
+        .user_ctx = NULL,
+    };
+    (void)httpd_register_uri_handler(server, &api_status);
+
+    httpd_uri_t api_scan = {
+        .uri = "/api/scan",
+        .method = HTTP_GET,
+        .handler = wifi_config_handle_api_scan,
+        .user_ctx = NULL,
+    };
+    (void)httpd_register_uri_handler(server, &api_scan);
+
+    httpd_uri_t device_get = {
+        .uri = "/device",
+        .method = HTTP_GET,
+        .handler = wifi_config_handle_device,
+        .user_ctx = NULL,
+    };
+    (void)httpd_register_uri_handler(server, &device_get);
+
+    httpd_uri_t device_post = {
+        .uri = "/device",
+        .method = HTTP_POST,
+        .handler = wifi_config_handle_device,
+        .user_ctx = NULL,
+    };
+    (void)httpd_register_uri_handler(server, &device_post);
+
+    httpd_uri_t wifi_post = {
+        .uri = "/wifi",
+        .method = HTTP_POST,
+        .handler = wifi_config_handle_wifi_post,
+        .user_ctx = NULL,
+    };
+    (void)httpd_register_uri_handler(server, &wifi_post);
+
+    httpd_uri_t wifi_clear = {
+        .uri = "/wifi/clear",
+        .method = HTTP_POST,
+        .handler = wifi_config_handle_wifi_clear,
+        .user_ctx = NULL,
+    };
+    (void)httpd_register_uri_handler(server, &wifi_clear);
+
+    httpd_uri_t factory_reset = {
+        .uri = "/factory-reset",
+        .method = HTTP_POST,
+        .handler = wifi_config_handle_factory_reset,
+        .user_ctx = NULL,
+    };
+    (void)httpd_register_uri_handler(server, &factory_reset);
+
+    httpd_uri_t ota_upload = {
+        .uri = "/ota/upload",
+        .method = HTTP_POST,
+        .handler = wifi_config_handle_ota_upload,
+        .user_ctx = NULL,
+    };
+    (void)httpd_register_uri_handler(server, &ota_upload);
+
+    // Register 404 handler for captive portal redirect
+    (void)httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, wifi_config_handle_404_redirect);
     
     // Register WebSocket handler
     httpd_uri_t ws = {
@@ -556,9 +637,10 @@ esp_err_t ws_server_start(void) {
         return ret;
     }
     
-        ESP_LOGI(TAG, "WebSocket server started successfully");
-        ESP_LOGI(TAG, "Listening for connections on %s<device-ip>:%d/ws", WS_PROTOCOL, server_port);
-        ESP_LOGI(TAG, "TLS cert is issued for: ots-fw-main.local (recommended)");
+    ESP_LOGI(TAG, "WebSocket server started successfully");
+    ESP_LOGI(TAG, "Webapp endpoints registered (WiFi config UI available)");
+    ESP_LOGI(TAG, "Listening for connections on %s<device-ip>:%d/ws", WS_PROTOCOL, server_port);
+    ESP_LOGI(TAG, "TLS cert is issued for: ots-fw-main.local (recommended)");
     return ESP_OK;
 }
 

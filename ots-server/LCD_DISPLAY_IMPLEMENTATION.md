@@ -17,13 +17,14 @@ The ots-server dashboard now includes a full LCD display emulator that mirrors t
 - Monospace font rendering with proper character spacing
 
 **Display Screens Implemented**:
-1. ✅ **Splash** - Boot screen (would need boot state)
-2. ✅ **Waiting for Connection** - When WebSocket disconnected
-3. ✅ **Lobby** - Connected, waiting for game
-4. ✅ **Troops Display** - In-game with troop counts and deployment percentage
-5. ✅ **Victory** - Game won (persists until userscript reconnect/reset)
-6. ✅ **Defeat** - Game lost (persists until userscript reconnect/reset)
-7. ✅ **Blank** - When powered off
+1. ✅ **Splash** - Boot screen ("OTS Firmware / Booting...")
+2. ✅ **Captive Portal** - WiFi setup screen ("Setup WiFi / Read Manual")
+3. ✅ **Waiting for Connection** - When WebSocket disconnected
+4. ✅ **Lobby** - Connected, waiting for game
+5. ✅ **Troops Display** - In-game with troop counts and deployment percentage
+6. ✅ **Victory** - Game won (persists until userscript reconnect/reset)
+7. ✅ **Defeat** - Game lost (persists until userscript reconnect/reset)
+8. ✅ **Blank** - When powered off
 
 ### Updated Components
 
@@ -47,7 +48,13 @@ The ots-server dashboard now includes a full LCD display emulator that mirrors t
 Power OFF
   └─→ Blank screen (all spaces)
 
-Power ON + WS Disconnected
+Power ON (Boot)
+  └─→ Splash Screen ("OTS Firmware / Booting...")
+
+Power ON + No WiFi Credentials
+  └─→ Captive Portal ("Setup WiFi / Read Manual")
+
+Power ON + WiFi OK + WS Disconnected
   └─→ "Waiting for Connection"
 
 Power ON + WS Connected + gamePhase=null
@@ -67,6 +74,22 @@ Power ON + gamePhase=game-lost
 ```
 
 ## Text Formatting Examples
+
+### Splash (Boot)
+```
+┌────────────────┐
+│  OTS Firmware  │
+│  Booting...    │
+└────────────────┘
+```
+
+### Captive Portal (WiFi Setup)
+```
+┌────────────────┐
+│   Setup WiFi   │
+│  Read Manual   │
+└────────────────┘
+```
 
 ### Waiting for Connection
 ```

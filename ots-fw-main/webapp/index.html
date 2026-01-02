@@ -73,6 +73,26 @@
         <section class="card danger">
           <div class="row">
             <div>
+              <h2 class="cardTitle">OTA Firmware Update</h2>
+              <p class="hint">Upload new firmware (.bin file). Device will be unresponsive during upload and will reboot automatically (~30 seconds).</p>
+            </div>
+            <button class="button danger" id="otaUploadBtn" type="button" disabled>Upload Firmware</button>
+          </div>
+          <div style="margin-top: 14px;">
+            <input class="input" type="file" id="otaFile" accept=".bin" style="margin-bottom: 8px;" />
+            <div class="progress-container" id="otaProgress" hidden>
+              <div class="progress-bar">
+                <div class="progress-fill" id="otaProgressFill"></div>
+              </div>
+              <div class="progress-text" id="otaProgressText">0%</div>
+            </div>
+          </div>
+          <div class="msg" id="otaMsg" role="status" aria-live="polite"></div>
+        </section>
+
+        <section class="card danger">
+          <div class="row">
+            <div>
               <h2 class="cardTitle">Factory Reset</h2>
               <p class="hint">Clears WiFi credentials and owner name, then reboots to onboarding mode.</p>
             </div>
@@ -84,11 +104,190 @@
 
       <div class="tabPanel" id="tab-about" hidden>
         <section class="card">
-          <h2 class="cardTitle">About OTS</h2>
-          <p class="hint">
-            OTS (OpenFront Tactical Suitcase) bridges OpenFront.io gameplay with physical hardware modules (lights, buttons,
-            displays). This page is served directly by the device.
+          <h2 class="cardTitle">OpenFront Tactical Suitcase</h2>
+          <p style="font-size: 15px; line-height: 1.6; margin-top: 12px;">
+            Welcome to the future of gaming. The <strong>OTS</strong> isn't just a controller—it's your command center, 
+            your war room, your direct link to the battlefield. Born from the intersection of physical hardware and 
+            digital warfare, this device transforms <a href="https://openfront.io" target="_blank" style="color: var(--ok);">OpenFront.io</a> 
+            from a browser game into a visceral, tactical experience.
           </p>
+          <div style="margin: 20px 0; padding: 16px; background: rgba(0, 0, 0, 0.3); border-radius: 10px; border: 1px solid rgba(92, 255, 176, 0.2);">
+            <img src="/images/ots-hero.jpg" alt="OTS Device Hero" style="width: 100%; border-radius: 8px; display: block; background: rgba(255,255,255,0.05); aspect-ratio: 16/9;" />
+            <div style="text-align: center; margin-top: 8px; font-size: 12px; color: var(--muted);">The OTS in all its glory</div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="cardTitle">🎯 What is OTS?</h2>
+          <p style="font-size: 14px; line-height: 1.6; margin-top: 12px;">
+            The OpenFront Tactical Suitcase is a custom-built hardware controller featuring physical buttons, 
+            LED indicators, LCD displays, and real-time game state integration. Every nuclear launch, every 
+            incoming threat, every troop deployment—felt through physical feedback.
+          </p>
+          <div style="margin-top: 16px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+              <div style="padding: 12px; background: rgba(92, 255, 176, 0.08); border-radius: 8px; border: 1px solid rgba(92, 255, 176, 0.2);">
+                <div style="font-weight: 600; margin-bottom: 6px;">⚡ Real-time Sync</div>
+                <div style="font-size: 12px; color: var(--muted);">100ms polling updates hardware instantly with game state</div>
+              </div>
+              <div style="padding: 12px; background: rgba(255, 207, 92, 0.08); border-radius: 8px; border: 1px solid rgba(255, 207, 92, 0.2);">
+                <div style="font-weight: 600; margin-bottom: 6px;">🎮 Physical Feedback</div>
+                <div style="font-size: 12px; color: var(--muted);">Buttons, LEDs, and displays bring the battlefield to life</div>
+              </div>
+              <div style="padding: 12px; background: rgba(255, 84, 104, 0.08); border-radius: 8px; border: 1px solid rgba(255, 84, 104, 0.2);">
+                <div style="font-weight: 600; margin-bottom: 6px;">🚀 Open Source</div>
+                <div style="font-size: 12px; color: var(--muted);">Hardware schematics, firmware, and software all open</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="cardTitle">🔧 Hardware Modules</h2>
+          <p style="font-size: 14px; line-height: 1.6; margin-top: 12px; margin-bottom: 16px;">
+            Modular design with hot-swappable PCB modules connected via I2C/CAN bus. Each module handles 
+            a specific aspect of the game.
+          </p>
+          
+          <div style="margin: 16px 0;">
+            <div style="padding: 14px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; margin-bottom: 12px; border-left: 3px solid var(--ok);">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <img src="/images/nuke-module.jpg" alt="Nuke Module" style="width: 80px; height: 80px; border-radius: 6px; background: rgba(255,255,255,0.05);" />
+                <div>
+                  <div style="font-weight: 600; font-size: 15px;">💣 Nuke Control Panel</div>
+                  <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Launch nuclear strikes with physical buttons</div>
+                </div>
+              </div>
+              <div style="font-size: 13px; line-height: 1.5; color: var(--muted);">
+                Three backlit buttons (ATOM, HYDRO, MIRV) with LED confirmation. Press to launch. 
+                Watch the LED pulse as your missile travels across the map.
+              </div>
+            </div>
+
+            <div style="padding: 14px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; margin-bottom: 12px; border-left: 3px solid var(--warn);">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <img src="/images/alert-module.jpg" alt="Alert Module" style="width: 80px; height: 80px; border-radius: 6px; background: rgba(255,255,255,0.05);" />
+                <div>
+                  <div style="font-weight: 600; font-size: 15px;">🚨 Alert System</div>
+                  <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Visual warnings for incoming threats</div>
+                </div>
+              </div>
+              <div style="font-size: 13px; line-height: 1.5; color: var(--muted);">
+                Six LEDs light up when enemies launch attacks. Nuke alerts blink urgently for 10 seconds. 
+                Land/naval invasion warnings give you 15 seconds to respond.
+              </div>
+            </div>
+
+            <div style="padding: 14px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; margin-bottom: 12px; border-left: 3px solid #a7b2d9;">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <img src="/images/troops-module.jpg" alt="Troops Module" style="width: 80px; height: 80px; border-radius: 6px; background: rgba(255,255,255,0.05);" />
+                <div>
+                  <div style="font-weight: 600; font-size: 15px;">⚔️ Troop Command</div>
+                  <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Real-time troop counter and deployment slider</div>
+                </div>
+              </div>
+              <div style="font-size: 13px; line-height: 1.5; color: var(--muted);">
+                16x2 LCD display shows current/max troops. Analog slider sets deployment percentage. 
+                See exactly how many troops you're sending before you commit.
+              </div>
+            </div>
+
+            <div style="padding: 14px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; border-left: 3px solid rgba(92, 255, 176, 0.5);">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <img src="/images/main-power-module.jpg" alt="Main Power Module" style="width: 80px; height: 80px; border-radius: 6px; background: rgba(255,255,255,0.05);" />
+                <div>
+                  <div style="font-weight: 600; font-size: 15px;">🔌 Main Power & Status</div>
+                  <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Connection status and power distribution</div>
+                </div>
+              </div>
+              <div style="font-size: 13px; line-height: 1.5; color: var(--muted);">
+                LINK LED shows WebSocket connection health. Power distribution for all modules. 
+                Central hub for the entire system.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="cardTitle">🧠 Technology Stack</h2>
+          <div style="margin-top: 14px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+              <div>
+                <div style="font-family: var(--mono); font-size: 11px; color: var(--ok); margin-bottom: 6px;">HARDWARE</div>
+                <div style="font-size: 13px; line-height: 1.6; color: var(--text);">
+                  • ESP32-S3 (240MHz dual-core)<br>
+                  • 16MB Flash / 8MB PSRAM<br>
+                  • MCP23017 I2C I/O expanders<br>
+                  • HD44780 LCD displays<br>
+                  • ADS1015 12-bit ADC
+                </div>
+              </div>
+              <div>
+                <div style="font-family: var(--mono); font-size: 11px; color: var(--ok); margin-bottom: 6px;">FIRMWARE</div>
+                <div style="font-size: 13px; line-height: 1.6; color: var(--text);">
+                  • ESP-IDF 5.4 (FreeRTOS)<br>
+                  • WebSocket server (WSS/TLS)<br>
+                  • Event-driven architecture<br>
+                  • OTA firmware updates<br>
+                  • WiFi provisioning portal
+                </div>
+              </div>
+              <div>
+                <div style="font-family: var(--mono); font-size: 11px; color: var(--ok); margin-bottom: 6px;">SOFTWARE</div>
+                <div style="font-size: 13px; line-height: 1.6; color: var(--text);">
+                  • Nuxt 4 dashboard (Vue 3)<br>
+                  • TypeScript userscript bridge<br>
+                  • WebSocket protocol (JSON)<br>
+                  • 100ms game state polling<br>
+                  • Dark theme UI (this page!)
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="cardTitle">📦 Inside the Suitcase</h2>
+          <div style="margin: 16px 0;">
+            <img src="/images/ots-internals.jpg" alt="OTS Internals" style="width: 100%; border-radius: 8px; display: block; background: rgba(255,255,255,0.05); aspect-ratio: 16/9;" />
+            <div style="text-align: center; margin-top: 8px; font-size: 12px; color: var(--muted);">Clean cable management and modular PCB layout</div>
+          </div>
+          <p style="font-size: 14px; line-height: 1.6; margin-top: 12px;">
+            Housed in a rugged tactical suitcase with foam cutouts for each module. Power distribution board, 
+            cable management, and easy access panels. Built to last, built to impress.
+          </p>
+        </section>
+
+        <section class="card">
+          <h2 class="cardTitle">🌐 Community & Resources</h2>
+          <div style="margin-top: 14px; font-size: 14px; line-height: 1.8;">
+            <div style="margin-bottom: 10px;">
+              <span style="color: var(--muted);">Game:</span> 
+              <a href="https://openfront.io" target="_blank" style="color: var(--ok);">openfront.io</a> 
+              <span style="color: var(--muted); margin-left: 8px;">— Play the browser game</span>
+            </div>
+            <div style="margin-bottom: 10px;">
+              <span style="color: var(--muted);">GitHub:</span> 
+              <a href="https://github.com/yourusername/ots" target="_blank" style="color: var(--ok);">/ots</a> 
+              <span style="color: var(--muted); margin-left: 8px;">— Full source code and docs</span>
+            </div>
+            <div style="margin-bottom: 10px;">
+              <span style="color: var(--muted);">Discord:</span> 
+              <a href="https://discord.gg/openfront" target="_blank" style="color: var(--ok);">/openfront</a> 
+              <span style="color: var(--muted); margin-left: 8px;">— Join the community</span>
+            </div>
+            <div>
+              <span style="color: var(--muted);">Build hash:</span> 
+              <span class="mono" style="color: var(--text); font-size: 12px;">8bd6f450f77e0cbe</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" style="text-align: center; padding: 24px;">
+          <div style="font-size: 18px; margin-bottom: 8px;">⚡ Built with ❤️ for the OpenFront community</div>
+          <div style="font-size: 13px; color: var(--muted);">
+            This page is served directly from the ESP32-S3 microcontroller inside your OTS device.
+          </div>
         </section>
       </div>
 

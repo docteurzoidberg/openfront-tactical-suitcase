@@ -122,6 +122,7 @@ esp_err_t network_manager_start_captive_portal(const char *ap_ssid, const char *
     }
 
     portal_mode = true;
+    ESP_LOGI(TAG, "*** PORTAL MODE SET TO TRUE ***");
     is_connected = false;
     has_ip = false;
     sta_fail_count = 0;
@@ -149,6 +150,7 @@ esp_err_t network_manager_stop(void) {
 }
 
 bool network_manager_is_portal_mode(void) {
+    ESP_LOGD(TAG, "network_manager_is_portal_mode() returning: %d", portal_mode);
     return portal_mode;
 }
 
