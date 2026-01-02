@@ -37,7 +37,7 @@
 
 #if !CONFIG_HTTPD_WS_SUPPORT
 
-static const char *TAG = "WS_HANDLERS";
+static const char *TAG = "OTS_WS";
 static ws_connection_callback_t connection_callback = NULL;
 
 esp_err_t ws_handlers_register(httpd_handle_t server) {
@@ -80,8 +80,7 @@ int ws_handlers_get_userscript_count(void) {
 
 #else
 
-static const char *TAG = "WS_HANDLERS";
-
+static const char *TAG = "OTS_WS";
 static httpd_handle_t s_server = NULL;
 static ws_connection_callback_t connection_callback = NULL;
 static int active_clients = 0;

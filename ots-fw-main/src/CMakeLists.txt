@@ -207,6 +207,7 @@ else()
         "wifi_credentials.c"
         "device_settings.c"
         "serial_commands.c"
+        "dns_captive_portal.c"
     )
     set(COMPONENT_REQUIRES
         espressif__mdns

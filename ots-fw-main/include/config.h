@@ -46,6 +46,12 @@
 static const uint8_t MCP23017_ADDRESSES[] = {0x20, 0x21};
 #define MCP23017_COUNT 2
 
+// Captive Portal Configuration
+#define CAPTIVE_PORTAL_IP_A 192
+#define CAPTIVE_PORTAL_IP_B 168
+#define CAPTIVE_PORTAL_IP_C 4
+#define CAPTIVE_PORTAL_IP_D 1
+
 // I2C GPIO pins for ESP32-S3
 #define I2C_SDA_PIN 8
 #define I2C_SCL_PIN 9

@@ -18,6 +18,7 @@
 #include "wifi_credentials.h"
 #include "device_settings.h"
 #include "network_manager.h"
+#include "dns_captive_portal.h"
 
 #include "config.h"
 #include "webapp/ots_webapp.h"
@@ -39,25 +40,10 @@
 #include <string.h>
 #include <stdlib.h>
 
-static const char *TAG = "WEBAPP_HANDLERS";
+static const char *TAG = "OTS_WEBAPP";
 
 // No local HTTP server instance - handlers are registered with core server
 static webapp_mode_t s_mode = WEBAPP_MODE_NORMAL;
-
-static TaskHandle_t s_dns_task = NULL;
-static int s_dns_sock = -1;
-static volatile bool s_dns_running = false;
-
-// Default ESP-IDF softAP IP is 192.168.4.1 unless explicitly changed.
-#define CAPTIVE_PORTAL_IP_A 192
-#define CAPTIVE_PORTAL_IP_B 168
-#define CAPTIVE_PORTAL_IP_C 4
-#define CAPTIVE_PORTAL_IP_D 1
-#define CAPTIVE_DNS_PORT 53
-
-static void dns_task(void *arg);
-static void captive_dns_start(void);
-static void captive_dns_stop(void);
 // Forward declarations (now exported - non-static)
 esp_err_t webapp_handle_404_redirect(httpd_req_t *req, httpd_err_code_t err);
 esp_err_t webapp_handle_webapp_get(httpd_req_t *req);
@@ -626,173 +612,6 @@ esp_err_t webapp_handle_api_scan(httpd_req_t *req) {
     return ESP_OK;
 }
 
-static void captive_dns_start(void) {
-    if (s_dns_task) {
-        return;
-    }
-    s_dns_running = true;
-
-    BaseType_t ok = xTaskCreate(dns_task, "captive_dns", 4096, NULL, 4, &s_dns_task);
-    if (ok != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create captive DNS task");
-        s_dns_task = NULL;
-        s_dns_running = false;
-    }
-}
-
-static void captive_dns_stop(void) {
-    s_dns_running = false;
-    if (s_dns_sock >= 0) {
-        shutdown(s_dns_sock, SHUT_RDWR);
-        close(s_dns_sock);
-        s_dns_sock = -1;
-    }
-    // Task will exit on its own.
-}
-
-static void dns_task(void *arg) {
-    (void)arg;
-
-    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock < 0) {
-        ESP_LOGE(TAG, "DNS socket() failed: errno=%d", errno);
-        s_dns_running = false;
-        s_dns_task = NULL;
-        vTaskDelete(NULL);
-        return;
-    }
-    s_dns_sock = sock;
-
-    int reuse = 1;
-    (void)setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(CAPTIVE_DNS_PORT);
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
-        ESP_LOGE(TAG, "DNS bind() failed: errno=%d", errno);
-        close(sock);
-        s_dns_sock = -1;
-        s_dns_running = false;
-        s_dns_task = NULL;
-        vTaskDelete(NULL);
-        return;
-    }
-
-    ESP_LOGI(TAG, "Captive DNS started on UDP/%u", (unsigned)CAPTIVE_DNS_PORT);
-
-    // Receive buffer large enough for typical DNS queries.
-    uint8_t rx[256];
-    uint8_t tx[256];
-
-    while (s_dns_running) {
-        struct sockaddr_in from;
-        socklen_t from_len = sizeof(from);
-        int n = recvfrom(sock, rx, sizeof(rx), 0, (struct sockaddr *)&from, &from_len);
-        if (n <= 0) {
-            // socket closed or error; exit if we are stopping.
-            if (!s_dns_running) {
-                break;
-            }
-            continue;
-        }
-
-        // Minimal DNS parsing/response.
-        // Header: 12 bytes
-        if (n < 12) {
-            continue;
-        }
-
-        // Only handle standard queries with exactly 1 question.
-        uint16_t qdcount = (uint16_t)((rx[4] << 8) | rx[5]);
-        if (qdcount != 1) {
-            continue;
-        }
-
-        // Find end of QNAME.
-        int offset = 12;
-        while (offset < n && rx[offset] != 0) {
-            offset += (int)rx[offset] + 1;
-        }
-        if (offset + 5 >= n) {
-            continue;
-        }
-        // offset points at 0 terminator
-        offset += 1;
-
-        // QTYPE/QCLASS are 4 bytes
-        const int question_end = offset + 4;
-        if (question_end > n) {
-            continue;
-        }
-
-        // Build response: header + original question + single A answer.
-        memset(tx, 0, sizeof(tx));
-        // Transaction ID
-        tx[0] = rx[0];
-        tx[1] = rx[1];
-        // Flags: response, recursion not available, no error
-        tx[2] = 0x81;
-        tx[3] = 0x80;
-        // QDCOUNT = 1
-        tx[4] = 0x00;
-        tx[5] = 0x01;
-        // ANCOUNT = 1
-        tx[6] = 0x00;
-        tx[7] = 0x01;
-        // NSCOUNT/ARCOUNT = 0
-        tx[8] = 0x00;
-        tx[9] = 0x00;
-        tx[10] = 0x00;
-        tx[11] = 0x00;
-
-        int tx_len = 12;
-        const int q_len = question_end - 12;
-        if (tx_len + q_len + 16 > (int)sizeof(tx)) {
-            continue;
-        }
-        memcpy(&tx[tx_len], &rx[12], (size_t)q_len);
-        tx_len += q_len;
-
-        // Answer section
-        // NAME: pointer to 0x0c (start of QNAME)
-        tx[tx_len++] = 0xC0;
-        tx[tx_len++] = 0x0C;
-        // TYPE: A
-        tx[tx_len++] = 0x00;
-        tx[tx_len++] = 0x01;
-        // CLASS: IN
-        tx[tx_len++] = 0x00;
-        tx[tx_len++] = 0x01;
-        // TTL: 0
-        tx[tx_len++] = 0x00;
-        tx[tx_len++] = 0x00;
-        tx[tx_len++] = 0x00;
-        tx[tx_len++] = 0x00;
-        // RDLENGTH: 4
-        tx[tx_len++] = 0x00;
-        tx[tx_len++] = 0x04;
-        // RDATA: AP IP
-        tx[tx_len++] = CAPTIVE_PORTAL_IP_A;
-        tx[tx_len++] = CAPTIVE_PORTAL_IP_B;
-        tx[tx_len++] = CAPTIVE_PORTAL_IP_C;
-        tx[tx_len++] = CAPTIVE_PORTAL_IP_D;
-
-        (void)sendto(sock, tx, (size_t)tx_len, 0, (struct sockaddr *)&from, from_len);
-    }
-
-    if (sock >= 0) {
-        close(sock);
-    }
-    s_dns_sock = -1;
-    s_dns_task = NULL;
-    ESP_LOGI(TAG, "Captive DNS stopped");
-    vTaskDelete(NULL);
-}
-
 // ============================================================================
 // PUBLIC API - Handler Registration
 // ============================================================================
@@ -960,7 +779,7 @@ esp_err_t webapp_handlers_register(httpd_handle_t server) {
 
     // Start captive DNS if in portal mode
     if (s_mode == WEBAPP_MODE_CAPTIVE_PORTAL) {
-        captive_dns_start();
+        dns_captive_portal_start();
     }
 
     return ESP_OK;
@@ -972,9 +791,11 @@ void webapp_handlers_set_mode(webapp_mode_t mode) {
 
     // Start/stop captive DNS based on portal mode
     if (s_mode == WEBAPP_MODE_CAPTIVE_PORTAL && prev != WEBAPP_MODE_CAPTIVE_PORTAL) {
-        captive_dns_start();
+        ESP_LOGI(TAG, "Entering captive portal mode");
+        dns_captive_portal_start();
     } else if (s_mode != WEBAPP_MODE_CAPTIVE_PORTAL && prev == WEBAPP_MODE_CAPTIVE_PORTAL) {
-        captive_dns_stop();
+        ESP_LOGI(TAG, "Exiting captive portal mode");
+        dns_captive_portal_stop();
     }
 }
 

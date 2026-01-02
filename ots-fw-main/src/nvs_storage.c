@@ -12,7 +12,7 @@
 #include "esp_log.h"
 #include <string.h>
 
-static const char *TAG = "nvs_storage";
+static const char *TAG = "OTS_NVS";
 
 // ============================================================================
 // Public API Implementation

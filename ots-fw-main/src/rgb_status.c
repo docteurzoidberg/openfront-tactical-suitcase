@@ -3,7 +3,7 @@
 #include "ws2812_rmt.h"
 #include "esp_log.h"
 
-static const char *TAG = "rgb_status";
+static const char *TAG = "OTS_RGB";
 
 static bool initialized = false;
 static rgb_status_t current_state = RGB_STATUS_DISCONNECTED;

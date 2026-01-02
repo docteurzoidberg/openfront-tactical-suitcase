@@ -23,7 +23,7 @@
 #include <freertos/task.h>
 #include <string.h>
 
-static const char *TAG = "SysStatus";
+static const char *TAG = "OTS_SYS_STATUS";
 
 // Module state
 // Animation state (shared for all animated screens)
