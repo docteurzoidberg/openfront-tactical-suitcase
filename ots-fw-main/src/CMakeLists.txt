@@ -101,7 +101,6 @@ if(TEST_BUILD)
         set(COMPONENT_SRCS
             "protocol.c"
             "tls_creds.c"
-            "http_server.c"
             "ws_handlers.c"
             "ws_protocol.c"
             "event_dispatcher.c"
@@ -109,9 +108,6 @@ if(TEST_BUILD)
             "game_state.c"
             "network_manager.c"
             "i2c_bus.c"
-            "io_expander.c"
-            "lcd_driver.c"
-            "adc_driver.c"
             "adc_handler.c"
             "rgb_status.c"
             "ots_logging.c"
@@ -125,8 +121,10 @@ if(TEST_BUILD)
             esp_timer
             json
             driver
-            esp_http_server
-            esp_https_server
+            mcp23017_driver
+            hd44780_pcf8574
+            ads1015_driver
+            esp_http_server_core
         )
     elseif(TEST_NAME STREQUAL "test-i2c")
         set(COMPONENT_SRCS
@@ -156,21 +154,21 @@ if(TEST_BUILD)
         set(COMPONENT_SRCS
             "ots_logging.c"
             "i2c_bus.c"
-            "adc_driver.c"
             "tests/test_adc.c"
         )
         set(COMPONENT_REQUIRES
             driver
+            ads1015_driver
         )
     elseif(TEST_NAME STREQUAL "test-lcd")
         set(COMPONENT_SRCS
             "ots_logging.c"
             "i2c_bus.c"
-            "lcd_driver.c"
             "tests/test_lcd.c"
         )
         set(COMPONENT_REQUIRES
             driver
+            hd44780_pcf8574
         )
     else()
         message(FATAL_ERROR "Unknown test build: ${TEST_NAME}")
@@ -180,11 +178,9 @@ else()
     set(COMPONENT_SRCS
         "main.c"
         "i2c_bus.c"
-        "io_expander.c"
         "module_io.c"
         "protocol.c"
         "tls_creds.c"
-        "http_server.c"
         "ws_handlers.c"
         "webapp_handlers.c"
         "ws_protocol.c"
@@ -203,8 +199,6 @@ else()
         "main_power_module.c"
         "system_status_module.c"
         "troops_module.c"
-        "lcd_driver.c"
-        "adc_driver.c"
         "rgb_status.c"
         "ots_logging.c"
         "wifi_credentials.c"
@@ -218,9 +212,11 @@ else()
         esp_timer
         json
         driver
-        esp_http_server
-        esp_https_server
         app_update
+        mcp23017_driver
+        hd44780_pcf8574
+        ads1015_driver
+        esp_http_server_core
     )
 endif()
 

@@ -21,7 +21,7 @@ void app_main(void) {
     ESP_LOGI(TAG, "Starting minimal LCD test...");
     ESP_ERROR_CHECK(ots_i2c_bus_init());
 
-    esp_err_t ret = lcd_init(LCD_I2C_ADDR);
+    esp_err_t ret = lcd_init(ots_i2c_bus_get(), LCD_I2C_ADDR);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "lcd_init(0x%02X) failed: %s", LCD_I2C_ADDR, esp_err_to_name(ret));
         while (1) {

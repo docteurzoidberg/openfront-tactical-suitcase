@@ -1,0 +1,6 @@
+version: "1.0.0"
+description: "ADS1015 12-bit I2C ADC Driver for ESP-IDF"
+url: "https://github.com/drzoid/ots"
+dependencies:
+  idf:
+    version: ">=5.0.0"

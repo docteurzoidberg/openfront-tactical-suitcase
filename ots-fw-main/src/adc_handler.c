@@ -1,5 +1,6 @@
 #include "adc_handler.h"
 #include "adc_driver.h"
+#include "i2c_bus.h"
 #include "event_dispatcher.h"
 #include "protocol.h"
 #include "esp_log.h"
@@ -46,7 +47,7 @@ esp_err_t adc_handler_init(void) {
     ESP_LOGI(TAG, "Initializing ADC handler...");
     
     // Initialize ADS1015 ADC
-    esp_err_t ret = ads1015_init(0x48);
+    esp_err_t ret = ads1015_init(ots_i2c_bus_get(), 0x48);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize ADC: %s", esp_err_to_name(ret));
         return ret;

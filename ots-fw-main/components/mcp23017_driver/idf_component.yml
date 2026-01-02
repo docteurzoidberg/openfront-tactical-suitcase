@@ -1,0 +1,6 @@
+version: "1.0.0"
+description: "MCP23017 I2C I/O Expander Driver for ESP-IDF with Health Monitoring"
+url: "https://github.com/drzoid/ots"
+dependencies:
+  idf:
+    version: ">=5.0.0"

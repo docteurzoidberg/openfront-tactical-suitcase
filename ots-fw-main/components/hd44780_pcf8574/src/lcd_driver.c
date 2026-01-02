@@ -1,7 +1,9 @@
 #include "lcd_driver.h"
 
-#include "config.h"
-#include "i2c_bus.h"
+// Default version if not defined by application
+#ifndef OTS_FIRMWARE_VERSION
+#define OTS_FIRMWARE_VERSION "unknown"
+#endif
 
 #include <driver/i2c_master.h>
 #include <esp_log.h>
@@ -208,21 +210,13 @@ esp_err_t lcd_write_line(uint8_t row, const char *str) {
     return lcd_write_string(str);
 }
 
-esp_err_t lcd_init(uint8_t i2c_addr) {
+esp_err_t lcd_init(i2c_master_bus_handle_t bus, uint8_t i2c_addr) {
     s_initialized = false;
     s_addr = i2c_addr;
 
-    i2c_master_bus_handle_t bus = ots_i2c_bus_get();
     if (!bus) {
-        esp_err_t init_ret = ots_i2c_bus_init();
-        if (init_ret != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to init I2C bus: %s", esp_err_to_name(init_ret));
-            return init_ret;
-        }
-        bus = ots_i2c_bus_get();
-    }
-    if (!bus) {
-        return ESP_FAIL;
+        ESP_LOGE(TAG, "I2C bus handle is NULL");
+        return ESP_ERR_INVALID_ARG;
     }
 
     if (s_dev) {

@@ -1,6 +1,4 @@
 #include "io_expander.h"
-#include "config.h"
-#include "i2c_bus.h"
 #include "esp_log.h"
 #include "driver/i2c_master.h"
 #include "freertos/FreeRTOS.h"
@@ -132,30 +130,27 @@ static esp_err_t init_single_board(uint8_t board_idx, uint8_t address) {
     return ret;
 }
 
-bool io_expander_begin(const uint8_t *addresses, uint8_t count) {
+bool io_expander_begin(i2c_master_bus_handle_t bus, const uint8_t *addresses, uint8_t count) {
     if (!addresses || count == 0 || count > MAX_MCP_BOARDS) {
         ESP_LOGE(TAG, "Invalid parameters (count=%d, max=%d)", count, MAX_MCP_BOARDS);
+        return false;
+    }
+    
+    if (!bus) {
+        ESP_LOGE(TAG, "I2C bus handle is NULL");
         return false;
     }
 
     ESP_LOGI(TAG, "Initializing %d MCP23017(s) with error recovery...", count);
 
-    // Use shared I2C bus (owned by i2c_bus.c)
-    esp_err_t ret = ots_i2c_bus_init();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize shared I2C bus: %s", esp_err_to_name(ret));
-        return false;
-    }
-    i2c_bus = ots_i2c_bus_get();
-    if (!i2c_bus) {
-        ESP_LOGE(TAG, "Shared I2C bus handle is NULL");
-        return false;
-    }
+    // Store the provided I2C bus handle
+    i2c_bus = bus;
 
     // Initialize board structures
     memset(boards, 0, sizeof(boards));
     board_count = 0;
     bool all_success = true;
+    esp_err_t ret;
 
     // Initialize each board with retry logic
     for (uint8_t i = 0; i < count; i++) {

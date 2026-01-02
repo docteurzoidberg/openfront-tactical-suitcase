@@ -120,7 +120,7 @@ void app_main(void) {
     ESP_ERROR_CHECK(ots_i2c_bus_init());
     
     ESP_LOGI(TAG, "Initializing ADS1015 ADC...");
-    esp_err_t ret = ads1015_init(ADS1015_I2C_ADDR);
+    esp_err_t ret = ads1015_init(ots_i2c_bus_get(), ADS1015_I2C_ADDR);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize ADS1015!");
         ESP_LOGE(TAG, "Check:");

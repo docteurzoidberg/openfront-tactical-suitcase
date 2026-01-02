@@ -9,7 +9,6 @@
 #include "http_server.h"
 #include "esp_https_server.h"
 #include "esp_log.h"
-#include "ws_handlers.h"
 #include <string.h>
 
 static const char *TAG = "HTTP_SERVER";
@@ -64,14 +63,8 @@ esp_err_t http_server_start(void) {
 
     esp_err_t ret;
 
-    // If no close_fn provided, use WebSocket handler's callback for proper cleanup
+    // Use provided close_fn (WebSocket handler should set this via http_server_config_t)
     httpd_close_func_t close_fn = s_config.close_fn;
-    if (close_fn == NULL) {
-#if CONFIG_HTTPD_WS_SUPPORT
-        close_fn = ws_handlers_get_session_close_callback();
-        ESP_LOGD(TAG, "Using WebSocket session close callback");
-#endif
-    }
 
     if (s_config.use_tls) {
         // HTTPS server configuration

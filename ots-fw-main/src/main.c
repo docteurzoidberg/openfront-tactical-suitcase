@@ -8,6 +8,7 @@
 #include "nvs_flash.h"
 
 #include "config.h"
+#include "i2c_bus.h"
 #include "io_expander.h"
 #include "module_io.h"
 #include "protocol.h"
@@ -236,7 +237,7 @@ void app_main(void) {
     
     // Initialize I/O expanders with error recovery
     ESP_LOGI(TAG, "Initializing I/O expanders...");
-    bool io_expanders_ready = io_expander_begin(MCP23017_ADDRESSES, MCP23017_COUNT);
+    bool io_expanders_ready = io_expander_begin(ots_i2c_bus_get(), MCP23017_ADDRESSES, MCP23017_COUNT);
     if (!io_expanders_ready) {
         ESP_LOGE(TAG, "Failed to initialize I/O expanders - continuing without hardware I/O boards");
     } else {
@@ -372,7 +373,7 @@ void app_main(void) {
         .key_len = ots_server_key_pem_len,
         .max_open_sockets = 4,  // ESP-IDF limit: 7 total (3 internal + 4 user)
         .max_uri_handlers = 32,
-        .close_fn = NULL  // Auto-set by http_server from ws_handlers
+        .close_fn = ws_handlers_get_session_close_callback()  // WebSocket session close callback
     };
     
     if (http_server_init(&server_config) != ESP_OK) {

@@ -3,6 +3,7 @@
 
 #include <esp_err.h>
 #include <stdint.h>
+#include <driver/i2c_master.h>
 
 // Default I2C address for ADS1015
 #define ADS1015_I2C_ADDR 0x48
@@ -16,10 +17,11 @@
 /**
  * @brief Initialize ADS1015 ADC
  * 
+ * @param bus I2C master bus handle
  * @param i2c_addr I2C address (default: 0x48)
  * @return esp_err_t ESP_OK on success
  */
-esp_err_t ads1015_init(uint8_t i2c_addr);
+esp_err_t ads1015_init(i2c_master_bus_handle_t bus, uint8_t i2c_addr);
 
 /**
  * @brief Read ADC value from channel

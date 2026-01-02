@@ -4,6 +4,7 @@
 #include <esp_err.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <driver/i2c_master.h>
 
 // LCD dimensions
 #define LCD_COLS 16
@@ -25,10 +26,11 @@ void lcd_backlight_off(void);
 /**
  * @brief Initialize LCD display
  * 
+ * @param bus I2C master bus handle
  * @param i2c_addr I2C address of LCD backpack (default: 0x27)
  * @return esp_err_t ESP_OK on success
  */
-esp_err_t lcd_init(uint8_t i2c_addr);
+esp_err_t lcd_init(i2c_master_bus_handle_t bus, uint8_t i2c_addr);
 
 /**
  * @brief Check if LCD is initialized

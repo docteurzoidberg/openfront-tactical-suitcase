@@ -12,6 +12,7 @@
 
 #include "system_status_module.h"
 #include "lcd_driver.h"
+#include "i2c_bus.h"
 #include "game_state.h"
 #include "protocol.h"
 #include "network_manager.h"
@@ -129,7 +130,7 @@ static esp_err_t system_status_init(void) {
     ESP_LOGI(TAG, "Initializing system status module...");
 
     // Ensure the LCD is initialized before we attempt to draw anything.
-    esp_err_t ret = lcd_init(LCD_I2C_ADDR);
+    esp_err_t ret = lcd_init(ots_i2c_bus_get(), LCD_I2C_ADDR);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize LCD at 0x%02X: %s", LCD_I2C_ADDR, esp_err_to_name(ret));
         return ret;
