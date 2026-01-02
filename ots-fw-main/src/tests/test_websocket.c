@@ -35,7 +35,8 @@
 
 #include "config.h"
 #include "network_manager.h"
-#include "ws_server.h"
+#include "http_server.h"
+#include "ws_handlers.h"
 #include "rgb_status.h"
 #include "protocol.h"
 #include "wifi_credentials.h"
@@ -58,7 +59,7 @@ typedef struct {
 
 static test_state_t test_state = {0};
 
-static volatile bool ws_server_start_requested = false;
+static volatile bool http_server_start_requested = false;
 
 // Forward declarations
 void network_event_handler(network_event_type_t event, const char *ip);
@@ -77,7 +78,7 @@ static bool test_event_handler(const internal_event_t *event) {
     }
 
     if (event->type == GAME_EVENT_GAME_END) {
-        if (ws_server_has_userscript()) {
+        if (ws_handlers_has_userscript()) {
             rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
         } else if (test_state.wifi_connected) {
             rgb_status_set(RGB_STATUS_WIFI_ONLY);
@@ -168,7 +169,7 @@ void test_send_messages(void) {
     snprintf(info_event.message, sizeof(info_event.message), 
              "Test message from firmware");
     
-    esp_err_t ret = ws_server_send_event(&info_event);
+    esp_err_t ret = ws_handlers_send_event(&info_event);
     if (ret == ESP_OK) {
         test_state.messages_sent++;
         ESP_LOGI(TAG, "  ✓ Sent INFO event");
@@ -186,7 +187,7 @@ void test_send_messages(void) {
     snprintf(test_event.message, sizeof(test_event.message), 
              "Hardware test in progress");
     
-    ret = ws_server_send_event(&test_event);
+    ret = ws_handlers_send_event(&test_event);
     if (ret == ESP_OK) {
         test_state.messages_sent++;
         ESP_LOGI(TAG, "  ✓ Sent HARDWARE_TEST event");
@@ -215,9 +216,9 @@ void display_statistics(void) {
     
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "WebSocket Status:");
-    ESP_LOGI(TAG, "  Server started: %s", ws_server_is_started() ? "Yes" : "No");
+    ESP_LOGI(TAG, "  Server started: %s", http_server_is_started() ? "Yes" : "No");
     ESP_LOGI(TAG, "  Server: %s<device-ip>:%d/ws", WS_PROTOCOL, WS_SERVER_PORT);
-    ESP_LOGI(TAG, "  Clients connected: %d", ws_server_is_connected() ? 1 : 0);
+    ESP_LOGI(TAG, "  Clients connected: %d", ws_handlers_is_connected() ? 1 : 0);
     if (test_state.ws_connected) {
         uint32_t uptime = (esp_log_timestamp() - test_state.ws_connect_time) / 1000;
         ESP_LOGI(TAG, "  Uptime: %lu seconds", uptime);
@@ -338,17 +339,51 @@ void app_main(void) {
     // Register network event callback
     network_manager_set_event_callback(network_event_handler);
     
-    // Initialize WebSocket client
-    ret = ws_server_init(WS_SERVER_PORT);
+    // Initialize HTTP server with TLS
+    extern const char ots_server_cert_pem[];
+    extern const size_t ots_server_cert_pem_len;
+    extern const char ots_server_key_pem[];
+    extern const size_t ots_server_key_pem_len;
+    
+    http_server_config_t server_config = {
+        .port = WS_SERVER_PORT,
+        .use_tls = WS_USE_TLS,
+        .cert_pem = (const uint8_t *)ots_server_cert_pem,
+        .cert_len = ots_server_cert_pem_len,
+        .key_pem = (const uint8_t *)ots_server_key_pem,
+        .key_len = ots_server_key_pem_len,
+        .max_open_sockets = 4,
+        .max_uri_handlers = 8,
+        .close_fn = NULL
+    };
+    
+    ret = http_server_init(&server_config);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize WebSocket server!");
+        ESP_LOGE(TAG, "Failed to initialize HTTP server!");
+        rgb_status_set(RGB_STATUS_ERROR);
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        esp_restart();
+    }
+    
+    ret = http_server_start();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start HTTP server!");
+        rgb_status_set(RGB_STATUS_ERROR);
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        esp_restart();
+    }
+    
+    // Register WebSocket handlers
+    ret = ws_handlers_register(http_server_get_handle());
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register WebSocket handlers!");
         rgb_status_set(RGB_STATUS_ERROR);
         vTaskDelay(pdMS_TO_TICKS(5000));
         esp_restart();
     }
     
     // Register WebSocket connection callback
-    ws_server_set_connection_callback(ws_connection_handler);
+    ws_handlers_set_connection_callback(ws_connection_handler);
     
     // Start network (will trigger connection events)
     rgb_status_set(RGB_STATUS_WIFI_CONNECTING);
@@ -370,19 +405,8 @@ void app_main(void) {
     // Main test loop
     int cycle = 1;
     while (1) {
-        // Start (or retry) WebSocket server as soon as we have an IP.
-        if (test_state.wifi_connected && test_state.current_ip[0] != '\0') {
-            if (ws_server_start_requested || !ws_server_is_started()) {
-                ws_server_start_requested = false;
-                ESP_LOGI(TAG, "Starting WebSocket server...");
-                esp_err_t start_ret = ws_server_start();
-                if (start_ret != ESP_OK) {
-                    ESP_LOGE(TAG, "Failed to start WebSocket server: %s", esp_err_to_name(start_ret));
-                } else {
-                    ESP_LOGI(TAG, "WebSocket server listening on %s%s:%d/ws", WS_PROTOCOL, test_state.current_ip, WS_SERVER_PORT);
-                }
-            }
-        }
+        // HTTP server is already started with WebSocket handlers registered
+        // No need for dynamic start logic
 
         vTaskDelay(pdMS_TO_TICKS(10000));  // Every 10 seconds
         

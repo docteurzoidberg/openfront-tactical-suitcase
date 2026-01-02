@@ -97,11 +97,12 @@ if(TEST_BUILD)
     message(STATUS "Building ${TEST_NAME}: minimal sources")
 
     if(TEST_NAME STREQUAL "test-websocket")
-        # WebSocket test: WiFi + WS/WSS server + RGB status
+        # WebSocket test: WiFi + HTTP/HTTPS server + WebSocket handlers + RGB status
         set(COMPONENT_SRCS
             "protocol.c"
             "tls_creds.c"
-            "ws_server.c"
+            "http_server.c"
+            "ws_handlers.c"
             "ws_protocol.c"
             "event_dispatcher.c"
             "led_controller.c"
