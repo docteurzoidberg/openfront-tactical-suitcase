@@ -2,34 +2,69 @@
 
 This folder contains **AI prompt files** used when working on the firmware.
 
-## Start Here
+## Core Prompts (Start Here)
 
-- **Main firmware prompt**: `FIRMWARE_MAIN_PROMPT.md`
-- **Build & test prompt**: `BUILD_AND_TEST_PROMPT.md`
-- **Protocol change prompt**: `PROTOCOL_CHANGE_PROMPT.md`
-- **Debug & recovery prompt**: `DEBUGGING_AND_RECOVERY_PROMPT.md`
-- **Module development prompt**: `MODULE_DEVELOPMENT_PROMPT.md`
+### System-Level
+- **Architecture Overview**: `ARCHITECTURE_PROMPT.md` - Component structure and design patterns
+- **Main Firmware**: `FIRMWARE_MAIN_PROMPT.md` - Application entry point and initialization
+- **Protocol Changes**: `PROTOCOL_CHANGE_PROMPT.md` - Synchronizing protocol across components
 
-## Existing Module Prompts
+### Development Workflows
+- **Build & Test**: `BUILD_AND_TEST_PROMPT.md` - PlatformIO environments and testing
+- **Debug & Recovery**: `DEBUGGING_AND_RECOVERY_PROMPT.md` - Boot loops and error recovery
+- **Module Development**: `MODULE_DEVELOPMENT_PROMPT.md` - Creating new hardware modules
+- **Automated Tests**: `AUTOMATED_TESTS_PROMPT.md` - Test automation and CI/CD
 
-- `MAIN_POWER_MODULE_PROMPT.md`
-- `NUKE_MODULE_PROMPT.md`
-- `ALERT_MODULE_PROMPT.md`
-- `TROOPS_MODULE_PROMPT.md`
-- `SOUND_MODULE_PROMPT.md`
+## Hardware Module Prompts
 
-## Reference Docs (not prompts)
+Each hardware module has a dedicated prompt file with implementation details:
 
-These are firmware docs under `docs/`, referenced by prompts above:
+- **Main Power**: `MAIN_POWER_MODULE_PROMPT.md` - LINK LED and connection status
+- **Nuke Control**: `NUKE_MODULE_PROMPT.md` - Nuke launch buttons and LEDs
+- **Alert System**: `ALERT_MODULE_PROMPT.md` - Incoming threat indicators
+- **Troops Display**: `TROOPS_MODULE_PROMPT.md` - LCD + slider + ADC
+- **Sound System**: `SOUND_MODULE_PROMPT.md` - Audio feedback and alerts
 
-- `docs/TESTING.md` – how to run the `test-*` PlatformIO environments
-- `docs/WSS_TEST_GUIDE.md` – WSS/WebSocket test notes
-- `docs/OTA_GUIDE.md` – OTA update flow
-- `docs/ERROR_RECOVERY.md` – how to recover from boot loops / bad flashes
-- `docs/RGB_LED_STATUS.md` – status LED behavior and mappings
-- `docs/NAMING_CONVENTIONS.md` – naming rules for modules/files
+## System Component Prompts
 
-For a quick human overview and basic commands, start at `../README.md`.
+Core system functionality with dedicated implementation guides:
+
+- **System Status Module**: `SYSTEM_STATUS_MODULE_PROMPT.md` - LCD display screens and game state visualization
+- **I2C Components**: `I2C_COMPONENTS_PROMPT.md` - Creating reusable I2C device drivers
+- **WebSocket Protocol**: `WEBSOCKET_PROTOCOL_PROMPT.md` - WebSocket message handling and serialization
+- **Network Provisioning**: `NETWORK_PROVISIONING_PROMPT.md` - WiFi setup and captive portal
+- **OTA Updates**: `OTA_UPDATE_PROMPT.md` - Over-the-air firmware update implementation
+
+## Documentation Files (../docs/)
+
+**User Guides:**
+- `TESTING.md` - How to run hardware tests
+- `OTA_GUIDE.md` - OTA update procedures
+- `OTS_DEVICE_TOOL.md` - CLI tool usage
+- `WSS_TEST_GUIDE.md` - WebSocket testing
+
+**Developer Reference:**
+- `NAMING_CONVENTIONS.md` - Code style guide
+- `RGB_LED_STATUS.md` - Status LED behavior
+- `ERROR_RECOVERY.md` - Boot failure recovery
+- `HARDWARE_TEST_PLAN.md` - Test strategy
+
+**Implementation Notes:**
+- `HARDWARE_DIAGNOSTIC_IMPLEMENTATION.md`
+- `HARDWARE_TEST_INTEGRATION.md`
+- `GAME_END_SCREEN.md`
+- `LCD_DISPLAY_MODES.md`
+- `REFACTORING_ADC_TASK.md`
+- `WIFI_PROVISIONING.md`
+- `WIFI_WEBAPP.md`
+- `PROTOCOL_ALIGNMENT_CHECK.md`
+- `OTA_VERIFICATION_REPORT.md`
+- `IMPROVEMENTS.md` (deprecated)
+- `IMPROV_SERIAL.md` (removed feature)
+- `CERTIFICATE_INSTALLATION_CHROME.md`
+- `TEST_WIFI_PROVISIONING_FLOW.md`
+
+For a quick overview, start at `../README.md`.
 
 ## How to Add a New Prompt
 

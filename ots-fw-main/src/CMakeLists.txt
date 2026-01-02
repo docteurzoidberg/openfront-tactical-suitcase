@@ -111,6 +111,7 @@ if(TEST_BUILD)
             "adc_handler.c"
             "rgb_status.c"
             "ots_logging.c"
+            "nvs_storage.c"
             "wifi_credentials.c"
             "tests/test_websocket.c"
         )
@@ -202,6 +203,7 @@ else()
         "troops_module.c"
         "rgb_status.c"
         "ots_logging.c"
+        "nvs_storage.c"
         "wifi_credentials.c"
         "device_settings.c"
         "serial_commands.c"

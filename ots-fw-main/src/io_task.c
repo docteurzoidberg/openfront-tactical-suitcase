@@ -48,27 +48,6 @@ esp_err_t io_task_start(void) {
     return ESP_OK;
 }
 
-esp_err_t io_task_stop(void) {
-    if (io_task_handle == NULL) {
-        ESP_LOGW(TAG, "I/O task not running");
-        return ESP_OK;
-    }
-    
-    ESP_LOGI(TAG, "Stopping I/O task...");
-    task_running = false;
-    
-    // Delete the task
-    vTaskDelete(io_task_handle);
-    io_task_handle = NULL;
-    
-    ESP_LOGI(TAG, "I/O task stopped");
-    return ESP_OK;
-}
-
-bool io_task_is_running(void) {
-    return task_running && io_task_handle != NULL;
-}
-
 static void io_task_main(void *pvParameters) {
     ESP_LOGI(TAG, "I/O task main loop started");
     

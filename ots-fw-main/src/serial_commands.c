@@ -3,12 +3,12 @@
 #include "config.h"
 #include "wifi_credentials.h"
 #include "device_settings.h"
+#include "nvs_storage.h"
 
 #include "esp_log.h"
 #include "esp_system.h"
 #include "driver/uart.h"
 #include "driver/usb_serial_jtag.h"
-#include "nvs.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -174,16 +174,8 @@ static void handle_line(char *line) {
                 return;
             }
             
-            // Directly erase the key from NVS
-            nvs_handle_t handle;
-            esp_err_t ret = nvs_open("device", NVS_READWRITE, &handle);
-            if (ret == ESP_OK) {
-                ret = nvs_erase_key(handle, nvs_key);
-                if (ret == ESP_OK || ret == ESP_ERR_NVS_NOT_FOUND) {
-                    ret = nvs_commit(handle);
-                }
-                nvs_close(handle);
-            }
+            // Use centralized NVS storage API
+            esp_err_t ret = nvs_storage_erase_key("device", nvs_key);
             if (ret == ESP_OK) {
                 ESP_LOGI(TAG, "%s cleared", key);
             } else {

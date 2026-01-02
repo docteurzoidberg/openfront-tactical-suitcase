@@ -32,6 +32,7 @@
 #include "system_status_module.h"
 #include "troops_module.h"
 #include "rgb_status.h"
+#include "nvs_storage.h"
 #include "wifi_credentials.h"
 #include "ots_logging.h"
 #include "serial_commands.h"
@@ -193,13 +194,9 @@ void app_main(void) {
     ESP_LOGI(TAG, "Firmware: %s", OTS_FIRMWARE_NAME);
     ESP_LOGI(TAG, "===========================================" );
     
-    // Initialize NVS
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
+    // Initialize NVS (centralized storage subsystem)
+    ESP_LOGI(TAG, "Initializing NVS storage...");
+    ESP_ERROR_CHECK(nvs_storage_init());
 
     // Initialize RGB status LED early so we can report boot failures
     if (rgb_status_init() != ESP_OK) {

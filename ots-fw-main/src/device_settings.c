@@ -1,12 +1,11 @@
 #include "device_settings.h"
 
 #include "config.h"
+#include "nvs_storage.h"
 
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_mac.h"
-
-#include "nvs.h"
 
 #include <string.h>
 
@@ -22,45 +21,26 @@ esp_err_t device_settings_init(void) {
     if (s_initialized) {
         return ESP_OK;
     }
-    // NVS is initialized by main.
+    // NVS is initialized by nvs_storage_init() in main.
     s_initialized = true;
     return ESP_OK;
 }
 
-static esp_err_t nvs_get_str_safe(const char *key, char *out, size_t out_len) {
-    if (!out || out_len == 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    out[0] = '\0';
-
-    nvs_handle_t handle;
-    esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
-    if (ret != ESP_OK) {
-        return ret;
-    }
-
-    size_t len = out_len;
-    ret = nvs_get_str(handle, key, out, &len);
-    nvs_close(handle);
-    return ret;
-}
-
 bool device_settings_owner_exists(void) {
-    char owner[64];
-    esp_err_t ret = nvs_get_str_safe(NVS_KEY_OWNER, owner, sizeof(owner));
-    return (ret == ESP_OK && owner[0] != '\0');
+    return nvs_storage_exists(NVS_NAMESPACE, NVS_KEY_OWNER);
 }
 
 esp_err_t device_settings_get_owner(char *out, size_t out_len) {
-    esp_err_t ret = nvs_get_str_safe(NVS_KEY_OWNER, out, out_len);
+    if (!out || out_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    esp_err_t ret = nvs_storage_get_string(NVS_NAMESPACE, NVS_KEY_OWNER, out, out_len);
     if (ret == ESP_OK) {
         return ESP_OK;
     }
 
     // Fallback to build-time owner (config.h) if no user owner stored.
-    if (!out || out_len == 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
     strncpy(out, OTS_DEVICE_OWNER, out_len - 1);
     out[out_len - 1] = '\0';
     return ESP_OK;
@@ -80,18 +60,7 @@ esp_err_t device_settings_set_owner(const char *owner) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    nvs_handle_t handle;
-    esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "nvs_open failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = nvs_set_str(handle, NVS_KEY_OWNER, owner);
-    if (ret == ESP_OK) {
-        ret = nvs_commit(handle);
-    }
-    nvs_close(handle);
+    esp_err_t ret = nvs_storage_set_string(NVS_NAMESPACE, NVS_KEY_OWNER, owner);
 
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "Owner name set: %s", owner);
@@ -114,7 +83,7 @@ esp_err_t device_settings_get_serial(char *out, size_t out_len) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t ret = nvs_get_str_safe(NVS_KEY_SERIAL, out, out_len);
+    esp_err_t ret = nvs_storage_get_string(NVS_NAMESPACE, NVS_KEY_SERIAL, out, out_len);
     if (ret == ESP_OK && out[0] != '\0') {
         return ESP_OK;
     }
@@ -144,18 +113,7 @@ esp_err_t device_settings_set_serial(const char *serial) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    nvs_handle_t handle;
-    esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "nvs_open failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = nvs_set_str(handle, NVS_KEY_SERIAL, serial);
-    if (ret == ESP_OK) {
-        ret = nvs_commit(handle);
-    }
-    nvs_close(handle);
+    esp_err_t ret = nvs_storage_set_string(NVS_NAMESPACE, NVS_KEY_SERIAL, serial);
 
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "Serial number set: %s", serial);
@@ -166,22 +124,9 @@ esp_err_t device_settings_set_serial(const char *serial) {
 }
 
 esp_err_t device_settings_factory_reset(void) {
-    nvs_handle_t handle;
-    esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "nvs_open failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
     // Erase owner name only (keep serial number)
-    ret = nvs_erase_key(handle, NVS_KEY_OWNER);
-    if (ret != ESP_OK && ret != ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGE(TAG, "Failed to erase owner: %s", esp_err_to_name(ret));
-    }
-
-    ret = nvs_commit(handle);
-    nvs_close(handle);
-
+    esp_err_t ret = nvs_storage_erase_key(NVS_NAMESPACE, NVS_KEY_OWNER);
+    
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "Factory reset complete (owner cleared, serial kept)");
     } else {

@@ -1,6 +1,6 @@
 #include "wifi_credentials.h"
 #include "config.h"
-#include "nvs_flash.h"
+#include "nvs_storage.h"
 #include "nvs.h"
 #include "esp_log.h"
 #include <string.h>
@@ -17,7 +17,7 @@ esp_err_t wifi_credentials_init(void) {
         return ESP_OK;
     }
     
-    // NVS should already be initialized by main.c
+    // NVS should already be initialized by nvs_storage_init() in main.c
     ESP_LOGI(TAG, "WiFi credentials storage initialized");
     credentials_initialized = true;
     return ESP_OK;
@@ -28,30 +28,26 @@ esp_err_t wifi_credentials_load(wifi_credentials_t *creds) {
         return ESP_ERR_INVALID_ARG;
     }
     
-    nvs_handle_t nvs_handle;
-    esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs_handle);
-    if (ret != ESP_OK) {
-        ESP_LOGD(TAG, "No stored credentials found");
-        return ESP_ERR_NOT_FOUND;
-    }
+    // Clear credentials first
+    memset(creds, 0, sizeof(wifi_credentials_t));
     
     // Read SSID
-    size_t ssid_len = sizeof(creds->ssid);
-    ret = nvs_get_str(nvs_handle, NVS_KEY_SSID, creds->ssid, &ssid_len);
+    esp_err_t ret = nvs_storage_get_string(NVS_NAMESPACE, NVS_KEY_SSID,
+                                            creds->ssid, sizeof(creds->ssid));
     if (ret != ESP_OK) {
-        nvs_close(nvs_handle);
-        return ret;
+        if (ret == ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGD(TAG, "No stored credentials found");
+        }
+        return (ret == ESP_ERR_NVS_NOT_FOUND) ? ESP_ERR_NOT_FOUND : ret;
     }
     
     // Read password
-    size_t password_len = sizeof(creds->password);
-    ret = nvs_get_str(nvs_handle, NVS_KEY_PASSWORD, creds->password, &password_len);
+    ret = nvs_storage_get_string(NVS_NAMESPACE, NVS_KEY_PASSWORD,
+                                  creds->password, sizeof(creds->password));
     if (ret != ESP_OK) {
-        nvs_close(nvs_handle);
         return ret;
     }
     
-    nvs_close(nvs_handle);
     ESP_LOGI(TAG, "Loaded credentials from NVS: SSID=%s", creds->ssid);
     return ESP_OK;
 }
@@ -61,82 +57,32 @@ esp_err_t wifi_credentials_save(const wifi_credentials_t *creds) {
         return ESP_ERR_INVALID_ARG;
     }
     
-    nvs_handle_t nvs_handle;
-    esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to open NVS: %s", esp_err_to_name(ret));
-        return ret;
-    }
-    
     // Write SSID
-    ret = nvs_set_str(nvs_handle, NVS_KEY_SSID, creds->ssid);
+    esp_err_t ret = nvs_storage_set_string(NVS_NAMESPACE, NVS_KEY_SSID, creds->ssid);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to write SSID: %s", esp_err_to_name(ret));
-        nvs_close(nvs_handle);
         return ret;
     }
     
     // Write password
-    ret = nvs_set_str(nvs_handle, NVS_KEY_PASSWORD, creds->password);
+    ret = nvs_storage_set_string(NVS_NAMESPACE, NVS_KEY_PASSWORD, creds->password);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to write password: %s", esp_err_to_name(ret));
-        nvs_close(nvs_handle);
         return ret;
     }
     
-    // Commit changes
-    ret = nvs_commit(nvs_handle);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to commit NVS: %s", esp_err_to_name(ret));
-        nvs_close(nvs_handle);
-        return ret;
-    }
-    
-    nvs_close(nvs_handle);
     ESP_LOGI(TAG, "Saved credentials to NVS: SSID=%s", creds->ssid);
     return ESP_OK;
 }
 
 bool wifi_credentials_exist(void) {
-    nvs_handle_t nvs_handle;
-    esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs_handle);
-    if (ret != ESP_OK) {
-        return false;
-    }
-    
-    // Try to read SSID
-    char ssid[WIFI_CREDENTIALS_MAX_SSID_LEN];
-    size_t ssid_len = sizeof(ssid);
-    ret = nvs_get_str(nvs_handle, NVS_KEY_SSID, ssid, &ssid_len);
-    nvs_close(nvs_handle);
-    
-    return (ret == ESP_OK && strlen(ssid) > 0);
+    return nvs_storage_exists(NVS_NAMESPACE, NVS_KEY_SSID);
 }
 
 esp_err_t wifi_credentials_clear(void) {
     ESP_LOGI(TAG, "=== Clearing WiFi credentials ===");
     
-    nvs_handle_t nvs_handle;
-    esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to open NVS: %s", esp_err_to_name(ret));
-        return ret;
-    }
-    
-    // Erase both keys
-    ESP_LOGI(TAG, "Erasing SSID key...");
-    esp_err_t ssid_ret = nvs_erase_key(nvs_handle, NVS_KEY_SSID);
-    ESP_LOGI(TAG, "SSID erase result: %s", esp_err_to_name(ssid_ret));
-    
-    ESP_LOGI(TAG, "Erasing password key...");
-    esp_err_t pwd_ret = nvs_erase_key(nvs_handle, NVS_KEY_PASSWORD);
-    ESP_LOGI(TAG, "Password erase result: %s", esp_err_to_name(pwd_ret));
-    
-    ESP_LOGI(TAG, "Committing NVS changes...");
-    ret = nvs_commit(nvs_handle);
-    ESP_LOGI(TAG, "NVS commit result: %s", esp_err_to_name(ret));
-    
-    nvs_close(nvs_handle);
+    esp_err_t ret = nvs_storage_erase_namespace(NVS_NAMESPACE);
     
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "✓ WiFi credentials cleared successfully");

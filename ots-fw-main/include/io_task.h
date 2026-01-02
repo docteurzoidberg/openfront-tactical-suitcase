@@ -19,18 +19,4 @@
  */
 esp_err_t io_task_start(void);
 
-/**
- * @brief Stop the I/O task
- * 
- * @return ESP_OK on success
- */
-esp_err_t io_task_stop(void);
-
-/**
- * @brief Check if I/O task is running
- * 
- * @return true if task is running
- */
-bool io_task_is_running(void);
-
 #endif // IO_TASK_H
