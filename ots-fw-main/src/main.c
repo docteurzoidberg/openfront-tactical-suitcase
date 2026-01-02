@@ -11,8 +11,10 @@
 #include "io_expander.h"
 #include "module_io.h"
 #include "protocol.h"
-#include "ws_server.h"
 #include "ws_protocol.h"
+#include "http_server.h"
+#include "ws_handlers.h"
+#include "webapp_handlers.h"
 #include "led_controller.h"
 #include "button_handler.h"
 #include "adc_handler.h"
@@ -31,7 +33,6 @@
 #include "rgb_status.h"
 #include "wifi_credentials.h"
 #include "ots_logging.h"
-#include "webapp_server.h"
 #include "serial_commands.h"
 
 static const char *TAG = "OTS_MAIN";
@@ -70,7 +71,7 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
         ESP_LOGI(TAG, "Network connected with IP: %s", ip_address);
         // Test-websocket stays YELLOW once WiFi is up, but do not override
         // an already-established userscript session.
-        if (ws_server_has_userscript()) {
+        if (ws_handlers_has_userscript()) {
             rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED);
         } else {
             rgb_status_set(RGB_STATUS_WIFI_ONLY);
@@ -81,12 +82,10 @@ static void handle_network_event(network_event_type_t event_type, const char *ip
             ESP_LOGE(TAG, "Failed to start HTTP OTA server");
         }
         
-        // Start WebSocket server only in normal STA mode.
-        if (!network_manager_is_portal_mode()) {
-            ESP_LOGI(TAG, "Starting WebSocket server (STA mode)");
-            ws_server_start();
-            // Trigger display refresh now that WSS server is started
-            system_status_refresh_display();
+        // HTTP server is already running with WebSocket handlers registered.
+        // Trigger display refresh now that network is ready.
+        ESP_LOGI(TAG, "Network ready - WebSocket server listening");
+        system_status_refresh_display();
         } else {
             ESP_LOGW(TAG, "Portal mode active; WS server not started");
         }
@@ -351,10 +350,59 @@ void app_main(void) {
     }
     network_manager_set_event_callback(handle_network_event);
 
-    // Start HTTP server on port 80 for easy access (redirects to HTTPS)
-    // The webapp is also served over HTTPS on port 3000 along with WebSocket
-    (void)webapp_server_init(80);
-    (void)webapp_server_start();
+    // Initialize WebSocket protocol
+    if (ws_protocol_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WebSocket protocol!");
+        return;
+    }
+
+    // ========== HTTP SERVER INITIALIZATION ==========
+    // Single HTTP/HTTPS server on port 3000 with TLS (WSS support).
+    // Components register their handlers with this core server.
+    
+    // TLS credentials (extern from tls_creds.c)
+    extern const char ots_server_cert_pem[];
+    extern const size_t ots_server_cert_pem_len;
+    extern const char ots_server_key_pem[];
+    extern const size_t ots_server_key_pem_len;
+    
+    http_server_config_t server_config = {
+        .port = WS_SERVER_PORT,  // 3000
+        .use_tls = WS_USE_TLS,   // true for HTTPS/WSS
+        .cert_pem = (const uint8_t *)ots_server_cert_pem,
+        .cert_len = ots_server_cert_pem_len,
+        .key_pem = (const uint8_t *)ots_server_key_pem,
+        .key_len = ots_server_key_pem_len,
+        .max_open_sockets = 8,
+        .max_uri_handlers = 32,
+        .close_fn = NULL  // Auto-set by http_server from ws_handlers
+    };
+    
+    if (http_server_init(&server_config) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize HTTP server!");
+        return;
+    }
+    
+    if (http_server_start() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start HTTP server!");
+        return;
+    }
+    
+    // Register WebSocket handlers (must be first for /ws route)
+    if (ws_handlers_register(http_server_get_handle()) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register WebSocket handlers!");
+        return;
+    }
+    ws_handlers_set_connection_callback(handle_ws_connection);
+    
+    // Register webapp handlers (UI and configuration endpoints)
+    if (webapp_handlers_register(http_server_get_handle()) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register webapp handlers!");
+        return;
+    }
+    
+    ESP_LOGI(TAG, "HTTP server ready with WebSocket and webapp handlers");
+    // ================================================
     
     // Initialize OTA managers (HTTP and Arduino protocols)
     if (ota_manager_init(OTA_PORT, OTA_HOSTNAME) != ESP_OK) {
@@ -362,29 +410,18 @@ void app_main(void) {
         return;
     }
     
-    // Initialize WebSocket protocol
-    if (ws_protocol_init() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize WebSocket protocol!");
-        return;
-    }
-    
-    // Initialize WebSocket server
-    if (ws_server_init(WS_SERVER_PORT) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize WebSocket server!");
-        return;
-    }
-    ws_server_set_connection_callback(handle_ws_connection);
-    
     // Start network services
     if (!have_stored_creds || strlen(wifi_creds.ssid) == 0) {
-        // Portal mode: start AP only; do not start WS server.
+        // Portal mode: start AP only.
         rgb_status_set(RGB_STATUS_WIFI_CONNECTING);  // Blue for captive portal setup
         (void)network_manager_start_captive_portal("OTS-SETUP", "");
+        webapp_handlers_set_mode(WEBAPP_MODE_CAPTIVE_PORTAL);
         ESP_LOGI(TAG, "*** Captive portal started, calling system_status_refresh_display() ***");
         // Trigger display refresh now that portal mode is active
         system_status_refresh_display();
     } else {
         rgb_status_set(RGB_STATUS_WIFI_CONNECTING);
+        webapp_handlers_set_mode(WEBAPP_MODE_NORMAL);
         if (network_manager_start() != ESP_OK) {
             ESP_LOGE(TAG, "Failed to start network!");
             return;

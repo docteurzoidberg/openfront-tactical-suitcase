@@ -183,7 +183,9 @@ else()
         "module_io.c"
         "protocol.c"
         "tls_creds.c"
-        "ws_server.c"
+        "http_server.c"
+        "ws_handlers.c"
+        "webapp_handlers.c"
         "ws_protocol.c"
         "led_controller.c"
         "button_handler.c"
@@ -206,7 +208,6 @@ else()
         "ots_logging.c"
         "wifi_credentials.c"
         "device_settings.c"
-        "webapp_server.c"
         "serial_commands.c"
     )
     set(COMPONENT_REQUIRES
@@ -217,6 +218,7 @@ else()
         json
         driver
         esp_http_server
+        esp_https_server
         app_update
     )
 endif()
