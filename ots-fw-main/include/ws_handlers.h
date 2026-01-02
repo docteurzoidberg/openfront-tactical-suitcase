@@ -97,6 +97,16 @@ esp_err_t ws_handlers_send_event(const game_event_t *event);
  */
 esp_err_t ws_handlers_broadcast_text(const char *data, size_t len);
 
+/**
+ * @brief Get session close callback function for HTTP server config
+ * 
+ * This callback is used by the HTTP server to clean up client state when
+ * a WebSocket connection closes abruptly (without CLOSE frame).
+ * 
+ * @return Function pointer for httpd_config_t.close_fn
+ */
+httpd_close_func ws_handlers_get_session_close_callback(void);
+
 #ifdef __cplusplus
 }
 #endif
