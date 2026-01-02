@@ -73,16 +73,6 @@ esp_err_t lcd_write_string(const char* str);
 esp_err_t lcd_write_line(uint8_t row, const char* str);
 
 /**
- * @brief Show splash screen on LCD
- * 
- * Displays project name and version, then clears after delay
- * 
- * @param delay_ms Duration to show splash screen (milliseconds)
- * @return esp_err_t ESP_OK on success
- */
-esp_err_t lcd_show_splash(uint32_t delay_ms);
-
-/**
  * @brief Write single character to LCD
  * 
  * @param c Character to write

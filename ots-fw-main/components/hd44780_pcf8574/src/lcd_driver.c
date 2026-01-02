@@ -1,10 +1,5 @@
 #include "lcd_driver.h"
 
-// Default version if not defined by application
-#ifndef OTS_FIRMWARE_VERSION
-#define OTS_FIRMWARE_VERSION "unknown"
-#endif
-
 #include <driver/i2c_master.h>
 #include <esp_log.h>
 #include <esp_rom_sys.h>
@@ -299,25 +294,4 @@ esp_err_t lcd_init(i2c_master_bus_handle_t bus, uint8_t i2c_addr) {
 
 bool lcd_is_initialized(void) {
     return s_initialized;
-}
-
-esp_err_t lcd_show_splash(uint32_t delay_ms) {
-    if (!s_initialized) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    (void)lcd_set_cursor(0, 0);
-    (void)lcd_write_string("  OpenFront.io  ");
-
-    char line2[LCD_COLS + 1];
-    snprintf(line2, sizeof(line2), "Tactical %-7s", OTS_FIRMWARE_VERSION);
-    (void)lcd_set_cursor(0, 1);
-    (void)lcd_write_string(line2);
-
-    if (delay_ms > 0) {
-        vTaskDelay(pdMS_TO_TICKS(delay_ms));
-        (void)lcd_clear();
-    }
-
-    return ESP_OK;
 }
