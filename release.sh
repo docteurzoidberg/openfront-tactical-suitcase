@@ -122,7 +122,7 @@ build_project() {
             
         firmware)
             echo -e "${BLUE}Building firmware...${NC}"
-            if (cd ots-fw-main && pio run > /dev/null 2>&1); then
+            if (cd ots-fw-main && pio run -e esp32-s3-dev > /dev/null 2>&1); then
                 echo -e "  ${GREEN}✓${NC} ots-fw-main/.pio/build/esp32-s3-dev/firmware.bin"
                 return 0
             else
