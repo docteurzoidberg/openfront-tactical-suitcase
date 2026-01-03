@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OTS Game Dashboard Bridge
 // @namespace    http://tampermonkey.net/
-// @version      2025-12-29.1
+// @version      2026-01-03.1
 // @description  Send game state and events to OTS controller
 // @author       [PUSH] DUCKDUCK
 // @author       DeloVan
@@ -3372,7 +3372,7 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
   }
 
   // src/main.user.ts
-  var VERSION = "2025-12-29.1";
+  var VERSION = "2026-01-03.1";
   (function start() {
     console.log(`[OTS Userscript] Version ${VERSION}`);
     let currentWsUrl = loadWsUrl();
