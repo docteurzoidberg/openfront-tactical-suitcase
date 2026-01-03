@@ -24,6 +24,7 @@
 #include "can_driver.h"
 #include "can_protocol.h"
 #include "ac101_driver.h"
+#include "audio_mixer.h"
 
 static const char *TAG = "MAIN";
 
@@ -34,8 +35,8 @@ static const char *TAG = "MAIN";
 
 // Global state
 static bool g_sd_mounted = false;
-static bool g_is_playing = false;
-static uint16_t g_current_sound_index = 0;
+// Removed g_is_playing - mixer tracks active sources
+static uint16_t g_last_sound_index = 0;  // Last requested sound
 static uint8_t g_last_error = CAN_ERR_OK;
 
 /*------------------------------------------------------------------------
@@ -513,26 +514,26 @@ static void serial_command_task(void *arg)
 /**
  * @brief Play WAV file by sound index
  */
-static esp_err_t play_sound_by_index(uint16_t sound_index) {
+static esp_err_t play_sound_by_index(uint16_t sound_index, uint8_t volume,
+                                     bool loop, bool interrupt,
+                                     audio_source_handle_t *handle) {
     char filepath[64];
     snprintf(filepath, sizeof(filepath), "/sdcard/sounds/%04d.wav", sound_index);
     
-    ESP_LOGI(TAG, "Playing sound index %d: %s", sound_index, filepath);
+    ESP_LOGI(TAG, "Playing sound %d: %s vol=%d%% loop=%d int=%d",
+             sound_index, filepath, volume, loop, interrupt);
     
-    g_current_sound_index = sound_index;
-    g_is_playing = true;
+    g_last_sound_index = sound_index;
     
-    esp_err_t ret = play_wav_from_sd(filepath);
-    
-    g_is_playing = false;
+    esp_err_t ret = audio_mixer_create_source(filepath, volume, loop, interrupt, handle);
     
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to play sound: %s", esp_err_to_name(ret));
-        g_last_error = CAN_ERR_FILE_NOT_FOUND;
+        ESP_LOGE(TAG, "Failed to create audio source: %s", esp_err_to_name(ret));
+        g_last_error = 1;
         return ret;
     }
     
-    g_last_error = CAN_ERR_OK;
+    g_last_error = 0;
     return ESP_OK;
 }
 
@@ -560,29 +561,32 @@ static void can_rx_task(void *arg) {
                     ESP_LOGI(TAG, "PLAY_SOUND: index=%d flags=0x%02X vol=%d req_id=%d",
                              sound_index, flags, volume, request_id);
                     
-                    // Check if we should interrupt current playback
-                    bool should_play = !g_is_playing || (flags & CAN_FLAG_INTERRUPT);
+                    int active_count = audio_mixer_get_active_count();
+                    bool should_play = (active_count < MAX_AUDIO_SOURCES) || (flags & CAN_FLAG_INTERRUPT);
                     
                     if (should_play) {
-                        esp_err_t ret = play_sound_by_index(sound_index);
+                        bool loop = (flags & CAN_FLAG_LOOP) != 0;
+                        bool interrupt = (flags & CAN_FLAG_INTERRUPT) != 0;
                         
-                        // Send ACK
+                        audio_source_handle_t handle;
+                        esp_err_t ret = play_sound_by_index(sound_index, volume, loop, interrupt, &handle);
+                        
                         can_frame_t ack_frame;
                         can_build_sound_ack(
                             ret == ESP_OK ? 1 : 0,
                             sound_index,
-                            ret == ESP_OK ? CAN_ERR_OK : g_last_error,
+                            ret == ESP_OK ? 0 : 1,
                             request_id,
                             &ack_frame
                         );
                         can_driver_send(&ack_frame);
-                        ESP_LOGI(TAG, "Sent ACK: ok=%d error=%d", ret == ESP_OK, g_last_error);
+                        ESP_LOGI(TAG, "Sent ACK: ok=%d handle=%d active=%d", 
+                                ret == ESP_OK, handle, audio_mixer_get_active_count());
                     } else {
-                        // Send NACK (busy)
                         can_frame_t ack_frame;
-                        can_build_sound_ack(0, sound_index, CAN_ERR_BUSY, request_id, &ack_frame);
+                        can_build_sound_ack(0, sound_index, 3, request_id, &ack_frame);
                         can_driver_send(&ack_frame);
-                        ESP_LOGI(TAG, "Sent NACK: busy");
+                        ESP_LOGW(TAG, "Sent NACK: max sources=%d", MAX_AUDIO_SOURCES);
                     }
                 }
             }
@@ -594,12 +598,17 @@ static void can_rx_task(void *arg) {
                 
                 if (can_parse_stop_sound(&frame, &sound_index, &flags, &request_id)) {
                     ESP_LOGI(TAG, "STOP_SOUND: index=%d flags=0x%02X", sound_index, flags);
-                    // TODO: Implement stop functionality (requires I2S control)
-                    g_is_playing = false;
                     
-                    // Send ACK
+                    if (flags & CAN_FLAG_STOP_ALL) {
+                        audio_mixer_stop_all();
+                        ESP_LOGI(TAG, "Stopped all sources");
+                    } else {
+                        audio_mixer_stop_all();
+                        ESP_LOGI(TAG, "Stopped sound %d (all sources)", sound_index);
+                    }
+                    
                     can_frame_t ack_frame;
-                    can_build_sound_ack(1, sound_index, CAN_ERR_OK, request_id, &ack_frame);
+                    can_build_sound_ack(1, sound_index, 0, request_id, &ack_frame);
                     can_driver_send(&ack_frame);
                 }
             }
@@ -608,16 +617,18 @@ static void can_rx_task(void *arg) {
         // Send periodic STATUS message every 5 seconds
         uptime_sec = esp_log_timestamp() / 1000;
         if (uptime_sec % 5 == 0) {
+            int active_sources = audio_mixer_get_active_count();
+            
             uint8_t state_bits = 0;
             if (g_sd_mounted) state_bits |= CAN_STATUS_SD_MOUNTED;
-            if (g_is_playing) state_bits |= CAN_STATUS_PLAYING;
-            if (g_last_error == CAN_ERR_OK) state_bits |= CAN_STATUS_READY;
-            if (g_last_error != CAN_ERR_OK) state_bits |= CAN_STATUS_ERROR;
+            if (active_sources > 0) state_bits |= CAN_STATUS_PLAYING;
+            if (g_last_error == 0) state_bits |= CAN_STATUS_READY;
+            if (g_last_error != 0) state_bits |= CAN_STATUS_ERROR;
             
             can_frame_t status_frame;
             can_build_sound_status(
                 state_bits,
-                g_is_playing ? g_current_sound_index : 0xFFFF,
+                active_sources > 0 ? g_last_sound_index : 0xFFFF,
                 g_last_error,
                 CAN_VOLUME_USE_POT,  // Volume from pot
                 uptime_sec,
@@ -625,7 +636,9 @@ static void can_rx_task(void *arg) {
             );
             can_driver_send(&status_frame);
             
-            // Delay to avoid sending multiple times in same second
+            ESP_LOGI(TAG, "STATUS: bits=0x%02X active=%d uptime=%lus",
+                     state_bits, active_sources, (unsigned long)uptime_sec);
+            
             vTaskDelay(pdMS_TO_TICKS(1000));
         }
     }
@@ -657,6 +670,10 @@ void app_main(void)
 
     // Init de base codec (volume, routing, etc.) à 44.1kHz
     ESP_ERROR_CHECK(init_audio_codec_ac101(44100));
+    
+    // Initialize audio mixer (multi-source playback)
+    ESP_LOGI(TAG, "Initializing audio mixer...");
+    ESP_ERROR_CHECK(audio_mixer_init());
     
     // Initialize CAN driver
     ESP_LOGI(TAG, "Initializing CAN driver...");

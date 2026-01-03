@@ -1,0 +1,97 @@
+#ifndef AUDIO_MIXER_H
+#define AUDIO_MIXER_H
+
+#include "esp_err.h"
+#include <stdint.h>
+#include <stdbool.h>
+
+// Maximum number of simultaneous audio sources
+#define MAX_AUDIO_SOURCES 4
+
+// Audio format
+#define MIXER_SAMPLE_RATE 44100
+#define MIXER_CHANNELS 2
+#define MIXER_BITS_PER_SAMPLE 16
+
+// Ring buffer size per source (in samples, stereo = 2 values per sample)
+#define SOURCE_BUFFER_SAMPLES 4096  // ~46ms at 44.1kHz stereo
+
+/**
+ * @brief Audio source handle
+ */
+typedef int audio_source_handle_t;
+#define INVALID_SOURCE_HANDLE -1
+
+/**
+ * @brief Audio source state
+ */
+typedef enum {
+    SOURCE_STATE_IDLE = 0,
+    SOURCE_STATE_PLAYING,
+    SOURCE_STATE_STOPPING,
+    SOURCE_STATE_STOPPED
+} audio_source_state_t;
+
+/**
+ * @brief Initialize audio mixer
+ * 
+ * Creates mixer task that combines all active sources and outputs to I2S.
+ * 
+ * @return ESP_OK on success, error otherwise
+ */
+esp_err_t audio_mixer_init(void);
+
+/**
+ * @brief Create a new audio source
+ * 
+ * @param filepath Path to WAV file on SD card
+ * @param volume Volume 0-100 (100 = full volume)
+ * @param loop true to loop playback, false for one-shot
+ * @param interrupt true to stop all other sources
+ * @param handle Output: source handle for control
+ * @return ESP_OK on success, error otherwise
+ */
+esp_err_t audio_mixer_create_source(const char *filepath, uint8_t volume, 
+                                     bool loop, bool interrupt,
+                                     audio_source_handle_t *handle);
+
+/**
+ * @brief Stop an audio source
+ * 
+ * @param handle Source handle to stop
+ * @return ESP_OK on success, error otherwise
+ */
+esp_err_t audio_mixer_stop_source(audio_source_handle_t handle);
+
+/**
+ * @brief Stop all audio sources
+ * 
+ * @return ESP_OK on success, error otherwise
+ */
+esp_err_t audio_mixer_stop_all(void);
+
+/**
+ * @brief Set source volume
+ * 
+ * @param handle Source handle
+ * @param volume Volume 0-100
+ * @return ESP_OK on success, error otherwise
+ */
+esp_err_t audio_mixer_set_volume(audio_source_handle_t handle, uint8_t volume);
+
+/**
+ * @brief Get number of active sources
+ * 
+ * @return Number of sources currently playing
+ */
+int audio_mixer_get_active_count(void);
+
+/**
+ * @brief Check if a source is still playing
+ * 
+ * @param handle Source handle
+ * @return true if playing, false otherwise
+ */
+bool audio_mixer_is_playing(audio_source_handle_t handle);
+
+#endif // AUDIO_MIXER_H
