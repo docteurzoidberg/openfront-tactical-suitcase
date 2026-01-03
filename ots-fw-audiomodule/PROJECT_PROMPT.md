@@ -51,7 +51,7 @@
 - **Language:** C (C99 standard)
 
 ### Audio Pipeline (Custom - No ESP-ADF)
-- **Decoder:** minimp3 (lightweight MP3 decoder) or libhelix
+- **Audio Format:** WAV only (16-bit PCM)
 - **File I/O:** ESP-VFS + FAT32 on SD card
 - **I2S Streaming:** ESP-IDF I2S driver
 - **Codec Control:** AC101 driver via I2C
@@ -69,7 +69,7 @@
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │  ┌──────────────┐      ┌──────────────┐      ┌───────────┐ │
-│  │ CAN RX Task  │─────▶│ Sound Queue  │─────▶│ MP3 Player│ │
+│  │ CAN RX Task  │─────▶│ Sound Queue  │─────▶│ WAV Player│ │
 │  │ (500kbps)    │      │ (FreeRTOS)   │      │ Task      │ │
 │  └──────────────┘      └──────────────┘      └─────┬─────┘ │
 │                                                      │       │
@@ -90,10 +90,10 @@
 ### Audio Playback Flow
 
 1. **CAN Command Received** (0x420 PLAY_SOUND)
-2. **Sound Index Extracted** (e.g., 1 = `/sounds/0001.mp3`)
+2. **Sound Index Extracted** (e.g., 1 = `/sounds/0001.wav`)
 3. **File Opened** from SD card via FatFS
-4. **MP3 Decoded** frame by frame using minimp3
-5. **PCM Streamed** to I2S DMA buffer
+4. **WAV Header Parsed** (sample rate, channels, bit depth)
+5. **PCM Data Streamed** to I2S DMA buffer
 6. **AC101 Plays** analog audio output
 
 ## CAN Protocol Implementation
@@ -152,23 +152,22 @@ Byte 5-7: Reserved
 ### Directory Layout
 ```
 /sounds/
-  ├── 0001.mp3  (game_start)
-  ├── 0002.mp3  (game_player_death)
-  ├── 0003.mp3  (game_victory)
-  ├── 0004.mp3  (game_defeat)
-  ├── 0010.mp3  (alert_atom)
-  ├── 0011.mp3  (alert_hydro)
-  ├── 0012.mp3  (alert_mirv)
-  ├── 0013.mp3  (alert_land)
-  ├── 0014.mp3  (alert_naval)
+  ├── 0001.wav  (game_start)
+  ├── 0002.wav  (game_player_death)
+  ├── 0003.wav  (game_victory)
+  ├── 0004.wav  (game_defeat)
+  ├── 0010.wav  (alert_atom)
+  ├── 0011.wav  (alert_hydro)
+  ├── 0012.wav  (alert_mirv)
+  ├── 0013.wav  (alert_land)
+  ├── 0014.wav  (alert_naval)
   └── ...
 ```
 
 ### File Naming Convention
-- **Format:** `NNNN.mp3` (4-digit zero-padded)
-- **Fallback:** `NNNN.wav` (if MP3 not available)
+- **Format:** `NNNN.wav` (4-digit zero-padded)
 - **Index Range:** 0001-9999
-- **Audio Specs:** MP3 320kbps, 44.1kHz stereo recommended
+- **Audio Specs:** 16-bit PCM WAV, 44.1kHz stereo/mono
 
 ### Sound Index Mapping
 
@@ -188,7 +187,6 @@ ots-fw-audiomodule/
     ├── CMakeLists.txt
     ├── main.c                  # Application entry point
     ├── can_protocol.c/h        # CAN message handling (future)
-    ├── audio_player.c/h        # MP3 playback engine (future)
     ├── ac101_driver.c/h        # AC101 codec control (future)
     └── sd_manager.c/h          # SD card file operations (future)
 ```
@@ -222,21 +220,14 @@ Edit `platformio.ini` to adjust:
 
 ## Development Roadmap
 
-### Phase 1: Audio Foundation ✅ (Current)
+### Phase 1: Audio Foundation ✅ (Complete)
 - [x] ESP-IDF base project setup
 - [x] I2S + AC101 codec initialization
 - [x] SD card mount (FAT32)
 - [x] WAV file playback
 - [x] UART command interface (basic testing)
 
-### Phase 2: MP3 Support 🔄 (Next)
-- [ ] Integrate minimp3 decoder library
-- [ ] Frame-by-frame MP3 decoding
-- [ ] I2S DMA buffer management
-- [ ] Memory optimization (PSRAM usage)
-- [ ] Gapless playback support
-
-### Phase 3: CAN Bus Integration ⏳
+### Phase 2: CAN Bus Integration 🔄 (Next)
 - [ ] TWAI driver initialization (500 kbps)
 - [ ] CAN protocol parser (0x420-0x423)
 - [ ] FreeRTOS queue for sound commands
@@ -280,7 +271,8 @@ HELLO\n      → Plays /sdcard/hello.wav
 
 **Last Updated:** January 3, 2026  
 **Framework:** ESP-IDF v5.4.2 (plain, no ESP-ADF)  
-**Status:** Phase 1 complete, Phase 2 in progress
+**Audio Format:** WAV only (16-bit PCM)  
+**Status:** Phase 1 complete, Phase 2 (CAN) in progress
 
 ### PLAY_SOUND payload (`0x420`)
 

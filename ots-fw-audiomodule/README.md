@@ -1,6 +1,6 @@
 # OTS Sound Module Firmware
 
-ESP32-A1S audio playback module for the OpenFront Tactical Suitcase (OTS). Provides CAN-controlled game event sounds with MP3 playback support.
+ESP32-A1S audio playback module for the OpenFront Tactical Suitcase (OTS). Provides CAN-controlled game event sounds with WAV playback.
 
 ## Quick Start
 
@@ -20,11 +20,10 @@ pio device monitor
 
 ## Features
 
-- ✅ WAV file playback from SD card
+- ✅ WAV file playback from SD card (16-bit PCM)
 - ✅ I2S audio output via AC101 codec
 - ✅ UART command interface (testing)
-- 🔄 MP3 decoding (in progress)
-- ⏳ CAN bus protocol (planned)
+- 🔄 CAN bus protocol (in progress)
 - ⏳ Integration with ots-fw-main controller
 
 ## Hardware Requirements
@@ -38,10 +37,9 @@ pio device monitor
 
 1. Format SD card as FAT32
 2. Create `/sounds/` directory
-3. Copy audio files:
-   - Format: `0001.mp3`, `0002.mp3`, etc.
-   - Fallback: `0001.wav`, `0002.wav`
-   - Specs: MP3 320kbps, 44.1kHz stereo
+3. Copy WAV audio files:
+   - Format: `0001.wav`, `0002.wav`, etc.
+   - Specs: 16-bit PCM, 44.1kHz, stereo or mono
 
 ## Testing
 
@@ -62,13 +60,13 @@ PING    → Play ping.wav
 ## Project Status
 
 **Phase 1:** ✅ Audio foundation complete (WAV playback)  
-**Phase 2:** 🔄 MP3 decoder integration (in progress)  
-**Phase 3:** ⏳ CAN bus communication (planned)  
-**Phase 4:** ⏳ Advanced features (queue, priority, volume control)  
-**Phase 5:** ⏳ Integration testing with main controller
+**Phase 2:** 🔄 CAN bus communication (in progress)  
+**Phase 3:** ⏳ Advanced features (queue, priority, volume control)  
+**Phase 4:** ⏳ Integration testing with main controller
 
 ---
 
 **Framework:** ESP-IDF v5.4.2  
 **Architecture:** Plain ESP-IDF (no ESP-ADF dependency)  
+**Audio Format:** WAV only (16-bit PCM)  
 **Last Updated:** January 3, 2026

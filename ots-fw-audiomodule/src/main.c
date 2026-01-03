@@ -242,7 +242,7 @@ static esp_err_t init_i2c(void)
 static esp_err_t init_audio_codec_ac101(uint32_t sample_rate_hz)
 {
     ESP_LOGI(TAG,
-             "TODO: init codec ES8388 ici (ADF/trombik) - sample_rate=%lu",
+             "TODO: AC101 codec register configuration - sample_rate=%lu",
              (unsigned long)sample_rate_hz);
 
     /* Exemple (pseudo-code, à adapter quand tu auras les composants ADF) :
