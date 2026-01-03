@@ -124,7 +124,8 @@ esp_err_t ws_protocol_build_handshake(const char *client_type, char *out_buffer,
     
     if (json_str) {
         if (strlen(json_str) < buffer_size) {
-            strcpy(out_buffer, json_str);
+            strncpy(out_buffer, json_str, buffer_size - 1);
+            out_buffer[buffer_size - 1] = '\0';
         } else {
             ret = ESP_ERR_INVALID_SIZE;
         }
@@ -165,7 +166,8 @@ esp_err_t ws_protocol_build_event(const game_event_t *event, char *out_buffer, s
     
     if (json_str) {
         if (strlen(json_str) < buffer_size) {
-            strcpy(out_buffer, json_str);
+            strncpy(out_buffer, json_str, buffer_size - 1);
+            out_buffer[buffer_size - 1] = '\0';
         } else {
             ESP_LOGW(TAG, "Buffer too small for event message");
             ret = ESP_ERR_INVALID_SIZE;
