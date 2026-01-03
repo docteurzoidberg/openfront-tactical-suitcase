@@ -200,6 +200,13 @@ ots/
   .github/
     copilot-instructions.md        # This file - workspace-level guidance
   
+  ots-fw-shared/                   # Shared firmware components
+    README.md                      # Shared components overview
+    components/
+      can_driver/                  # Generic CAN bus driver (used by all firmwares)
+        COMPONENT_PROMPT.md        # CAN driver documentation
+        CAN_PROTOCOL_ARCHITECTURE.md  # Multi-module CAN protocol design
+  
   ots-hardware/                    # Hardware specs & module designs
     copilot-project-context.md     # Hardware-specific context
     hardware-spec.md               # Controller & bus specification
@@ -243,6 +250,8 @@ ots/
 
 - **Protocol**: `/prompts/protocol-context.md` (1155 lines, complete specification)
 - **Release Process**: `/prompts/RELEASE.md` (Complete guide to version management and tagging)
+- **Shared Components**: `/ots-fw-shared/components/` (Firmware code shared across projects)
+  - CAN driver: `/ots-fw-shared/components/can_driver/`
 - **Component context**: Per-component `copilot-project-context.md` for detailed implementation guides
 - **Shared types**: `ots-shared/src/game.ts` (TypeScript protocol implementation)
 - **Firmware protocol**: `ots-fw-main/include/protocol.h` (C implementation)

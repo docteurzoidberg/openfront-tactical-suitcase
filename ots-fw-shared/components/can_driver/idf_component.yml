@@ -1,0 +1,7 @@
+version: "1.0.0"
+description: "Generic CAN bus driver for ESP32 (TWAI interface)"
+url: https://github.com/yourusername/ots
+
+dependencies:
+  idf:
+    version: ">=5.0.0"

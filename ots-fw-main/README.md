@@ -17,7 +17,7 @@ From this folder:
 # Install deps (PlatformIO)
 # (Assumes you already have PlatformIO set up in your environment)
 
-# Build production firmware
+# Build production firmware (ALWAYS specify -e esp32-s3-dev)
 pio run -e esp32-s3-dev
 
 # Flash production firmware
@@ -25,7 +25,13 @@ pio run -e esp32-s3-dev -t upload
 
 # Monitor serial
 pio device monitor
+
+# Build + Flash + Monitor (recommended workflow)
+pio run -e esp32-s3-dev -t upload && pio device monitor
 ```
+
+**⚠️ IMPORTANT:** Always use `-e esp32-s3-dev` flag for main firmware builds.
+Running `pio run` without `-e` flag will fail or use wrong environment!
 
 ## Running hardware tests
 

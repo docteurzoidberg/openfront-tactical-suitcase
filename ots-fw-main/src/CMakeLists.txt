@@ -201,6 +201,8 @@ else()
         "main_power_module.c"
         "system_status_module.c"
         "troops_module.c"
+        "sound_module.c"
+        "can_protocol.c"
         "rgb_status.c"
         "ots_logging.c"
         "nvs_storage.c"
@@ -222,6 +224,7 @@ else()
         ads1015_driver
         esp_http_server_core
         ws2812_rmt
+        can_driver
     )
 endif()
 

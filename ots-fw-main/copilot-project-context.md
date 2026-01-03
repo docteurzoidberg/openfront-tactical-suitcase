@@ -38,31 +38,47 @@ Firmware prompt index: `prompts/PROMPTS_INDEX.md`
 
 ## Build Tooling Notes (AI Reminder)
 
+**CRITICAL BUILD COMMANDS:**
+- **Main firmware:** ALWAYS use `pio run -e esp32-s3-dev`
+- **Hardware tests:** ALWAYS use `pio run -e test-<name>` (e.g., `test-i2c`, `test-outputs`)
+- **NEVER** run `pio run` without the `-e` flag - it will fail or use wrong environment
+
+**Build validation:**
 - Ignore this non-blocking warning: `esp_idf_size: error: unrecognized arguments: --ng`. Do not spend time debugging it unless the user explicitly asks.
-- When validating builds, treat success as: compile + link + `pio run` succeeds (even if `esp_idf_size` prints that warning).
-- Prefer PlatformIO env builds via `pio run -e <env>`; avoid custom scripts that swap CMakeLists files.
+- When validating builds, treat success as: compile + link + `pio run -e <env>` succeeds (even if `esp_idf_size` prints that warning).
 - Test selection must be driven by PlatformIO `build_flags` (`-DTEST_*`) first, with fallbacks only when not provided.
 - Keep terminal commands targeted (one env at a time) and run the smallest build needed to verify a change.
+
+**Available environments:**
+- `esp32-s3-dev` - Main production firmware (default)
+- `test-i2c` - I2C bus scan test
+- `test-outputs` - Output board LED test
+- `test-inputs` - Input board button test
+- `test-adc` - ADC slider test
+- `test-lcd` - LCD display test
+- `test-websocket` - WebSocket connection test
 
 ### Using PlatformIO (Recommended)
 
 PlatformIO provides a simpler build experience with automatic dependency management.
 
-**Build firmware:**
+**⚠️ CRITICAL: Always specify environment with `-e esp32-s3-dev` flag!**
+
+**Build main firmware:**
 ```bash
 cd ots-fw-main
-pio run
+pio run -e esp32-s3-dev
 ```
 
 **Clean build:**
 ```bash
-pio run -t clean
-pio run
+pio run -e esp32-s3-dev -t clean
+pio run -e esp32-s3-dev
 ```
 
 **Upload to device:**
 ```bash
-pio run -t upload
+pio run -e esp32-s3-dev -t upload
 ```
 
 **Monitor serial output:**
@@ -70,14 +86,24 @@ pio run -t upload
 pio device monitor
 ```
 
-**Build and upload:**
+**Build and upload (recommended):**
 ```bash
-pio run -t upload && pio device monitor
+pio run -e esp32-s3-dev -t upload && pio device monitor
+```
+
+**Common mistake:**
+```bash
+# ❌ WRONG - Do not run without -e flag
+pio run
+
+# ✅ CORRECT - Always specify environment
+pio run -e esp32-s3-dev
 ```
 
 **Configuration:**
 - Edit `platformio.ini` for board settings
-- Configure WiFi credentials in `include/config.h`
+- Default environment: `esp32-s3-dev` (main firmware)
+- Test environments: `test-i2c`, `test-outputs`, `test-inputs`, `test-adc`, `test-lcd`, `test-websocket`
 - Build output: `.pio/build/esp32-s3-dev/firmware.bin`
 
 ### Using ESP-IDF (Alternative)
@@ -441,6 +467,32 @@ See `docs/OTA_GUIDE.md` for detailed instructions and troubleshooting.
 - Update `CHANGELOG.md` with version and date
 - Update this context file for architecture changes
 - Update module prompt files if interfaces change
-- Test compilation with `pio run` (or `idf.py build` for ESP-IDF)
+- Test compilation with `pio run -e esp32-s3-dev` (ALWAYS use -e flag!)
 - Test OTA update procedure
 - Verify firmware size fits in partition (max ~2MB per partition)
+
+## Hardware Driver Components
+
+All hardware-specific logic is isolated into **independent ESP-IDF components**. For detailed information:
+
+- **Architecture Overview**: [docs/COMPONENTS_ARCHITECTURE.md](docs/COMPONENTS_ARCHITECTURE.md)
+  - Component types and structure
+  - Integration patterns
+  - Creating new components
+
+- **Individual Component Documentation**:
+  - **CAN Driver**: [/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md](/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md)
+    - Generic CAN bus (TWAI) driver with mock fallback
+    - Used by sound_module.c
+  - **MCP23017 Driver**: [components/mcp23017_driver/COMPONENT_PROMPT.md](components/mcp23017_driver/COMPONENT_PROMPT.md)
+    - I2C 16-pin I/O expander for buttons and LEDs
+    - Used by all hardware modules via io_expander.c
+  - **ADS1015 Driver**: [components/ads1015_driver/COMPONENT_PROMPT.md](components/ads1015_driver/COMPONENT_PROMPT.md)
+    - 12-bit I2C ADC for analog input (slider)
+    - Used by troops_module.c
+  - **HD44780 LCD Driver**: [components/hd44780_pcf8574/COMPONENT_PROMPT.md](components/hd44780_pcf8574/COMPONENT_PROMPT.md)
+    - I2C 16x2 character LCD display
+    - Used by troops_module.c
+  - **WS2812 Driver**: [components/ws2812_rmt/COMPONENT_PROMPT.md](components/ws2812_rmt/COMPONENT_PROMPT.md)
+    - RGB LED strip driver using RMT peripheral
+    - Reserved for future lighting module

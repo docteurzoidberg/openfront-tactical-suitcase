@@ -31,6 +31,7 @@
 #include "main_power_module.h"
 #include "system_status_module.h"
 #include "troops_module.h"
+#include "sound_module.h"
 #include "rgb_status.h"
 #include "nvs_storage.h"
 #include "wifi_credentials.h"
@@ -280,6 +281,8 @@ void app_main(void) {
     module_manager_register((hardware_module_t *)system_status_module_get());
     // Troops is LCD-driven and should be available regardless of MCP23017 presence.
     module_manager_register((hardware_module_t *)troops_module_get());
+    // Sound module uses CAN bus (not MCP23017), register independently
+    module_manager_register(sound_module_get());
     
     if (io_expanders_ready) {
         module_manager_register(&nuke_module);
