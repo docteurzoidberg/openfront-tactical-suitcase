@@ -21,8 +21,21 @@
 
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
+#include "can_driver.h"
+#include "can_protocol.h"
 
 static const char *TAG = "MAIN";
+
+// CAN bus configuration (GPIO 21=TX, GPIO 22=RX for ESP32-A1S)
+#define CAN_TX_GPIO GPIO_NUM_21
+#define CAN_RX_GPIO GPIO_NUM_22
+#define CAN_BITRATE 500000  // 500 kbps
+
+// Global state
+static bool g_sd_mounted = false;
+static bool g_is_playing = false;
+static uint16_t g_current_sound_index = 0;
+static uint8_t g_last_error = CAN_ERR_OK;
 
 /*------------------------------------------------------------------------
  *  Forward declarations
@@ -511,6 +524,131 @@ static void serial_command_task(void *arg)
 }
 
 /*------------------------------------------------------------------------
+ *  CAN Bus Tasks
+ *-----------------------------------------------------------------------*/
+
+/**
+ * @brief Play WAV file by sound index
+ */
+static esp_err_t play_sound_by_index(uint16_t sound_index) {
+    char filepath[64];
+    snprintf(filepath, sizeof(filepath), "/sdcard/sounds/%04d.wav", sound_index);
+    
+    ESP_LOGI(TAG, "Playing sound index %d: %s", sound_index, filepath);
+    
+    g_current_sound_index = sound_index;
+    g_is_playing = true;
+    
+    esp_err_t ret = play_wav_from_sd(filepath);
+    
+    g_is_playing = false;
+    
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to play sound: %s", esp_err_to_name(ret));
+        g_last_error = CAN_ERR_FILE_NOT_FOUND;
+        return ret;
+    }
+    
+    g_last_error = CAN_ERR_OK;
+    return ESP_OK;
+}
+
+/**
+ * @brief CAN RX task - receives and processes CAN messages
+ */
+static void can_rx_task(void *arg) {
+    can_frame_t frame;
+    uint32_t uptime_sec = 0;
+    
+    ESP_LOGI(TAG, "CAN RX task started");
+    
+    while (1) {
+        // Try to receive CAN frame (100ms timeout)
+        if (can_driver_receive(&frame, pdMS_TO_TICKS(100)) == ESP_OK) {
+            ESP_LOGI(TAG, "CAN RX: ID=0x%03lX DLC=%d", (unsigned long)frame.id, frame.dlc);
+            
+            // Handle PLAY_SOUND command (0x420)
+            if (frame.id == CAN_ID_PLAY_SOUND) {
+                uint16_t sound_index;
+                uint8_t flags, volume;
+                uint16_t request_id;
+                
+                if (can_parse_play_sound(&frame, &sound_index, &flags, &volume, &request_id)) {
+                    ESP_LOGI(TAG, "PLAY_SOUND: index=%d flags=0x%02X vol=%d req_id=%d",
+                             sound_index, flags, volume, request_id);
+                    
+                    // Check if we should interrupt current playback
+                    bool should_play = !g_is_playing || (flags & CAN_FLAG_INTERRUPT);
+                    
+                    if (should_play) {
+                        esp_err_t ret = play_sound_by_index(sound_index);
+                        
+                        // Send ACK
+                        can_frame_t ack_frame;
+                        can_build_sound_ack(
+                            ret == ESP_OK ? 1 : 0,
+                            sound_index,
+                            ret == ESP_OK ? CAN_ERR_OK : g_last_error,
+                            request_id,
+                            &ack_frame
+                        );
+                        can_driver_send(&ack_frame);
+                        ESP_LOGI(TAG, "Sent ACK: ok=%d error=%d", ret == ESP_OK, g_last_error);
+                    } else {
+                        // Send NACK (busy)
+                        can_frame_t ack_frame;
+                        can_build_sound_ack(0, sound_index, CAN_ERR_BUSY, request_id, &ack_frame);
+                        can_driver_send(&ack_frame);
+                        ESP_LOGI(TAG, "Sent NACK: busy");
+                    }
+                }
+            }
+            // Handle STOP_SOUND command (0x421)
+            else if (frame.id == CAN_ID_STOP_SOUND) {
+                uint16_t sound_index;
+                uint8_t flags;
+                uint16_t request_id;
+                
+                if (can_parse_stop_sound(&frame, &sound_index, &flags, &request_id)) {
+                    ESP_LOGI(TAG, "STOP_SOUND: index=%d flags=0x%02X", sound_index, flags);
+                    // TODO: Implement stop functionality (requires I2S control)
+                    g_is_playing = false;
+                    
+                    // Send ACK
+                    can_frame_t ack_frame;
+                    can_build_sound_ack(1, sound_index, CAN_ERR_OK, request_id, &ack_frame);
+                    can_driver_send(&ack_frame);
+                }
+            }
+        }
+        
+        // Send periodic STATUS message every 5 seconds
+        uptime_sec = esp_log_timestamp() / 1000;
+        if (uptime_sec % 5 == 0) {
+            uint8_t state_bits = 0;
+            if (g_sd_mounted) state_bits |= CAN_STATUS_SD_MOUNTED;
+            if (g_is_playing) state_bits |= CAN_STATUS_PLAYING;
+            if (g_last_error == CAN_ERR_OK) state_bits |= CAN_STATUS_READY;
+            if (g_last_error != CAN_ERR_OK) state_bits |= CAN_STATUS_ERROR;
+            
+            can_frame_t status_frame;
+            can_build_sound_status(
+                state_bits,
+                g_is_playing ? g_current_sound_index : 0xFFFF,
+                g_last_error,
+                CAN_VOLUME_USE_POT,  // Volume from pot
+                uptime_sec,
+                &status_frame
+            );
+            can_driver_send(&status_frame);
+            
+            // Delay to avoid sending multiple times in same second
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+    }
+}
+
+/*------------------------------------------------------------------------
  *  app_main
  *-----------------------------------------------------------------------*/
 
@@ -519,7 +657,15 @@ void app_main(void)
     ESP_ERROR_CHECK(init_nvs());
     ESP_LOGI(TAG, "NVS OK");
 
-    ESP_ERROR_CHECK(init_sdcard());
+    esp_err_t ret = init_sdcard();
+    if (ret == ESP_OK) {
+        g_sd_mounted = true;
+        ESP_LOGI(TAG, "SD card mounted successfully");
+    } else {
+        ESP_LOGW(TAG, "SD card mount failed, continuing without SD");
+        g_sd_mounted = false;
+    }
+    
     ESP_ERROR_CHECK(init_i2c());
 
     // I2S initialisé avec un sample rate par défaut, sera ajusté
@@ -528,7 +674,33 @@ void app_main(void)
 
     // Init de base codec (volume, routing, etc.) à 44.1kHz
     ESP_ERROR_CHECK(init_audio_codec_ac101(44100));
+    
+    // Initialize CAN driver
+    ESP_LOGI(TAG, "Initializing CAN driver...");
+    can_config_t can_config = {
+        .tx_gpio = CAN_TX_GPIO,
+        .rx_gpio = CAN_RX_GPIO,
+        .bitrate = CAN_BITRATE,
+        .loopback = false,
+        .mock_mode = false  // Try real hardware first
+    };
+    ret = can_driver_init(&can_config);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "CAN driver init failed, running in mock mode");
+    } else {
+        ESP_LOGI(TAG, "CAN driver initialized successfully");
+    }
 
+    // Start CAN RX task (higher priority)
+    xTaskCreatePinnedToCore(can_rx_task,
+                            "can_rx",
+                            4096,
+                            NULL,
+                            6,  // Higher priority than serial
+                            NULL,
+                            tskNO_AFFINITY);
+    
+    // Start serial command task (lower priority)
     xTaskCreatePinnedToCore(serial_command_task,
                             "serial_cmd",
                             4096,
@@ -537,6 +709,8 @@ void app_main(void)
                             NULL,
                             tskNO_AFFINITY);
 
-    ESP_LOGI(TAG,
-             "Setup complete, type a command (1, 2, HELLO, PING...)");
+    ESP_LOGI(TAG, "Setup complete!");
+    ESP_LOGI(TAG, "CAN bus ready on GPIO21(TX)/GPIO22(RX) @ 500kbps");
+    ESP_LOGI(TAG, "Waiting for PLAY_SOUND commands (0x420)...");
+    ESP_LOGI(TAG, "Serial commands: 1, 2, HELLO, PING");
 }
