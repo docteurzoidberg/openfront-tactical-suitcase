@@ -23,6 +23,7 @@
 #include "sdmmc_cmd.h"
 #include "can_driver.h"
 #include "can_protocol.h"
+#include "ac101_driver.h"
 
 static const char *TAG = "MAIN";
 
@@ -254,25 +255,7 @@ static esp_err_t init_i2c(void)
  */
 static esp_err_t init_audio_codec_ac101(uint32_t sample_rate_hz)
 {
-    ESP_LOGI(TAG,
-             "TODO: AC101 codec register configuration - sample_rate=%lu",
-             (unsigned long)sample_rate_hz);
-
-    /* Exemple (pseudo-code, à adapter quand tu auras les composants ADF) :
-
-    audio_hal_codec_config_t cfg = AUDIO_HAL_ES8388_DEFAULT();
-    cfg.i2s_iface.samples = AUDIO_HAL_16BITS;
-    cfg.i2s_iface.fmt = AUDIO_HAL_I2S_NORMAL;
-    cfg.i2s_iface.mode = AUDIO_HAL_MODE_SLAVE;
-    cfg.i2s_iface.sample_rate = sample_rate_hz;
-
-    audio_board_handle_t board = audio_board_init();
-    audio_hal_handle_t hal = audio_board_audio_hal(board);
-    audio_hal_ctrl_codec(hal, AUDIO_HAL_CODEC_MODE_DECODE, AUDIO_HAL_CTRL_START);
-
-    */
-
-    return ESP_OK;
+    return ac101_init(sample_rate_hz);
 }
 
 /*------------------------------------------------------------------------
