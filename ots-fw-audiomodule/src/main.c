@@ -25,6 +25,12 @@
 static const char *TAG = "MAIN";
 
 /*------------------------------------------------------------------------
+ *  Forward declarations
+ *-----------------------------------------------------------------------*/
+
+static esp_err_t init_audio_codec_ac101(uint32_t sample_rate_hz);
+
+/*------------------------------------------------------------------------
  *  Table commandes série -> nom de fichier WAV
  *-----------------------------------------------------------------------*/
 
@@ -123,7 +129,8 @@ static esp_err_t init_sdcard(void)
     ESP_LOGI(TAG, "Initializing SD card in SPI mode...");
 
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
-    host.slot = SDSPI_HOST_SLOT_1;
+    // In ESP-IDF 5.x, use SPI2_HOST or SPI3_HOST
+    spi_host_device_t spi_host = SPI2_HOST;
 
     spi_bus_config_t bus_cfg = {
         .mosi_io_num = SD_CARD_MOSI,
@@ -133,11 +140,11 @@ static esp_err_t init_sdcard(void)
         .quadhd_io_num = -1,
         .max_transfer_sz = 4000,
     };
-    ESP_ERROR_CHECK(spi_bus_initialize(host.slot, &bus_cfg, SPI_DMA_CH_AUTO));
+    ESP_ERROR_CHECK(spi_bus_initialize(spi_host, &bus_cfg, SPI_DMA_CH_AUTO));
 
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
     slot_config.gpio_cs = SD_CARD_CS;
-    slot_config.host_id = host.slot;
+    slot_config.host_id = spi_host;
 
     esp_vfs_fat_sdmmc_mount_config_t mount_cfg = {
         .format_if_mount_failed = false,
@@ -232,7 +239,7 @@ static esp_err_t init_i2c(void)
  *
  * Le skeleton se contente de fournir le point d’entrée.
  */
-static esp_err_t init_audio_codec_es8388(uint32_t sample_rate_hz)
+static esp_err_t init_audio_codec_ac101(uint32_t sample_rate_hz)
 {
     ESP_LOGI(TAG,
              "TODO: init codec ES8388 ici (ADF/trombik) - sample_rate=%lu",
