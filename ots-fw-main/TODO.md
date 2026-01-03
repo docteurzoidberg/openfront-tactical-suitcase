@@ -20,13 +20,16 @@
 - [ ] testing adc driver
   - Initial test firmware created (`test-adc`).
   - Next: verify ADS1015 readings + 1% threshold behavior.
+- [ ] testing device-to-device CAN communication
+  - Validate CAN protocol between main firmware and audio module
+  - Test PLAY_SOUND, STOP_SOUND, STATUS, ACK message exchange
+  - Verify 500kbps CAN bus stability with real hardware
 
 ## Automation
 
 - [x] generic Python device tool + tests
-  - `tools/ots_device_tool.py`
-  - `tools/tests/userscript_connect_disconnect.py`
-  - Wrapper entrypoint: `tools/test_ws_firmware.py`
+  - `tools/ots_device_tool.py` - Main CLI tool (serial, OTA, NVS, WiFi, WebSocket testing)
+  - `tools/tests/` - Automated test scripts
 
 ## Features
 
@@ -34,4 +37,3 @@
 
 ## Follow-ups
 
-- [ ] investigate persistent flash size mismatch warning (if still present on your board)

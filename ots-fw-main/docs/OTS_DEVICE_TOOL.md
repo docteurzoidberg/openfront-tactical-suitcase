@@ -1,17 +1,18 @@
 # OTS Device Tool (CLI)
 
-This repo includes a durable, stdlib-only Python CLI for interacting with an OTS firmware device over:
-- **Serial console** (send commands, monitor logs, save logs)
-- **OTA HTTP** (upload firmware)
+Comprehensive Python CLI for OTS firmware device management and testing.
 
-Tool location:
-- `ots-fw-main/tools/ots_device_tool.py`
+**Location:** `ots-fw-main/tools/ots_device_tool.py`
 
-## Goals
+**Features:**
+- Serial console monitoring with timestamps and logging
+- OTA firmware uploads via HTTP
+- NVS (non-volatile storage) management
+- WiFi provisioning and management
+- WebSocket testing capabilities
+- Device version and status queries
 
-- No external Python dependencies (stdlib-only).
-- Works in CI/dev shells without `pip install`.
-- Ergonomic defaults (auto-detect serial port, auto-detect device IP from serial logs when possible).
+**No Dependencies:** Pure Python 3 stdlib - works without pip install.
 
 ## Quick start
 
@@ -277,3 +278,28 @@ Flags:
 - Use `serial monitor` in one terminal and run `ota upload` in another.
 - If auto-host is flaky, pass `--host` explicitly.
 - If you see repeated disconnects, confirm WiFi credentials and AP signal strength.
+
+## Related Tools
+
+### embed_webapp.py
+
+Generates C header from webapp files with build hash injection. **Must run after editing webapp files.**
+
+```bash
+cd ots-fw-main/
+python3 tools/embed_webapp.py
+```
+
+See `tools/README.md` for full documentation.
+
+### Test Scripts
+
+Automated test scripts are in `tools/tests/`:
+- `ws_test.py` - WebSocket protocol testing
+- `test_websocket.sh` - Quick WebSocket smoke tests
+
+## See Also
+
+- `tools/README.md` - Complete tools overview
+- `docs/WIFI_PROVISIONING.md` - WiFi setup workflow
+- `docs/OTA_GUIDE.md` - OTA update details

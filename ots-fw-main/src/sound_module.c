@@ -247,15 +247,38 @@ esp_err_t sound_module_stop(uint16_t sound_index, bool stop_all) {
 }
 
 /**
+ * @brief Map soundId string to soundIndex number
+ * 
+ * Canonical mapping from /prompts/protocol-context.md:
+ * - game_start → 1
+ * - game_player_death → 2
+ * - game_victory → 3
+ * - game_defeat → 4
+ */
+static uint16_t map_sound_id_to_index(const char *sound_id) {
+    if (!sound_id) return 0;
+    
+    if (strcmp(sound_id, "game_start") == 0) return 1;
+    if (strcmp(sound_id, "game_player_death") == 0) return 2;
+    if (strcmp(sound_id, "game_victory") == 0) return 3;
+    if (strcmp(sound_id, "game_defeat") == 0) return 4;
+    
+    ESP_LOGW(TAG, "Unknown soundId: %s", sound_id);
+    return 0;
+}
+
+/**
  * @brief Parse SOUND_PLAY event data JSON
  * 
  * Expected format:
  * {
- *   "soundId": "alert.atom",
- *   "soundIndex": 10,
+ *   "soundId": "game_start",
+ *   "soundIndex": 1,
  *   "interrupt": true,
  *   "priority": "high"
  * }
+ * 
+ * Prefers soundIndex if present, falls back to mapping soundId string.
  */
 static esp_err_t parse_sound_play_data(const char *json_data, uint16_t *sound_index,
                                       bool *interrupt, bool *high_priority) {
@@ -269,11 +292,25 @@ static esp_err_t parse_sound_play_data(const char *json_data, uint16_t *sound_in
         return ESP_FAIL;
     }
     
-    // Try to get soundIndex directly
+    bool found_index = false;
+    
+    // Try to get soundIndex directly (numeric)
     cJSON *index_item = cJSON_GetObjectItem(root, "soundIndex");
     if (index_item && cJSON_IsNumber(index_item)) {
         *sound_index = (uint16_t)index_item->valueint;
+        found_index = true;
     } else {
+        // Fall back to mapping soundId string
+        cJSON *id_item = cJSON_GetObjectItem(root, "soundId");
+        if (id_item && cJSON_IsString(id_item)) {
+            *sound_index = map_sound_id_to_index(id_item->valuestring);
+            if (*sound_index > 0) {
+                found_index = true;
+            }
+        }
+    }
+    
+    if (!found_index) {
         cJSON_Delete(root);
         return ESP_ERR_NOT_FOUND;
     }

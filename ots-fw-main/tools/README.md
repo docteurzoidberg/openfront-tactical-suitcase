@@ -1,6 +1,12 @@
 # OTS Firmware Tools
 
-Quick reference for development tools in this directory.
+Development tools for OTS firmware development and device management.
+
+## Tools Overview
+
+- **embed_webapp.py** - Generates C header from webapp files with build hash injection
+- **ots_device_tool.py** - Comprehensive device management CLI (serial monitor, OTA uploads, NVS management)
+- **tests/** - Test scripts for firmware validation
 
 ## embed_webapp.py
 
@@ -42,22 +48,47 @@ pio run -e esp32-s3-dev -t upload
 
 ## ots_device_tool.py
 
-**Purpose:** Comprehensive device management CLI (serial + OTA).
+**Purpose:** All-in-one device management tool.
+
+**Features:**
+- Serial monitoring with timestamps and log file support
+- OTA firmware uploads via HTTP
+- NVS (non-volatile storage) management
+- Device reboot and command sending
+- WebSocket testing
 
 **Common Commands:**
 
 ### Serial Monitor
 ```bash
+# Auto-detect port
 python3 tools/ots_device_tool.py serial monitor --port auto
+
+# With timestamps and log file
+python3 tools/ots_device_tool.py serial monitor --port auto --timestamps --log-file logs/test.log
 ```
 
-### Send Commands
+### OTA Firmware Upload
 ```bash
-# WiFi status
-python3 tools/ots_device_tool.py serial send --port auto --cmd "wifi-status"
+# Upload firmware to device
+python3 tools/ots_device_tool.py ota upload \
+  --host 192.168.77.153 \
+  --port 3232 \
+  --bin .pio/build/esp32-s3-dev/firmware.bin
 
-# Reboot
+# Using mDNS hostname
+python3 tools/ots_device_tool.py ota upload \
+  --host ots-fw-main.local \
+  --bin .pio/build/esp32-s3-dev/firmware.bin
+```
+
+### Device Management
+```bash
+# Reboot device
 python3 tools/ots_device_tool.py serial reboot --port auto
+
+# Send command to device
+python3 tools/ots_device_tool.py serial send --port auto --cmd "wifi-status"
 ```
 
 ### NVS Owner Management
@@ -72,24 +103,4 @@ python3 tools/ots_device_tool.py nvs clear-owner --port auto
 python3 tools/ots_device_tool.py nvs get owner_name --port auto
 ```
 
-### OTA Upload
-```bash
-python3 tools/ots_device_tool.py ota upload \
-  --host 192.168.1.50 \
-  --bin .pio/build/esp32-s3-dev/firmware.bin
-```
-
 See [../docs/OTS_DEVICE_TOOL.md](../docs/OTS_DEVICE_TOOL.md) for full documentation.
-
-## reset_owner.py
-
-**Purpose:** HTTP-based owner name reset (alternative to serial method).
-
-**Usage:**
-```bash
-python3 tools/reset_owner.py 192.168.77.153
-```
-
-**When to use:** When device is accessible via HTTP but serial is unavailable.
-
-**Equivalent to:** `python3 tools/ots_device_tool.py nvs clear-owner --port auto`

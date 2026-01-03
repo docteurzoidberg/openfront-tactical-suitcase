@@ -91,10 +91,11 @@ Same as TC2 but without sending a close frame (drop the TCP socket).
 From `ots-fw-main/`:
 
 - Run tests (no flash):
-  - `python3 tools/test_ws_firmware.py --host <device-ip> --serial-port /dev/ttyACM1 --insecure`
+  - `python3 tools/ots_device_tool.py ws test --host <device-ip> --serial-port /dev/ttyACM0 --insecure`
 
 - Flash + run:
-  - `python3 tools/test_ws_firmware.py --upload --env esp32-s3-dev --host <device-ip> --serial-port /dev/ttyACM1 --insecure`
+  - First: `pio run -e esp32-s3-dev -t upload --upload-port /dev/ttyACM0`
+  - Then: `python3 tools/ots_device_tool.py ws test --host <device-ip> --serial-port /dev/ttyACM0 --insecure`
 
 ## Expected Outcome
 - Script prints PASS/FAIL per test case.
