@@ -68,7 +68,7 @@ static const size_t s_command_table_len =
 
 #define I2C_PORT     I2C_NUM_0
 #define I2C_FREQ_HZ  100000
-#define ES8388_ADDR  0x10   // valeur habituelle sur cette carte
+#define AC101_ADDR   0x1A   // AC101 codec I2C address on ESP32-A1S
 
 #define I2S_PORT     I2S_NUM_0
 
@@ -201,13 +201,13 @@ static esp_err_t init_i2s_default(uint32_t sample_rate)
 }
 
 /*------------------------------------------------------------------------
- *  I2C + Codec ES8388 (crochet vers trombik / ESP-ADF)
+ *  I2C + Codec AC101 (Plain ESP-IDF)
  *-----------------------------------------------------------------------*/
 
 static esp_err_t init_i2c(void)
 {
-    ESP_LOGI(TAG, "Initializing I2C for codec (ES8388 @ 0x%02X)",
-             ES8388_ADDR);
+    ESP_LOGI(TAG, "Initializing I2C for codec (AC101 @ 0x%02X)",
+             AC101_ADDR);
 
     i2c_config_t cfg = {
         .mode = I2C_MODE_MASTER,
@@ -421,7 +421,7 @@ static esp_err_t play_wav_from_sd(const char *rel_path)
                                     : I2S_CHANNEL_STEREO));
 
     // Ré-init éventuelle du codec à ce sample rate
-    ESP_ERROR_CHECK(init_audio_codec_es8388(info.sample_rate));
+    ESP_ERROR_CHECK(init_audio_codec_ac101(info.sample_rate));
 
     uint8_t buf[1024];
     size_t total = 0;
@@ -520,7 +520,7 @@ void app_main(void)
     ESP_ERROR_CHECK(init_i2s_default(44100));
 
     // Init de base codec (volume, routing, etc.) à 44.1kHz
-    ESP_ERROR_CHECK(init_audio_codec_es8388(44100));
+    ESP_ERROR_CHECK(init_audio_codec_ac101(44100));
 
     xTaskCreatePinnedToCore(serial_command_task,
                             "serial_cmd",
