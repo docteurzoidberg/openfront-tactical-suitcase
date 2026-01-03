@@ -66,13 +66,13 @@ esp_err_t can_driver_init(const can_config_t *config) {
         // Configure timing based on bitrate
         twai_timing_config_t t_config;
         if (s_driver.config.bitrate == 500000) {
-            t_config = TWAI_TIMING_CONFIG_500KBITS();
+            t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_500KBITS();
         } else if (s_driver.config.bitrate == 250000) {
-            t_config = TWAI_TIMING_CONFIG_250KBITS();
+            t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_250KBITS();
         } else if (s_driver.config.bitrate == 125000) {
-            t_config = TWAI_TIMING_CONFIG_125KBITS();
+            t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_125KBITS();
         } else if (s_driver.config.bitrate == 1000000) {
-            t_config = TWAI_TIMING_CONFIG_1MBITS();
+            t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_1MBITS();
         } else {
             ESP_LOGE(TAG, "Unsupported bitrate: %lu (use 125k/250k/500k/1M)", 
                      (unsigned long)s_driver.config.bitrate);
@@ -180,37 +180,36 @@ esp_err_t can_driver_send(const can_frame_t *frame) {
         
         s_driver.tx_count++;
         return ESP_OK;
-    } else {
-        // Physical mode: Send via TWAI
-        twai_message_t msg = {0};
-        msg.identifier = frame->id;
-        msg.data_length_code = frame->dlc;
-        msg.rtr = frame->rtr ? 1 : 0;
-        msg.extd = frame->extended ? 1 : 0;
-        memcpy(msg.data, frame->data, 8);
-        
-        // Try to transmit with 100ms timeout
-        esp_err_t ret = twai_transmit(&msg, pdMS_TO_TICKS(100));
-        if (ret == ESP_OK) {
-            s_driver.tx_count++;
-            ESP_LOGD(TAG, "TX: ID=0x%03X DLC=%d", frame->id, frame->dlc);
-        } else if (ret == ESP_ERR_TIMEOUT) {
-            s_driver.tx_errors++;
-            ESP_LOGW(TAG, "TX timeout (bus busy or not connected)");
-        } else {
-            s_driver.tx_errors++;
-            ESP_LOGW(TAG, "TX failed: %s", esp_err_to_name(ret));
-        }
-        
-        return ret
-        //     ESP_LOGW(TAG, "TX failed: %s", esp_err_to_name(ret));
-        // }
-        // return ret;
-        
-        ESP_LOGE(TAG, "Physical mode not implemented");
-        s_driver.tx_errors++;
-        return ESP_ERR_NOT_SUPPORTED;
     }
+    
+#if CONFIG_CAN_DRIVER_USE_TWAI
+    // Physical mode: Send via TWAI
+    twai_message_t msg = {0};
+    msg.identifier = frame->id;
+    msg.data_length_code = frame->dlc;
+    msg.rtr = frame->rtr ? 1 : 0;
+    msg.extd = frame->extended ? 1 : 0;
+    memcpy(msg.data, frame->data, 8);
+    
+    // Try to transmit with 100ms timeout
+    esp_err_t ret = twai_transmit(&msg, pdMS_TO_TICKS(100));
+    if (ret == ESP_OK) {
+        s_driver.tx_count++;
+        ESP_LOGD(TAG, "TX: ID=0x%03X DLC=%d", frame->id, frame->dlc);
+    } else if (ret == ESP_ERR_TIMEOUT) {
+        s_driver.tx_errors++;
+        ESP_LOGW(TAG, "TX timeout (bus busy or not connected)");
+    } else {
+        s_driver.tx_errors++;
+        ESP_LOGW(TAG, "TX failed: %s", esp_err_to_name(ret));
+    }
+    
+    return ret;
+#else
+    ESP_LOGE(TAG, "Physical mode not implemented");
+    s_driver.tx_errors++;
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
 }
 
 /**
@@ -227,34 +226,37 @@ esp_err_t can_driver_receive(can_frame_t *frame, uint32_t timeout_ms) {
     if (s_driver.mock_mode) {
         // Mock mode: No incoming frames
         return ESP_ERR_TIMEOUT;
-    } else {
-        // Physical mode: Receive via TWAI
-        twai_message_t msg;
-        esp_err_t ret = twai_receive(&msg, pdMS_TO_TICKS(timeout_ms));
-        
-        if (ret == ESP_OK) {
-            frame->id = msg.identifier;
-            frame->dlc = msg.data_length_code;
-            frame->rtr = msg.rtr ? true : false;
-            frame->extended = msg.extd ? true : false;
-            memcpy(frame->data, msg.data, 8);
-            
-            s_driver.rx_count++;
-            
-            ESP_LOGI(TAG, "RX: ID=0x%03X DLC=%d RTR=%d EXT=%d DATA=[%02X %02X %02X %02X %02X %02X %02X %02X]",
-                     frame->id, frame->dlc, frame->rtr, frame->extended,
-                     frame->data[0], frame->data[1], frame->data[2], frame->data[3],
-                     frame->data[4], frame->data[5], frame->data[6], frame->data[7]);
-        } else if (ret == ESP_ERR_TIMEOUT) {
-            // Timeout is normal, not an error
-        } else {
-            s_driver.rx_errors++;
-            ESP_LOGW(TAG, "RX error: %s", esp_err_to_name(ret));
-        }
-        
-        return ret
-        return ESP_ERR_NOT_SUPPORTED;
     }
+    
+#if CONFIG_CAN_DRIVER_USE_TWAI
+    // Physical mode: Receive via TWAI
+    twai_message_t msg;
+    esp_err_t ret = twai_receive(&msg, pdMS_TO_TICKS(timeout_ms));
+    
+    if (ret == ESP_OK) {
+        frame->id = msg.identifier;
+        frame->dlc = msg.data_length_code;
+        frame->rtr = msg.rtr ? true : false;
+        frame->extended = msg.extd ? true : false;
+        memcpy(frame->data, msg.data, 8);
+        
+        s_driver.rx_count++;
+        
+        ESP_LOGI(TAG, "RX: ID=0x%03X DLC=%d RTR=%d EXT=%d DATA=[%02X %02X %02X %02X %02X %02X %02X %02X]",
+                 frame->id, frame->dlc, frame->rtr, frame->extended,
+                 frame->data[0], frame->data[1], frame->data[2], frame->data[3],
+                 frame->data[4], frame->data[5], frame->data[6], frame->data[7]);
+    } else if (ret == ESP_ERR_TIMEOUT) {
+        // Timeout is normal, not an error
+    } else {
+        s_driver.rx_errors++;
+        ESP_LOGW(TAG, "RX error: %s", esp_err_to_name(ret));
+    }
+    
+    return ret;
+#else
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
 }
 
 /**
@@ -264,12 +266,13 @@ uint32_t can_driver_rx_available(void) {
     if (!s_driver.initialized || s_driver.mock_mode) {
         return 0;
     }
-    Query TWAI RX queue depth
+#if CONFIG_CAN_DRIVER_USE_TWAI
+    // Query TWAI RX queue depth
     twai_status_info_t status;
     if (twai_get_status_info(&status) == ESP_OK) {
         return status.msgs_to_rx;
-        return status.msgs_to_rx;
-    // }
+    }
+#endif
     
     return 0;
 }

@@ -4,6 +4,7 @@
 #include "event_dispatcher.h"
 #include "cJSON.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include <string.h>
 
 static const char *TAG = "SOUND_MODULE";
@@ -25,7 +26,7 @@ static uint16_t s_request_counter = 0;
 static esp_err_t sound_init(void);
 static esp_err_t sound_update(void);
 static bool sound_handle_event(const internal_event_t *event);
-static module_status_t sound_get_status(void);
+static void sound_get_status(module_status_t *status);
 static esp_err_t sound_shutdown(void);
 
 // Helper functions
@@ -100,7 +101,7 @@ static bool sound_handle_event(const internal_event_t *event) {
     if (!s_state.initialized || !event) return false;
     
     // Only handle SOUND_PLAY events
-    if (event->game_event.type != GAME_EVENT_SOUND_PLAY) {
+    if (event->type != GAME_EVENT_SOUND_PLAY) {
         return false;
     }
     
@@ -111,12 +112,12 @@ static bool sound_handle_event(const internal_event_t *event) {
     bool interrupt = false;
     bool high_priority = false;
     
-    esp_err_t ret = parse_sound_play_data(event->game_event.data, 
+    esp_err_t ret = parse_sound_play_data(event->data, 
                                           &sound_index, &interrupt, &high_priority);
     
     if (ret != ESP_OK) {
         // If no explicit sound index, try to map from event message or type
-        sound_index = map_event_to_sound_index(event->game_event.type);
+        sound_index = map_event_to_sound_index(event->type);
         if (sound_index == 0) {
             ESP_LOGW(TAG, "Failed to parse sound data and no fallback mapping");
             s_state.sounds_failed++;
@@ -143,22 +144,21 @@ static bool sound_handle_event(const internal_event_t *event) {
 /**
  * @brief Get module status
  */
-static module_status_t sound_get_status(void) {
-    module_status_t status = {0};
-    status.initialized = s_state.initialized;
-    status.operational = s_state.can_ready;
-    status.error_count = s_state.sounds_failed;
+static void sound_get_status(module_status_t *status) {
+    if (!status) return;
+    
+    status->initialized = s_state.initialized;
+    status->operational = s_state.can_ready;
+    status->error_count = s_state.sounds_failed;
     
     if (!s_state.can_ready) {
-        snprintf(status.last_error, sizeof(status.last_error), "CAN driver not ready");
+        snprintf(status->last_error, sizeof(status->last_error), "CAN driver not ready");
     } else if (s_state.sounds_failed > 0) {
-        snprintf(status.last_error, sizeof(status.last_error), 
+        snprintf(status->last_error, sizeof(status->last_error), 
                 "%lu sounds failed to play", (unsigned long)s_state.sounds_failed);
     } else {
-        snprintf(status.last_error, sizeof(status.last_error), "OK");
+        snprintf(status->last_error, sizeof(status->last_error), "OK");
     }
-    
-    return status;
 }
 
 /**
