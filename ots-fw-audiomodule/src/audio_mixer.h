@@ -36,10 +36,22 @@ typedef enum {
  * @brief Initialize audio mixer
  * 
  * Creates mixer task that combines all active sources and outputs to I2S.
+ * Note: Audio hardware (I2S/codec) must be initialized separately.
+ * Call audio_mixer_set_hardware_ready(true) after successful hardware init.
  * 
  * @return ESP_OK on success, error otherwise
  */
 esp_err_t audio_mixer_init(void);
+
+/**
+ * @brief Set hardware ready state
+ * 
+ * Should be called after I2S and codec are successfully initialized.
+ * When false, mixer task will skip I2S writes to prevent crashes.
+ * 
+ * @param ready true if hardware is working, false otherwise
+ */
+void audio_mixer_set_hardware_ready(bool ready);
 
 /**
  * @brief Create a new audio source
@@ -54,6 +66,21 @@ esp_err_t audio_mixer_init(void);
 esp_err_t audio_mixer_create_source(const char *filepath, uint8_t volume, 
                                      bool loop, bool interrupt,
                                      audio_source_handle_t *handle);
+
+/**
+ * @brief Create an audio source from memory buffer
+ * 
+ * @param pcm_data Pointer to PCM audio data
+ * @param pcm_size Size of PCM data in bytes
+ * @param volume Volume 0-100 (100 = full volume)
+ * @param loop true to loop playback, false for one-shot
+ * @param interrupt true to stop all other sources
+ * @param handle Output: source handle for control
+ * @return ESP_OK on success, error otherwise
+ */
+esp_err_t audio_mixer_create_source_from_memory(const uint8_t *pcm_data, size_t pcm_size,
+                                                 uint8_t volume, bool loop, bool interrupt,
+                                                 audio_source_handle_t *handle);
 
 /**
  * @brief Stop an audio source

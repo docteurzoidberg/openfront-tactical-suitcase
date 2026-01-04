@@ -1,0 +1,10 @@
+idf_component_register(
+    SRCS 
+        "main.c"
+        "es8388.c"
+        "i2s_audio.c"
+        "test_tone_data.c"
+        "silence_padding.c"
+    INCLUDE_DIRS 
+        "../include"
+)

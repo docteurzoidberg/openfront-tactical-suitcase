@@ -1,0 +1,54 @@
+# ESP32-A1S Audio Module Configuration
+# Minimal configuration for CAN-only audio module (no network, no HTTP)
+
+# === Core Performance ===
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP32_DEFAULT_CPU_FREQ_240=y
+
+# === Disable ALL Network Stack Components ===
+# WiFi
+CONFIG_ESP_WIFI_ENABLED=n
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
+
+# Ethernet
+CONFIG_ETH_ENABLED=n
+
+# TCP/IP Stack
+CONFIG_LWIP_ENABLE=n
+
+# === Disable HTTP Components (this is what causes httpd_main.c compilation) ===
+# HTTP Server
+# CONFIG_ESP_HTTP_SERVER is not set
+
+# HTTP Client  
+# CONFIG_ESP_HTTP_CLIENT is not set
+
+# HTTPS OTA
+# CONFIG_ESP_HTTPS_OTA is not set
+
+# HTTPS Server
+# CONFIG_ESP_HTTPS_SERVER is not set
+
+# === Disable Other Network Services ===
+# mDNS
+# CONFIG_MDNS is not set
+
+# MQTT
+# CONFIG_MQTT_PROTOCOL_311 is not set
+
+# WebSocket
+# CONFIG_WS_TRANSPORT is not set
+
+# === Keep Required Components ===
+# SPI (for SD card)
+CONFIG_SPI_MASTER_ISR_IN_IRAM=y
+
+# I2C (for AC101 codec)
+CONFIG_I2C_ENABLE_DEBUG_LOG=n
+
+# I2S (for audio)
+CONFIG_I2S_ENABLE_DEBUG_LOG=n
+
+# FATFS (for SD card)
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=255

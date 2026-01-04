@@ -1,6 +1,9 @@
 #include "audio_mixer.h"
-#include "driver/i2s.h"
+#include "audio_decoder.h"
+#include "wav_utils.h"
+#include "hardware/i2s.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/stream_buffer.h"
@@ -9,15 +12,6 @@
 #include <stdio.h>
 
 static const char *TAG = "MIXER";
-
-// WAV file info
-typedef struct {
-    uint32_t sample_rate;
-    uint16_t num_channels;
-    uint16_t bits_per_sample;
-    uint32_t data_offset;
-    uint32_t data_size;
-} wav_info_t;
 
 // Audio source structure
 typedef struct {
@@ -30,30 +24,31 @@ typedef struct {
     // Stream buffer for PCM data
     StreamBufferHandle_t buffer;
     
-    // Decoder task
+    // Decoder task and params
     TaskHandle_t decoder_task;
+    decoder_params_t decoder_params;
     
     // WAV info
     wav_info_t wav_info;
     
     // Playback state
     uint32_t samples_played;
+    bool stopping;
     bool eof_reached;
 } audio_source_t;
 
 // Global mixer state
 static struct {
     bool initialized;
+    bool hardware_ready;  // Track if I2S/codec hardware is working
     audio_source_t sources[MAX_AUDIO_SOURCES];
     SemaphoreHandle_t mutex;
     TaskHandle_t mixer_task;
-    int16_t mix_buffer[SOURCE_BUFFER_SAMPLES * 2];  // Stereo
+    int16_t *mix_buffer;  // Dynamically allocated stereo mix buffer
 } g_mixer = {0};
 
 // Forward declarations
-static void decoder_task(void *arg);
 static void mixer_task(void *arg);
-static esp_err_t parse_wav_header(FILE *fp, wav_info_t *info);
 
 /**
  * @brief Initialize audio mixer
@@ -65,6 +60,23 @@ esp_err_t audio_mixer_init(void) {
     }
     
     ESP_LOGI(TAG, "Initializing audio mixer (max %d sources)", MAX_AUDIO_SOURCES);
+    
+    // Assume hardware is NOT ready (main.c will set this after successful I2S/codec init)
+    g_mixer.hardware_ready = false;
+    
+    // Allocate mix buffer from heap (use PSRAM if available, fallback to internal RAM)
+    g_mixer.mix_buffer = (int16_t *)heap_caps_malloc(SOURCE_BUFFER_SAMPLES * 2 * sizeof(int16_t), 
+                                                      MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (g_mixer.mix_buffer == NULL) {
+        ESP_LOGW(TAG, "PSRAM allocation failed, using internal RAM for mix buffer");
+        g_mixer.mix_buffer = (int16_t *)malloc(SOURCE_BUFFER_SAMPLES * 2 * sizeof(int16_t));
+        if (g_mixer.mix_buffer == NULL) {
+            ESP_LOGE(TAG, "Failed to allocate mix buffer");
+            return ESP_FAIL;
+        }
+    } else {
+        ESP_LOGI(TAG, "Mix buffer allocated from PSRAM (%zu bytes)", SOURCE_BUFFER_SAMPLES * 2 * sizeof(int16_t));
+    }
     
     // Create mutex
     g_mixer.mutex = xSemaphoreCreateMutex();
@@ -85,7 +97,7 @@ esp_err_t audio_mixer_init(void) {
     xTaskCreatePinnedToCore(
         mixer_task,
         "mixer",
-        4096,
+        8192,  // Increased stack size for buffers
         NULL,
         10,  // High priority
         &g_mixer.mixer_task,
@@ -96,6 +108,18 @@ esp_err_t audio_mixer_init(void) {
     ESP_LOGI(TAG, "Audio mixer initialized");
     
     return ESP_OK;
+}
+
+/**
+ * @brief Set hardware ready state
+ */
+void audio_mixer_set_hardware_ready(bool ready) {
+    g_mixer.hardware_ready = ready;
+    if (ready) {
+        ESP_LOGI(TAG, "Audio hardware ready - I2S output enabled");
+    } else {
+        ESP_LOGW(TAG, "Audio hardware not ready - I2S output disabled");
+    }
 }
 
 /**
@@ -142,6 +166,7 @@ esp_err_t audio_mixer_create_source(const char *filepath, uint8_t volume,
     src->volume = volume;
     src->loop = loop;
     src->samples_played = 0;
+    src->stopping = false;
     src->eof_reached = false;
     
     // Create stream buffer (2x buffer size for safety)
@@ -153,15 +178,26 @@ esp_err_t audio_mixer_create_source(const char *filepath, uint8_t volume,
         return ESP_FAIL;
     }
     
+    // Setup decoder parameters
+    src->decoder_params.slot = slot;
+    strncpy(src->decoder_params.filepath, filepath, sizeof(src->decoder_params.filepath) - 1);
+    src->decoder_params.loop = loop;
+    src->decoder_params.buffer = src->buffer;
+    src->decoder_params.stopping = &src->stopping;
+    src->decoder_params.eof_reached = &src->eof_reached;
+    src->decoder_params.wav_info = &src->wav_info;
+    src->decoder_params.memory_data = NULL;  // File source, not memory
+    src->decoder_params.memory_size = 0;
+    
     // Create decoder task
     char task_name[16];
     snprintf(task_name, sizeof(task_name), "dec_%d", slot);
     
     BaseType_t ret = xTaskCreatePinnedToCore(
-        decoder_task,
+        audio_decoder_task,
         task_name,
         4096,
-        (void *)(intptr_t)slot,
+        &src->decoder_params,
         8,  // Medium priority
         &src->decoder_task,
         tskNO_AFFINITY
@@ -186,6 +222,117 @@ esp_err_t audio_mixer_create_source(const char *filepath, uint8_t volume,
 }
 
 /**
+ * @brief Create an audio source from memory buffer
+ */
+esp_err_t audio_mixer_create_source_from_memory(const uint8_t *pcm_data, size_t pcm_size,
+                                                 uint8_t volume, bool loop, bool interrupt,
+                                                 audio_source_handle_t *handle) {
+    if (!g_mixer.initialized) {
+        ESP_LOGE(TAG, "Mixer not initialized");
+        return ESP_FAIL;
+    }
+    
+    if (!pcm_data || pcm_size == 0) {
+        ESP_LOGE(TAG, "Invalid PCM data");
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    if (volume > 100) volume = 100;
+    
+    // Stop all sources if interrupt flag set
+    if (interrupt) {
+        audio_mixer_stop_all();
+    }
+    
+    // Find free slot
+    xSemaphoreTake(g_mixer.mutex, portMAX_DELAY);
+    
+    int slot = -1;
+    for (int i = 0; i < MAX_AUDIO_SOURCES; i++) {
+        if (!g_mixer.sources[i].active) {
+            slot = i;
+            break;
+        }
+    }
+    
+    if (slot == -1) {
+        xSemaphoreGive(g_mixer.mutex);
+        ESP_LOGW(TAG, "No free source slots (max %d)", MAX_AUDIO_SOURCES);
+        return ESP_FAIL;
+    }
+    
+    audio_source_t *src = &g_mixer.sources[slot];
+    
+    // Initialize source
+    src->active = true;
+    src->state = SOURCE_STATE_PLAYING;
+    snprintf(src->filepath, sizeof(src->filepath), "[memory:%zu]", pcm_size);
+    src->volume = volume;
+    src->loop = loop;
+    src->samples_played = 0;
+    src->stopping = false;
+    src->eof_reached = false;
+    
+    // Create stream buffer - Cap size to prevent DRAM overflow
+    // We stream in chunks anyway, so no need to buffer the entire file
+    size_t buffer_size = SOURCE_BUFFER_SAMPLES * 4;  // Fixed 16KB buffer
+    
+    // Create buffer (will use internal RAM, but limited size)
+    src->buffer = xStreamBufferCreate(buffer_size, 1);
+    if (src->buffer == NULL) {
+        ESP_LOGE(TAG, "Failed to create stream buffer for source %d", slot);
+        src->active = false;
+        xSemaphoreGive(g_mixer.mutex);
+        return ESP_FAIL;
+    }
+    
+    ESP_LOGI(TAG, "Memory source %d: allocated %zu bytes buffer (PCM size: %zu)", slot, buffer_size, pcm_size);
+    
+    // Setup decoder parameters for memory source
+    src->decoder_params.slot = slot;
+    snprintf(src->decoder_params.filepath, sizeof(src->decoder_params.filepath), "[memory:%zu]", pcm_size);
+    src->decoder_params.loop = loop;
+    src->decoder_params.buffer = src->buffer;
+    src->decoder_params.stopping = &src->stopping;
+    src->decoder_params.eof_reached = &src->eof_reached;
+    src->decoder_params.wav_info = &src->wav_info;
+    src->decoder_params.memory_data = pcm_data;
+    src->decoder_params.memory_size = pcm_size;
+    
+    // Create decoder task to stream memory data
+    char task_name[16];
+    snprintf(task_name, sizeof(task_name), "memdec_%d", slot);
+    
+    BaseType_t ret = xTaskCreatePinnedToCore(
+        audio_decoder_task,
+        task_name,
+        4096,
+        &src->decoder_params,
+        8,
+        &src->decoder_task,
+        tskNO_AFFINITY
+    );
+    
+    if (ret != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create memory decoder task for source %d", slot);
+        vStreamBufferDelete(src->buffer);
+        src->active = false;
+        xSemaphoreGive(g_mixer.mutex);
+        return ESP_FAIL;
+    }
+    
+    if (handle) {
+        *handle = slot;
+    }
+    
+    xSemaphoreGive(g_mixer.mutex);
+    
+    ESP_LOGI(TAG, "Created memory source %d: %zu bytes vol=%d%%", slot, pcm_size, volume);
+    
+    return ESP_OK;
+}
+
+/**
  * @brief Stop an audio source
  */
 esp_err_t audio_mixer_stop_source(audio_source_handle_t handle) {
@@ -198,6 +345,7 @@ esp_err_t audio_mixer_stop_source(audio_source_handle_t handle) {
     audio_source_t *src = &g_mixer.sources[handle];
     if (src->active && src->state == SOURCE_STATE_PLAYING) {
         src->state = SOURCE_STATE_STOPPING;
+        src->stopping = true;
         ESP_LOGI(TAG, "Stopping source %d", handle);
     }
     
@@ -216,6 +364,7 @@ esp_err_t audio_mixer_stop_all(void) {
         if (g_mixer.sources[i].active && 
             g_mixer.sources[i].state == SOURCE_STATE_PLAYING) {
             g_mixer.sources[i].state = SOURCE_STATE_STOPPING;
+            g_mixer.sources[i].stopping = true;
         }
     }
     
@@ -286,106 +435,6 @@ bool audio_mixer_is_playing(audio_source_handle_t handle) {
 }
 
 /**
- * @brief Parse WAV header
- */
-static esp_err_t parse_wav_header(FILE *fp, wav_info_t *info) {
-    uint8_t header[44];
-    
-    if (fread(header, 1, 44, fp) != 44) {
-        return ESP_FAIL;
-    }
-    
-    // Check RIFF header
-    if (memcmp(header, "RIFF", 4) != 0 || memcmp(header + 8, "WAVE", 4) != 0) {
-        return ESP_FAIL;
-    }
-    
-    info->num_channels = header[22] | (header[23] << 8);
-    info->sample_rate = header[24] | (header[25] << 8) | 
-                       (header[26] << 16) | (header[27] << 24);
-    info->bits_per_sample = header[34] | (header[35] << 8);
-    
-    // Find data chunk
-    info->data_offset = 44;
-    info->data_size = header[40] | (header[41] << 8) | 
-                     (header[42] << 16) | (header[43] << 8);
-    
-    return ESP_OK;
-}
-
-/**
- * @brief Decoder task - reads WAV file and feeds stream buffer
- */
-static void decoder_task(void *arg) {
-    int slot = (int)(intptr_t)arg;
-    audio_source_t *src = &g_mixer.sources[slot];
-    
-    ESP_LOGI(TAG, "Decoder task started for source %d", slot);
-    
-    FILE *fp = NULL;
-    int16_t read_buffer[512];
-    
-    while (true) {
-        // Check if we should stop
-        if (src->state == SOURCE_STATE_STOPPING) {
-            break;
-        }
-        
-        // Open file if not already open
-        if (fp == NULL) {
-            fp = fopen(src->filepath, "rb");
-            if (fp == NULL) {
-                ESP_LOGE(TAG, "Failed to open %s", src->filepath);
-                break;
-            }
-            
-            // Parse WAV header
-            if (parse_wav_header(fp, &src->wav_info) != ESP_OK) {
-                ESP_LOGE(TAG, "Invalid WAV file: %s", src->filepath);
-                fclose(fp);
-                break;
-            }
-            
-            ESP_LOGI(TAG, "Source %d: %luHz %dch %dbit", 
-                     slot, (unsigned long)src->wav_info.sample_rate, 
-                     src->wav_info.num_channels, src->wav_info.bits_per_sample);
-        }
-        
-        // Read PCM data
-        size_t samples_to_read = sizeof(read_buffer) / (src->wav_info.num_channels * 2);
-        size_t bytes_read = fread(read_buffer, 1, 
-                                  samples_to_read * src->wav_info.num_channels * 2, fp);
-        
-        if (bytes_read == 0) {
-            // EOF reached
-            if (src->loop) {
-                // Loop back to beginning
-                fseek(fp, src->wav_info.data_offset, SEEK_SET);
-                continue;
-            } else {
-                // End of playback
-                src->eof_reached = true;
-                break;
-            }
-        }
-        
-        // Write to stream buffer (blocking if buffer full)
-        xStreamBufferSend(src->buffer, read_buffer, bytes_read, portMAX_DELAY);
-    }
-    
-    // Cleanup
-    if (fp != NULL) {
-        fclose(fp);
-    }
-    
-    src->state = SOURCE_STATE_STOPPED;
-    
-    ESP_LOGI(TAG, "Decoder task stopped for source %d", slot);
-    
-    vTaskDelete(NULL);
-}
-
-/**
  * @brief Mixer task - combines all sources and outputs to I2S
  */
 static void mixer_task(void *arg) {
@@ -400,6 +449,7 @@ static void mixer_task(void *arg) {
         memset(i2s_buffer, 0, sizeof(i2s_buffer));
         
         int active_sources = 0;
+        size_t max_samples = 0;  // Track maximum samples mixed
         
         // Mix all active sources
         xSemaphoreTake(g_mixer.mutex, portMAX_DELAY);
@@ -449,16 +499,24 @@ static void mixer_task(void *arg) {
                 i2s_buffer[j] = (int16_t)mixed;
             }
             
+            // Track the maximum number of samples we've mixed
+            if (samples > max_samples) {
+                max_samples = samples;
+            }
+            
             active_sources++;
         }
         
         xSemaphoreGive(g_mixer.mutex);
         
-        // Write to I2S (always write to prevent underruns, silence if no sources)
-        i2s_write(I2S_NUM_0, i2s_buffer, sizeof(i2s_buffer), &bytes_written, portMAX_DELAY);
+        // Write to I2S only if hardware is ready
+        if (g_mixer.hardware_ready) {
+            // Always write full buffer to maintain continuous I2S stream
+            i2s_write_audio(i2s_buffer, sizeof(i2s_buffer), &bytes_written);
+        }
         
         // Small yield to prevent watchdog
-        if (active_sources == 0) {
+        if (active_sources == 0 || !g_mixer.hardware_ready) {
             vTaskDelay(pdMS_TO_TICKS(10));
         }
     }
