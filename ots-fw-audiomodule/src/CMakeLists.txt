@@ -3,8 +3,10 @@
 
 FILE(GLOB_RECURSE app_sources ${CMAKE_SOURCE_DIR}/src/*.*)
 
-# Exclude test tone and large test WAV to save memory
-list(FILTER app_sources EXCLUDE REGEX ".*test_tone_440hz_wav\\.c$")
-list(FILTER app_sources EXCLUDE REGEX ".*audio_test_tone\\.c$")
+# Exclude old serial_commands system (replaced by audio_console)
+list(FILTER app_sources EXCLUDE REGEX ".*serial_commands\\.c$")
+
+# Always include audio_console (unified interface)
+message(STATUS "Audio console: ENABLED (unified command interface)")
 
 idf_component_register(SRCS ${app_sources})

@@ -28,6 +28,7 @@ typedef int audio_source_handle_t;
 typedef enum {
     SOURCE_STATE_IDLE = 0,
     SOURCE_STATE_PLAYING,
+    SOURCE_STATE_PAUSED,
     SOURCE_STATE_STOPPING,
     SOURCE_STATE_STOPPED
 } audio_source_state_t;
@@ -121,4 +122,47 @@ int audio_mixer_get_active_count(void);
  */
 bool audio_mixer_is_playing(audio_source_handle_t handle);
 
+/**
+ * @brief Set master volume for mixer
+ * 
+ * @param volume Volume 0-100 (applied to all sources)
+ */
+void audio_mixer_set_master_volume(uint8_t volume);
+
+/**
+ * @brief Get current master volume
+ * 
+ * @return Master volume 0-100
+ */
+uint8_t audio_mixer_get_master_volume(void);
+/**
+ * @brief Get information about a specific source
+ * 
+ * @param handle Source handle
+ * @param filepath Output buffer for file path (can be NULL)
+ * @param filepath_size Size of filepath buffer
+ * @param volume Output pointer for volume (can be NULL)
+ * @param state Output pointer for state (can be NULL)
+ * @return ESP_OK if source exists, ESP_ERR_NOT_FOUND otherwise
+ */
+esp_err_t audio_mixer_get_source_info(audio_source_handle_t handle,
+                                       char *filepath, size_t filepath_size,
+                                       uint8_t *volume,
+                                       int *state);
+
+/**
+ * @brief Pause a playing source
+ * 
+ * @param handle Source handle
+ * @return ESP_OK on success, error otherwise
+ */
+esp_err_t audio_mixer_pause_source(audio_source_handle_t handle);
+
+/**
+ * @brief Resume a paused source
+ * 
+ * @param handle Source handle
+ * @return ESP_OK on success, error otherwise
+ */
+esp_err_t audio_mixer_resume_source(audio_source_handle_t handle);
 #endif // AUDIO_MIXER_H

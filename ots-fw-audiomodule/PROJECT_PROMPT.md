@@ -13,23 +13,26 @@
 
 **Board:** ESP32-A1S Audio Development Kit (AI-Thinker ESP32 Audio Kit v2.2)
 - **MCU:** ESP32-WROVER-B (4MB Flash, 8MB PSRAM)
-- **Audio Codec:** AC101 (I2S interface)
+- **Audio Codec:** ES8388 (I2S interface) - NOT AC101!
 - **Storage:** MicroSD card slot (SPI mode)
 - **CAN Interface:** GPIO 21 (TX), GPIO 22 (RX) via external transceiver
 
-### ESP32-A1S Pin Configuration
+### ESP32-A1S Pin Configuration (VERIFIED WORKING)
 
-**I2S Audio (AC101 Codec):**
-- BCK (Bit Clock): GPIO 27
+**I2S Audio (ES8388 Codec):**
+- **MCLK (Master Clock): GPIO 0** ⚠️ **CRITICAL - MUST BE ENABLED!**
+  - ES8388 REQUIRES MCLK to generate internal audio clocks
+  - Setting `.mclk = I2S_GPIO_UNUSED` causes silent playback
+  - This is the #1 cause of "no audio" issues
+- BCK (Bit Clock): GPIO 27 (NOT GPIO 5!)
 - WS (Word Select): GPIO 25
 - DOUT (Data Out to codec): GPIO 26
 - DIN (Data In from codec): GPIO 35
-- MCLK (Master Clock): GPIO 0
 
-**I2C Control (AC101 Config):**
+**I2C Control (ES8388 Config):**
 - SDA: GPIO 33
 - SCL: GPIO 32
-- Address: 0x1A
+- Address: 0x10 (not 0x1A!)
 
 **SD Card (SPI Mode):**
 - CS: GPIO 13
@@ -249,7 +252,8 @@ ots-fw-audiomodule/
 ├── platformio.ini              # PlatformIO configuration
 ├── CMakeLists.txt              # Root CMake config
 ├── sdkconfig.esp32-a1s-espidf  # ESP-IDF SDK config
-├── PROJECT_PROMPT.md           # This file
+├── PROJECT_PROMPT.md           # This file (architecture & dev guide)
+├── CONSOLE_COMMANDS.md         # User documentation (MUST MAINTAIN!)
 ├── README.md                   # Quick start guide
 ├── prompts/                    # Development prompts
 └── src/
@@ -261,19 +265,23 @@ ots-fw-audiomodule/
     ├── audio_player.c/h        # Simple WAV playback (87 lines)
     ├── wav_utils.c/h           # Shared WAV parsing (116 lines)
     │
+    ├── audio_console.c/h       # Interactive console (16 commands) ⚠️ UPDATE DOCS!
     ├── can_handler.c/h         # CAN message handling (159 lines)
-    ├── serial_commands.c/h     # UART command interface (122 lines)
     │
-    ├── sound_config.c/h        # Sound ID→file mapping
     ├── board_config.h          # ESP32-A1S pin definitions
     │
     └── hardware/               # Hardware abstraction layer
         ├── i2s.c/h             # I2S audio output
-        ├── ac101.c/h           # AC101 codec driver
+        ├── es8388.c/h          # ES8388 codec driver
         ├── i2c.c/h             # I2C bus management
         ├── gpio.c/h            # GPIO initialization
         └── sdcard.c/h          # SD card FAT32 mount
 ```
+
+**⚠️ Documentation Maintenance:**
+- When modifying `src/audio_console.c`, update `CONSOLE_COMMANDS.md`
+- When changing command behavior, update documentation examples
+- When adding features to mixer/player, update architecture docs
 
 ## Build & Flash
 
@@ -456,6 +464,35 @@ Speakers/Headphones
 
 ## Documentation & Resources
 
+### Project Documentation
+
+#### **CONSOLE_COMMANDS.md** - User Command Reference
+**⚠️ IMPORTANT: Keep this documentation up-to-date!**
+
+Complete user documentation for all serial console commands. This file MUST be updated whenever:
+- ✏️ Adding new commands to `audio_console.c`
+- ✏️ Modifying command behavior or parameters
+- ✏️ Removing or deprecating commands
+- ✏️ Changing command syntax or output format
+
+**Maintenance checklist when modifying console commands:**
+1. Update command implementation in `src/audio_console.c`
+2. Update command registration in console command array
+3. Update `CONSOLE_COMMANDS.md` with:
+   - Command syntax and parameters
+   - Usage examples with actual output
+   - Error conditions and handling
+   - Any behavioral changes
+4. Update version history section in `CONSOLE_COMMANDS.md`
+5. Test the command and verify documentation accuracy
+
+**Current commands (16 total):**
+- WAV playback: `play`, `1`, `2`, `hello`, `ping`
+- Tone generation: `tone1`, `tone2`, `tone3`
+- Volume control: `volume`
+- Mixer control: `status`, `stop`, `mix`, `test`
+- System info: `ls`, `sysinfo`, `info`
+
 ### ESP32-A1S Audio Kit
 - **Official ESP-ADF (Audio Development Framework):** https://docs.espressif.com/projects/esp-adf/en/latest/
 - **ESP32-A1S Board Overview:** https://docs.ai-thinker.com/en/esp32-audio-kit
@@ -494,6 +531,12 @@ Speakers/Headphones
 - Verify SD card mount/unmount behavior
 - Test command parsing edge cases
 - Monitor memory usage (heap, stack)
+- **After adding/modifying console commands:**
+  - Test the new/modified command thoroughly
+  - Verify all parameter combinations
+  - Check error handling paths
+  - Update `CONSOLE_COMMANDS.md` with examples
+  - Verify documentation matches actual behavior
 
 ## Future Enhancements
 

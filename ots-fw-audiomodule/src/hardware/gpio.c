@@ -16,6 +16,9 @@ esp_err_t gpio_init(void)
     ESP_LOGI(TAG, "Initializing board GPIO...");
     
     // Configure PA enable GPIO (power amplifier)
+    // Note: Per ESP-ADF best practice, PA is enabled ONCE during init and stays on.
+    // Audio on/off is controlled via ES8388 DAC mute (DACCONTROL3), not PA toggling.
+    // Rapid PA toggling causes clicks.
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << PA_ENABLE_GPIO),
         .mode = GPIO_MODE_OUTPUT,
@@ -24,8 +27,8 @@ esp_err_t gpio_init(void)
         .intr_type = GPIO_INTR_DISABLE,
     };
     gpio_config(&io_conf);
-    gpio_set_level(PA_ENABLE_GPIO, 1);  // Enable power amplifier
-    ESP_LOGI(TAG, "Power amplifier enabled (GPIO%d)", PA_ENABLE_GPIO);
+    gpio_set_level(PA_ENABLE_GPIO, 1);  // Enable power amplifier (keep ON)
+    ESP_LOGI(TAG, "Power amplifier enabled (GPIO%d) - keeping ON per ESP-ADF", PA_ENABLE_GPIO);
     
     // Configure status LED
     io_conf.pin_bit_mask = (1ULL << GREEN_LED_GPIO);

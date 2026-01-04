@@ -9,7 +9,7 @@
 #include <string.h>
 #include "esp_log.h"
 #include "hardware/i2s.h"
-#include "embedded/test_2sec_wav.h"  // 2-second test tone
+#include "embedded/quack_44100_wav.h"  // Quack sound for testing
 
 static const char *TAG = "AUDIO_PLAYER";
 
@@ -65,8 +65,8 @@ esp_err_t audio_player_play_wav(const char *rel_path)
 }
 esp_err_t audio_player_play_embedded_wav(void)
 {
-    size_t size = test_2sec_wav_len;
-    const uint8_t *data = test_2sec_wav;
+    size_t size = quack_44100_wav_len;
+    const uint8_t *data = quack_44100_wav;
     
     ESP_LOGI(TAG, "Playing embedded WAV (%zu bytes)", size);
     

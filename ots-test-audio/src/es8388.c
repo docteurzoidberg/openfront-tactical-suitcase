@@ -110,7 +110,7 @@ esp_err_t es8388_codec_init(void)
 {
     esp_err_t ret = ESP_OK;
     
-    // Configure power amplifier GPIO but keep it OFF initially
+    // Configure power amplifier GPIO and enable immediately (ESP-ADF approach)
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << PA_ENABLE_GPIO),
         .mode = GPIO_MODE_OUTPUT,
@@ -119,8 +119,8 @@ esp_err_t es8388_codec_init(void)
         .intr_type = GPIO_INTR_DISABLE,
     };
     gpio_config(&io_conf);
-    gpio_set_level(PA_ENABLE_GPIO, 0);  // Keep PA OFF during init
-    ESP_LOGI(TAG, "Power amplifier configured (GPIO %d) - keeping OFF", PA_ENABLE_GPIO);
+    gpio_set_level(PA_ENABLE_GPIO, 1);  // Enable PA immediately
+    ESP_LOGI(TAG, "Power amplifier enabled (GPIO %d)", PA_ENABLE_GPIO);
     
     // Initialize I2C
     ret = i2c_bus_init();
@@ -168,11 +168,11 @@ esp_err_t es8388_codec_init(void)
     ret |= es8388_write_reg(ES8388_DACCONTROL17, 0x90);     // Left DAC to left mixer
     ret |= es8388_write_reg(ES8388_DACCONTROL20, 0x90);     // Right DAC to right mixer
     
-    // Output volume (MAXIMUM for testing - 0x00 = max, 0x1E = default)
-    ret |= es8388_write_reg(ES8388_DACCONTROL24, 0x00);     // LOUT1 volume MAX
-    ret |= es8388_write_reg(ES8388_DACCONTROL25, 0x00);     // ROUT1 volume MAX
-    ret |= es8388_write_reg(ES8388_DACCONTROL26, 0x00);     // LOUT2 volume
-    ret |= es8388_write_reg(ES8388_DACCONTROL27, 0x00);     // ROUT2 volume
+    // Output volume (0x1E = 0dB, 0x00 = -30dB, 0x21 = +3dB)
+    ret |= es8388_write_reg(ES8388_DACCONTROL24, 0x1E);     // LOUT1 volume 0dB
+    ret |= es8388_write_reg(ES8388_DACCONTROL25, 0x1E);     // ROUT1 volume 0dB
+    ret |= es8388_write_reg(ES8388_DACCONTROL26, 0x1E);     // LOUT2 volume 0dB
+    ret |= es8388_write_reg(ES8388_DACCONTROL27, 0x1E);     // ROUT2 volume 0dB
     
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "ES8388 register configuration failed");
@@ -188,15 +188,20 @@ esp_err_t es8388_set_volume(int volume)
     if (volume < 0) volume = 0;
     if (volume > 100) volume = 100;
     
-    // Convert 0-100 to ES8388 range (0-33 per channel, 0=loudest)
-    uint8_t reg_val = (100 - volume) * 33 / 100;
+    // Convert 0-100% to register value
+    // DACCONTROL4/5 control DAC digital volume (0x00 = 0dB max, 0xC0 = mute)
+    // Formula from ESP-ADF: volume 0-100 maps to reg 0xC0-0x00
+    uint8_t reg_val = 0xC0 - (volume * 192 / 100);  // 192 = 0xC0
     
     esp_err_t ret = ESP_OK;
-    ret |= es8388_write_reg(ES8388_DACCONTROL24, reg_val);
-    ret |= es8388_write_reg(ES8388_DACCONTROL25, reg_val);
+    ret |= es8388_write_reg(ES8388_DACCONTROL4, reg_val);  // Left DAC volume
+    ret |= es8388_write_reg(ES8388_DACCONTROL5, reg_val);  // Right DAC volume
+    
+    // NOTE: DACCONTROL24/25 (output stage volume) is set to 0x1E (0dB) in init
+    // and should NOT be changed here
     
     if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "Volume set to %d%% (reg=0x%02x)", volume, reg_val);
+        ESP_LOGI(TAG, "Volume set to %d%% (DACCONTROL4/5 reg=0x%02x)", volume, reg_val);
     }
     
     return ret;
@@ -212,23 +217,17 @@ esp_err_t es8388_start(void)
     ret |= es8388_write_reg(ES8388_CHIPPOWER, 0xF0);   // Reset state machine
     ret |= es8388_write_reg(ES8388_CHIPPOWER, 0x00);   // Start state machine
     
-    // Power up DAC outputs (still muted from init)
+    // Power up DAC outputs
     ret |= es8388_write_reg(ES8388_DACPOWER, 0x3C);
-    ESP_LOGI(TAG, "DAC powered up (muted), waiting for power-up transient...");
+    vTaskDelay(pdMS_TO_TICKS(50));  // Let outputs stabilize
     
-    // Wait for DAC power-up transient to settle
-    vTaskDelay(pdMS_TO_TICKS(100));
+    // Enable soft-ramp unmute (bit 5 = soft ramp, bit 2 = unmute)
+    ret |= es8388_write_reg(ES8388_DACCONTROL3, 0x20);  // Soft ramp enabled, muted
+    ret |= es8388_write_reg(ES8388_DACCONTROL3, 0x00);  // Unmute with soft ramp
     
-    // Unmute DAC - audio signal will now appear at DAC output
-    ret |= es8388_write_reg(ES8388_DACCONTROL3, 0x00);  // Unmute
-    ESP_LOGI(TAG, "DAC unmuted, waiting for output signal to stabilize...");
-    
-    // Wait for audio signal to stabilize at DAC output (coupling caps charging, etc)
-    vTaskDelay(pdMS_TO_TICKS(200));
-    
-    // NOW enable power amplifier - DAC is outputting stable audio signal
-    gpio_set_level(PA_ENABLE_GPIO, 1);
-    ESP_LOGI(TAG, "Power amplifier enabled - audio should be clean");
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "DAC started and unmuted (with soft-ramp)");
+    }
     
     return ret;
 }
@@ -239,14 +238,7 @@ esp_err_t es8388_stop(void)
     
     ESP_LOGI(TAG, "Stopping DAC output");
     
-    // Disable power amplifier FIRST (prevents pop on shutdown)
-    gpio_set_level(PA_ENABLE_GPIO, 0);
-    ESP_LOGI(TAG, "Power amplifier disabled");
-    
-    // Small delay for PA to turn off
-    vTaskDelay(pdMS_TO_TICKS(50));
-    
-    // Mute DAC
+    // Mute DAC (PA stays enabled - ESP-ADF approach)
     ret |= es8388_write_reg(ES8388_DACCONTROL3, 0x04);
     
     // Power down DAC

@@ -4,8 +4,12 @@
  */
 
 #include "audio_test_tone.h"
+#include "esp_heap_caps.h"
+#include "esp_log.h"
 #include <math.h>
 #include <string.h>
+
+static const char *TAG = "TEST_TONE";
 
 #define TEST_SAMPLE_RATE 44100
 #define TEST_FREQUENCY 440  // 440Hz = A note
@@ -21,11 +25,18 @@ void audio_test_tone_generate(void)
     size_t num_samples = (TEST_SAMPLE_RATE * TEST_DURATION_MS) / 1000;
     size_t buffer_size = num_samples * 2 * sizeof(int16_t);  // Stereo
     
-    // Allocate buffer if not already allocated
+    // Allocate buffer if not already allocated (prefer PSRAM for large audio buffers)
     if (test_tone_buffer == NULL) {
-        test_tone_buffer = (int16_t *)malloc(buffer_size);
+        test_tone_buffer = (int16_t *)heap_caps_malloc(buffer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (test_tone_buffer == NULL) {
-            return;  // Allocation failed
+            // Fallback to internal RAM
+            ESP_LOGW(TAG, "PSRAM allocation failed, using internal RAM for test tone");
+            test_tone_buffer = (int16_t *)malloc(buffer_size);
+            if (test_tone_buffer == NULL) {
+                return;  // Allocation failed
+            }
+        } else {
+            ESP_LOGI(TAG, "Test tone buffer allocated from PSRAM (%zu bytes)", buffer_size);
         }
     }
     

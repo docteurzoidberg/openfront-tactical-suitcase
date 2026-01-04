@@ -15,7 +15,7 @@
 #include "can_handler.h"
 #include "audio_mixer.h"
 #include "audio_player.h"
-#include "serial_commands.h"
+#include "audio_console.h"
 
 // Hardware abstraction layer
 #include "hardware/gpio.h"
@@ -26,7 +26,6 @@
 
 // Configuration
 #include "board_config.h"
-#include "sound_config.h"
 
 static const char *TAG = "MAIN";
 
@@ -64,12 +63,21 @@ void app_main(void)
     ret = es8388_init(DEFAULT_SAMPLE_RATE);
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "ES8388 codec initialized successfully");
-        // Enable BOTH outputs at 80% volume (speaker AND line-out/headphone)
-        es8388_set_speaker_volume(80);    // LOUT2/ROUT2 (speaker outputs)
-        es8388_set_headphone_volume(80);  // LOUT1/ROUT1 (line-out/headphone jack)
-        es8388_set_speaker_enable(true);
-        ESP_LOGI(TAG, "ES8388: Enabled both speaker and line-out outputs at 80%");
-        codec_ok = true;
+        
+        // Start the codec (unmute and power up)
+        ret = es8388_start();
+        if (ret == ESP_OK) {
+            ESP_LOGI(TAG, "ES8388 codec started and unmuted");
+            
+            // Enable BOTH outputs at 80% volume (speaker AND line-out/headphone)
+            es8388_set_speaker_volume(80);    // LOUT2/ROUT2 (speaker outputs)
+            es8388_set_headphone_volume(80);  // LOUT1/ROUT1 (line-out/headphone jack)
+            es8388_set_speaker_enable(true);
+            ESP_LOGI(TAG, "ES8388: Enabled both speaker and line-out outputs at 80%");
+            codec_ok = true;
+        } else {
+            ESP_LOGW(TAG, "ES8388 codec start failed");
+        }
     } else {
         ESP_LOGW(TAG, "ES8388 codec init failed");
         ESP_LOGW(TAG, "Audio output will not work, but system will continue");
@@ -116,24 +124,13 @@ void app_main(void)
     ESP_ERROR_CHECK(can_handler_start_task());
     ESP_LOGI(TAG, "CAN handler started");
     
-    // Initialize and start serial command processor
-    ESP_LOGI(TAG, "Initializing serial commands...");
-    ESP_ERROR_CHECK(serial_commands_init(
-        sound_command_table,
-        SOUND_COMMAND_TABLE_LEN,
-        audio_player_play_wav
-    ));
-    ESP_ERROR_CHECK(serial_commands_start_task());
-
-    ESP_LOGI(TAG, "=== Setup Complete ===");
-    ESP_LOGI(TAG, "CAN: GPIO%d(TX)/GPIO%d(RX) @ %d bps", 
-             CAN_TX_GPIO, CAN_RX_GPIO, CAN_BITRATE);
-    ESP_LOGI(TAG, "Serial commands: 1, 2, HELLO, PING");
-    ESP_LOGI(TAG, "Ready for PLAY_SOUND commands (0x420)");
+    // Initialize interactive console (unified audio control)
+    ESP_LOGI(TAG, "=== Audio Console Starting ===");
+    ESP_ERROR_CHECK(audio_console_init());
+    ESP_ERROR_CHECK(audio_console_start());
+    ESP_LOGI(TAG, "Audio console ready - type 'help' for commands");
     
-    // Play embedded WAV at boot
-    if (codec_ok) {
-        ESP_LOGI(TAG, "Playing embedded quack sound...");
-        audio_player_play_embedded_wav();
+    if (!codec_ok) {
+        ESP_LOGW(TAG, "*** CODEC FAILED - AUDIO WILL NOT WORK ***");
     }
 }
