@@ -43,7 +43,7 @@ OpenFront.io Game → Userscript (100ms poll) → Firmware WS Server → Dashboa
 ### Nuke Tracking System
 
 Critical implementation detail: Nukes are tracked by `unitID` (not timeouts):
-- Firmware tracks up to 32 simultaneous nukes in `nuke_tracker.c`
+- Firmware tracks up to 32 simultaneous nukes in `nuke_state_manager.c`
 - LEDs stay ON until ALL nukes of that type resolve (explode/intercept)
 - Alert module tracks incoming (NUKE_DIR_INCOMING), nuke module tracks outgoing (NUKE_DIR_OUTGOING)
 - Events MUST include `nukeUnitID` in data payload for proper tracking
@@ -130,7 +130,7 @@ pio device monitor   # Serial output
 - Automation tools in `tools/tests/` (Python scripts for WebSocket testing)
 
 **Nuke tracking:**
-- `nuke_tracker.c` manages state for up to 32 nukes by unitID
+- `nuke_state_manager.c` manages state for up to 32 nukes by unitID
 - `nuke_module.c` handles outgoing nukes (button LEDs)
 - `alert_module.c` handles incoming nukes (alert LEDs)
 - LEDs stay ON while `nuke_tracker_get_active_count() > 0`
@@ -333,7 +333,7 @@ ots/
     src/
       main.c
       *_module.c                   # Hardware module implementations
-      nuke_tracker.c               # Nuke state tracking
+      nuke_state_manager.c         # Nuke state tracking
 ```
 
 **No root-level package.json** - each subproject manages dependencies independently.

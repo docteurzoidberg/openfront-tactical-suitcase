@@ -68,8 +68,8 @@ static const char *TAG = "OTS_ADC";          // ADC driver
 **Examples**:
 ```c
 // Public API
-esp_err_t nuke_tracker_init(void);
-void led_controller_alert_on(uint8_t led_index, uint32_t duration_ms);
+esp_err_t nuke_state_manager_init(void);
+void led_handler_alert_on(uint8_t led_index, uint32_t duration_ms);
 const hardware_module_t* troops_module_get(void);
 
 // Static helpers

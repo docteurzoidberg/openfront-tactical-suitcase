@@ -30,17 +30,17 @@ Edit `/include/config.h` to change GPIO pin:
 ## API Usage
 
 ```c
-#include "rgb_status.h"
+#include "rgb_handler.h"
 
 // Initialize (call once in main)
-esp_err_t ret = rgb_status_init();
+esp_err_t ret = rgb_handler_init();
 
 // Set status
-rgb_status_set(RGB_STATUS_DISCONNECTED);  // Red solid
-rgb_status_set(RGB_STATUS_WIFI_ONLY);     // Orange solid
-rgb_status_set(RGB_STATUS_USERSCRIPT_CONNECTED); // Purple solid
-rgb_status_set(RGB_STATUS_GAME_STARTED);         // Green solid
-rgb_status_set(RGB_STATUS_ERROR);         // Red fast blink
+rgb_handler_set(RGB_STATUS_DISCONNECTED);  // Red solid
+rgb_handler_set(RGB_STATUS_WIFI_ONLY);     // Orange solid
+rgb_handler_set(RGB_STATUS_USERSCRIPT_CONNECTED); // Purple solid
+rgb_handler_set(RGB_STATUS_GAME_STARTED);         // Green solid
+rgb_handler_set(RGB_STATUS_ERROR);         // Red fast blink
 
 // Get current status
 rgb_status_t current = rgb_status_get();
@@ -120,7 +120,7 @@ For more advanced features, see `/prompts/RGB_STATUS_PLAN.md` for:
 
 ## Notes
 
-- The RGB LED is independent of the module LED controller (`led_controller.c`)
+- The RGB LED is independent of the module LED handler (`led_handler.c`)
 - Module LEDs (nuke buttons, alert indicators) continue to function normally
 - RGB updates happen in a separate FreeRTOS task (non-blocking)
 - Status changes are logged for debugging
@@ -128,5 +128,5 @@ For more advanced features, see `/prompts/RGB_STATUS_PLAN.md` for:
 ## See Also
 
 - [Main Power Module](prompts/MAIN_POWER_MODULE_PROMPT.md) - LINK LED behavior
-- [LED Controller](include/led_controller.h) - Module LED control
+- [LED Handler](include/led_handler.h) - Module LED control
 - [Event Dispatcher](include/event_dispatcher.h) - System event handling

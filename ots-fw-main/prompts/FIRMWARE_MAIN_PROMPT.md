@@ -21,7 +21,7 @@ You are working on the **OTS ESP32-S3 firmware** in `ots-fw-main/`.
 - Protocol enums/strings: `include/protocol.h`, `src/protocol.c`
 - WebSocket: `src/ws_server.c`, `src/ws_protocol.c`
 - Event system: `src/event_dispatcher.c`
-- LED/status: `src/rgb_status.c`, `docs/RGB_LED_STATUS.md`
+- LED/status: `src/rgb_handler.c`, `docs/RGB_LED_STATUS.md`
 - OTA: `src/ota_manager.c`, `docs/OTA_GUIDE.md`
 - Test builds: `platformio.ini`, `src/tests/*.c`, `docs/TESTING.md`
 

@@ -162,10 +162,10 @@ ots-fw-main/
     
     # Event System
     event_dispatcher.c     # Centralized event routing
-    game_state.c           # Game phase tracking
+    game_state_manager.c   # Game phase tracking
     
     # Hardware Control
-    led_controller.c       # LED effect management (dedicated task)
+    led_handler.c          # LED effect management (dedicated task)
     button_handler.c       # Button debouncing and event posting
     io_task.c              # Dedicated I/O scanning task
     

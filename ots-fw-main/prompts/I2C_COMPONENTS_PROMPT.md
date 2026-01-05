@@ -236,8 +236,8 @@ bool device_name_is_initialized(void) {
 The I2C bus should be initialized **once** by the main application, not by components:
 
 ```c
-// In main.c or dedicated i2c_bus.c
-esp_err_t ots_i2c_bus_init(void) {
+// In main.c or dedicated i2c_handler.c
+esp_err_t ots_i2c_handler_init(void) {
     i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
         .sda_io_num = I2C_SDA_GPIO,
@@ -400,7 +400,7 @@ ESP-IDF component for interfacing with [Device Name] over I2C.
 
 void app_main(void) {
     // Initialize I2C bus (once)
-    ots_i2c_bus_init();
+    ots_i2c_handler_init();
     
     // Initialize device
     esp_err_t ret = device_name_init(I2C_NUM_0, 0x27);
@@ -479,7 +479,7 @@ void app_main(void) {
     ESP_LOGI(TAG, "Testing Device Name Component");
     
     // Initialize I2C bus
-    ots_i2c_bus_init();
+    ots_i2c_handler_init();
     
     // Test 1: Initialization
     ESP_LOGI(TAG, "Test 1: Initialization");

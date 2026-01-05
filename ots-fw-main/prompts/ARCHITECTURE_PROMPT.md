@@ -85,17 +85,17 @@ This prompt provides an overview of the firmware's modular architecture for AI a
 - **protocol.c** - Event type definitions and string conversions
 
 #### Hardware Abstraction
-- **i2c_bus.c** - Shared I2C master bus (GPIO8 SDA, GPIO9 SCL)
+- **i2c_handler.c** - Shared I2C master bus (GPIO8 SDA, GPIO9 SCL)
 - **io_expander.c** (component) - MCP23017 driver with retry logic
 - **lcd_driver.c** (component) - HD44780 LCD via PCF8574 I2C backpack
 - **adc_driver.c** (component) - ADS1015 12-bit ADC driver
 - **ws2812_rmt.c** (component) - WS2812 RGB LED via RMT peripheral
 
 #### Hardware Controllers
-- **led_controller.c** - LED effect management (blink patterns, timers)
+- **led_handler.c** - LED effect management (blink patterns, timers)
 - **button_handler.c** - Button debouncing and event posting
 - **adc_handler.c** - Periodic ADC scanning and value change detection
-- **rgb_status.c** - RGB LED status state machine
+- **rgb_handler.c** - RGB LED status state machine
 
 #### Hardware Modules (Event-Driven)
 Each module implements `hardware_module_t` interface:
@@ -279,7 +279,7 @@ See `docs/TESTING.md` for complete testing guide.
 - `src/ws_handlers.c` - WebSocket connection management
 
 **Hardware:**
-- `src/i2c_bus.c` - Shared I2C bus
+- `src/i2c_handler.c` - Shared I2C bus
 - `components/*/` - Reusable hardware drivers
 - `src/*_module.c` - Hardware module implementations
 

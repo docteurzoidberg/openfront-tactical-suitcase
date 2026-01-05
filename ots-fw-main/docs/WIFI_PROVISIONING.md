@@ -87,7 +87,7 @@ Supported commands:
   - Saves credentials and reboots.
   - Aliases: `wifi-provisioning`, `wifi-provisionning`
 
-Implementation: `serial_commands.c`.
+Implementation: `serial_command_handler.c`.
 
 ### Example session
 
