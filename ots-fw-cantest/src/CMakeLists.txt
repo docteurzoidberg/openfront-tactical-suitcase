@@ -1,0 +1,17 @@
+idf_component_register(
+    SRCS 
+        "main.c"
+        "can_monitor.c"
+        "can_simulator.c"
+        "can_decoder.c"
+        "cli_handler.c"
+    INCLUDE_DIRS 
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    PRIV_INCLUDE_DIRS
+        "."
+    REQUIRES 
+        driver
+        nvs_flash
+        can_driver
+        can_discovery
+)

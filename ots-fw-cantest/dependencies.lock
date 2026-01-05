@@ -1,0 +1,17 @@
+dependencies:
+  can_driver:
+    dependencies: []
+    source:
+      path: /home/drzoid/dev/openfront/ots/ots-fw-shared/components/can_driver
+      type: local
+    version: 1.0.0
+  idf:
+    source:
+      type: idf
+    version: 5.4.2
+direct_dependencies:
+- espressif/can_driver
+- idf
+manifest_hash: 9e1e9e974548275550ecc43424a8a5734ebcd97f8cb4b17d4314933e800bfb2b
+target: esp32s3
+version: 2.0.0
