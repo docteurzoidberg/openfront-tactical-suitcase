@@ -4,7 +4,10 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: "OpenFront Tactical Suitcase",
   description: "Hardware controller for OpenFront.io game",
-  
+
+  // GitHub Pages base path (repository name)
+  base: '/openfront-tactical-suitcase/',
+
   // Ignore dead links from synced docs (many reference pages not yet created)
   ignoreDeadLinks: true,
 
