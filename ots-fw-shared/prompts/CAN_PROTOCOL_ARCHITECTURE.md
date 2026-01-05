@@ -147,45 +147,160 @@ Reserved for module type-specific messages.
 
 ## Module Discovery Protocol
 
+> **✅ IMPLEMENTED**: Boot-time discovery protocol is fully implemented in the shared component.  
+> See: `/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md`
+
 ### Startup Sequence
+
+The OTS system uses a **boot-time only** discovery protocol to detect CAN modules:
 
 ```
 1. Controller boots, initializes CAN bus
-2. Controller broadcasts WHO_IS_THERE (0x10, addr 0xF)
-3. Modules respond with I_AM_HERE (0x11, their addr)
-4. Controller queries each module for detailed info (0x12)
-5. Modules respond with type, version, capabilities (0x13)
-6. Controller builds module registry
+2. Controller broadcasts MODULE_QUERY (0x411) to all modules
+3. Modules respond with MODULE_ANNOUNCE (0x410) containing their info
+4. Controller waits 500ms for all responses
+5. Controller builds module registry (no further discovery traffic)
 ```
 
-### Module Info Response Format
+**No ongoing heartbeat**: Discovery happens once at boot. This minimizes CAN bus traffic during gameplay.
 
-```c
-typedef struct {
-    uint8_t msg_class;        // 0x13 (MSG_DISC_INFO_RESPONSE)
-    uint8_t module_type;      // Module type ID
-    uint8_t hw_version;       // Hardware version
-    uint8_t fw_version_major; // Firmware major version
-    uint8_t fw_version_minor; // Firmware minor version
-    uint8_t capabilities;     // Capability flags
-    uint16_t vendor_id;       // Manufacturer ID (optional)
-} __attribute__((packed)) module_info_t;
+### CAN IDs (Reserved for Discovery)
+
+| CAN ID | Direction | Message Type | Description |
+|--------|-----------|--------------|-------------|
+| **0x410** | Module → Main | MODULE_ANNOUNCE | Module announces presence and info |
+| **0x411** | Main → Module | MODULE_QUERY | Main controller queries for modules |
+
+### Message Format
+
+#### MODULE_QUERY (0x411)
+
+**Direction**: Main controller → All modules (broadcast)  
+**Purpose**: Request all modules to identify themselves
+
+```
+Byte 0: 0xFF (broadcast marker)
+Bytes 1-7: Reserved (0x00)
+```
+
+**Example**:
+```
+CAN ID: 0x411
+Data: [FF 00 00 00 00 00 00 00]
+```
+
+#### MODULE_ANNOUNCE (0x410)
+
+**Direction**: Module → Main controller  
+**Purpose**: Module identifies itself with type, version, capabilities
+
+```
+Byte 0: Module Type (0x00-0xFF)
+Byte 1: Firmware Major Version
+Byte 2: Firmware Minor Version
+Byte 3: Capabilities (bit flags)
+Byte 4: CAN Block (module's assigned CAN ID block)
+Byte 5: Node ID (reserved, 0x00)
+Bytes 6-7: Reserved (0x00)
+```
+
+**Example - Audio Module v1.0**:
+```
+CAN ID: 0x410
+Data: [01 01 00 01 42 00 00 00]
+       │  │  │  │  │
+       │  │  │  │  └─ CAN block 0x42 (uses 0x420-0x42F)
+       │  │  │  └─ Capabilities: 0x01 (STATUS)
+       │  │  └─ Firmware minor: 0
+       │  └─ Firmware major: 1
+       └─ Module type: 0x01 (AUDIO)
 ```
 
 ### Module Type Registry
 
 ```c
-#define MODULE_TYPE_UNKNOWN     0x00
-#define MODULE_TYPE_AUDIO       0x01
-#define MODULE_TYPE_DISPLAY     0x02
-#define MODULE_TYPE_INPUT       0x03
-#define MODULE_TYPE_LIGHTING    0x04
-#define MODULE_TYPE_HAPTIC      0x05
-#define MODULE_TYPE_SENSOR      0x06
-#define MODULE_TYPE_POWER       0x07
+#define MODULE_TYPE_NONE        0x00  // Reserved / uninitialized
+#define MODULE_TYPE_AUDIO       0x01  // ✅ IMPLEMENTED
+#define MODULE_TYPE_DISPLAY     0x02  // Future
+#define MODULE_TYPE_INPUT       0x03  // Future
+#define MODULE_TYPE_LIGHTING    0x04  // Future
+#define MODULE_TYPE_HAPTIC      0x05  // Future
+#define MODULE_TYPE_SENSOR      0x06  // Future
+#define MODULE_TYPE_POWER       0x07  // Future
 // 0x08-0x7F: Future module types
 // 0x80-0xFF: Custom/experimental
 ```
+
+### Capability Flags
+
+```c
+#define MODULE_CAP_STATUS       0x01  // Sends periodic status updates
+#define MODULE_CAP_OTA          0x02  // Supports OTA firmware updates
+#define MODULE_CAP_BATTERY      0x04  // Battery powered (low-power mode)
+// bits 3-7: Reserved for future capabilities
+```
+
+### Discovery Flow Diagram
+
+```
+Main Controller                          Audio Module
+     │                                        │
+     │ ──────── MODULE_QUERY (0x411) ───────→│
+     │                                        │
+     │                                   [Parse query]
+     │                                   [Prepare announce]
+     │                                        │
+     │ ←──── MODULE_ANNOUNCE (0x410) ────────│
+     │       (type=AUDIO, v1.0, block=0x42)  │
+     │                                        │
+[Wait 500ms for more responses]              │
+     │                                        │
+[Build module registry]                      │
+[Enable sound_module features]               │
+     │                                        │
+     ▼                                        ▼
+  Ready                                   Ready
+```
+
+### Integration Example
+
+**Module Side (e.g., audio module)**:
+```c
+#include "can_discovery.h"
+
+void can_rx_task(void *arg) {
+    can_frame_t frame;
+    while (1) {
+        if (can_driver_receive(&frame, portMAX_DELAY) == ESP_OK) {
+            if (frame.id == CAN_ID_MODULE_QUERY) {
+                // Auto-respond to discovery
+                can_discovery_handle_query(&frame, MODULE_TYPE_AUDIO,
+                                          1, 0, MODULE_CAP_STATUS, 0x42, 0);
+            }
+            // ... handle other messages ...
+        }
+    }
+}
+```
+
+**Main Controller Side**:
+```c
+#include "can_discovery.h"
+
+void discover_modules(void) {
+    // Send discovery query
+    can_discovery_query_all();
+    
+    // Wait for responses
+    vTaskDelay(pdMS_TO_TICKS(500));
+    
+    // Process MODULE_ANNOUNCE messages in CAN RX task
+    // (handled separately in can_rx_task)
+}
+```
+
+For complete API reference and integration examples, see:  
+**`/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md`**
 
 ## Controller Implementation
 
