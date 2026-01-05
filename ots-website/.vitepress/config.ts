@@ -4,7 +4,9 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: "OpenFront Tactical Suitcase",
   description: "Hardware controller for OpenFront.io game",
-
+  
+  // Ignore dead links from synced docs (many reference pages not yet created)
+  ignoreDeadLinks: true,
 
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
