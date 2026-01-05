@@ -36,7 +36,7 @@ export type GameEventType =
   | 'NUKE_LAUNCHED'
   | 'NUKE_EXPLODED'
   | 'NUKE_INTERCEPTED'
-  | 'ALERT_NUKE'
+  | 'ALERT_ATOM'
   | 'ALERT_HYDRO'
   | 'ALERT_MIRV'
   | 'ALERT_LAND'

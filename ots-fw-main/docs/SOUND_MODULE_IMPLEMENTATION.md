@@ -132,7 +132,7 @@ Maps to SD card files on audio module: `/sounds/0001.mp3`, etc.
 4. Send ACK messages (0x423) on successful playback
 
 ### For Main Firmware (ots-fw-main)
-1. Complete sound catalog in protocol-context.md
+1. Complete sound catalog in WEBSOCKET_MESSAGE_SPEC.md
 2. Add CAN receive handler for STATUS/ACK messages
 3. Display audio module status in diagnostics
 4. Implement sound queue/priority system
@@ -147,5 +147,5 @@ Maps to SD card files on audio module: `/sounds/0001.mp3`, etc.
 
 - Sound Module Spec: `/ots-hardware/modules/sound-module.md`
 - Audio Firmware: `/ots-fw-audiomodule/`
-- Protocol Context: `/prompts/protocol-context.md`
+- Protocol Context: `/prompts/WEBSOCKET_MESSAGE_SPEC.md`
 - CAN Migration Plan: `/ots-fw-main/docs/CAN_DRIVER_FUTURE.md`

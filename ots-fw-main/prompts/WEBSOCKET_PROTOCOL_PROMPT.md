@@ -42,7 +42,7 @@ The WebSocket protocol implementation provides:
 
 ## Protocol Specification
 
-The protocol is defined in `/prompts/protocol-context.md`. All implementations must stay in sync.
+The protocol is defined in `/prompts/WEBSOCKET_MESSAGE_SPEC.md`. All implementations must stay in sync.
 
 ### Message Envelope
 
@@ -407,7 +407,7 @@ void ws_server_send_game_event(game_event_type_t event_type, const char* message
 
 ### Event Type Mapping
 
-Keep `protocol.h` in sync with `/prompts/protocol-context.md`:
+Keep `protocol.h` in sync with `/prompts/WEBSOCKET_MESSAGE_SPEC.md`:
 
 ```c
 typedef enum {
@@ -620,7 +620,7 @@ asyncio.run(test_websocket())
 
 ## References
 
-- Protocol specification: `/prompts/protocol-context.md`
+- Protocol specification: `/prompts/WEBSOCKET_MESSAGE_SPEC.md`
 - Event dispatcher: `src/event_dispatcher.c`, `include/event_dispatcher.h`
 - Game state: `include/game_state.h`
 - HTTP server: `src/http_server.c`

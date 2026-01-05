@@ -35,7 +35,7 @@
  * - /sounds/0002.mp3
  * - etc.
  * 
- * TODO: Sync with protocol-context.md Sound Catalog section
+ * TODO: Sync with WEBSOCKET_MESSAGE_SPEC.md Sound Catalog section
  */
 typedef enum {
     SOUND_INDEX_GAME_START = 1,

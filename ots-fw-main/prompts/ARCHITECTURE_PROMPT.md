@@ -285,7 +285,7 @@ See `docs/TESTING.md` for complete testing guide.
 
 ## Protocol Synchronization
 
-**CRITICAL**: All protocol changes start at `/prompts/protocol-context.md` (repo root).
+**CRITICAL**: All protocol changes start at `/prompts/WEBSOCKET_MESSAGE_SPEC.md` (repo root).
 
 Changes must be synchronized across:
 1. TypeScript: `ots-shared/src/game.ts`

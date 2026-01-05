@@ -21,7 +21,7 @@ Main controller and bus specification for the Openfront Tactical Suitcase.
 
 ### Network Configuration
 - **Mode**: WiFi Station (connects to local network) or AP mode
-- **Protocol**: WebSocket server (same protocol as defined in `prompts/protocol-context.md`)
+- **Protocol**: WebSocket server (same protocol as defined in `prompts/WEBSOCKET_MESSAGE_SPEC.md`)
 - **Port**: TBD (e.g., 8080)
 - **Discovery**: mDNS/DNS-SD for auto-discovery (optional)
 
@@ -100,7 +100,7 @@ Each module can:
 
 ## Protocol Integration
 
-The hardware uses the same protocol defined in `/prompts/protocol-context.md` at the WebSocket layer:
+The hardware uses the same protocol defined in `/prompts/WEBSOCKET_MESSAGE_SPEC.md` at the WebSocket layer:
 
 ### Incoming to Hardware (from ots-simulator)
 ```json

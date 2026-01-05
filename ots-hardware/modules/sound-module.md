@@ -108,7 +108,7 @@ To keep CAN payloads small, the Sound Module uses `soundIndex` to choose a file.
 
 The Sound Module should try MP3 first and fall back to WAV if MP3 decode is not available.
 
-For the canonical mapping of `soundId` → `soundIndex`, see `prompts/protocol-context.md` (Sound Catalog).
+For the canonical mapping of `soundId` → `soundIndex`, see `prompts/WEBSOCKET_MESSAGE_SPEC.md` (Sound Catalog).
 
 ## Game / Protocol Mapping (Planned)
 

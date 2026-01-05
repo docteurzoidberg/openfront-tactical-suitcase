@@ -33,7 +33,11 @@ doc/
 │   ├── README.md                          # Developer docs table of contents
 │   │
 │   ├── getting-started.md                 # ⭐ Dev environment setup
+│   ├── development-environment.md         # Comprehensive IDE setup and workflows
 │   ├── repository-overview.md             # Codebase structure
+│   ├── websocket-protocol.md              # WebSocket protocol implementation guide
+│   ├── canbus-protocol.md                 # CAN bus protocol implementation guide
+│   ├── releases.md                        # Release process and version management
 │   ├── firmware-development.md            # ESP32 firmware dev guide
 │   ├── server-development.md              # Nuxt dashboard dev guide
 │   ├── userscript-development.md          # Browser extension dev guide
@@ -190,8 +194,8 @@ From `ots-userscript/docs/`:
 - Architecture → `developer/architecture/userscript.md`
 
 From `prompts/`:
-- `protocol-context.md` → Link as authoritative source
-- `DEVELOPMENT_SETUP.md` → `developer/getting-started.md`
+- `WEBSOCKET_MESSAGE_SPEC.md` → Link as authoritative source
+- `developer/development-environment.md` - Comprehensive environment setup
 - `GIT_WORKFLOW.md` → `developer/standards/git-workflow.md`
 
 ## Next Steps

@@ -20,4 +20,4 @@ Examples:
 - `0003-game_victory.*` → `SOUND_PLAY { soundId: "game_victory" }`
 - `0004-game_defeat.*` → `SOUND_PLAY { soundId: "game_defeat" }`
 
-See the canonical mapping table in `prompts/protocol-context.md` (Sound Catalog).
+See the canonical mapping table in `prompts/WEBSOCKET_MESSAGE_SPEC.md` (Sound Catalog).

@@ -17,6 +17,30 @@ Documentation for developers and makers working on OTS.
    - Build systems
    - Configuration files
 
+3. **[Development Environment](development-environment.md)**
+   - Comprehensive IDE setup
+   - Tools and extensions
+   - Environment configuration
+   - Testing workflows
+
+4. **[WebSocket Protocol](websocket-protocol.md)**
+   - Protocol specification reference
+   - Implementation patterns
+   - Event detection and handling
+   - Debugging WebSocket communication
+
+5. **[CAN Bus Protocol](canbus-protocol.md)**
+   - CAN message format reference
+   - Discovery protocol implementation
+   - Audio module protocol patterns
+   - Testing and debugging strategies
+
+6. **[Release Process](releases.md)**
+   - Creating releases
+   - Version management
+   - Build automation
+   - Deployment
+
 ## 🏗️ Development Guides
 
 ### Firmware Development

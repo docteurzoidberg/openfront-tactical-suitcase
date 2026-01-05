@@ -31,7 +31,6 @@ ots/
 │           ├── idf_component.yml
 │           ├── README.md
 │           ├── COMPONENT_PROMPT.md
-│           ├── CAN_PROTOCOL_ARCHITECTURE.md
 │           ├── include/can_driver.h
 │           └── can_driver.c
 │
@@ -183,4 +182,4 @@ Search and replace pattern used:
 - Shared components: `/ots-fw-shared/README.md`
 - Component architecture: `/ots-fw-main/docs/COMPONENTS_ARCHITECTURE.md`
 - CAN driver: `/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md`
-- CAN protocol: `/ots-fw-shared/components/can_driver/CAN_PROTOCOL_ARCHITECTURE.md`
+- CAN protocol: `/prompts/CANBUS_MESSAGE_SPEC.md` (specification) and `/doc/developer/canbus-protocol.md` (implementation guide)

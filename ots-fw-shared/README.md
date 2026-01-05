@@ -31,7 +31,6 @@ ots-fw-shared/
         ├── idf_component.yml
         ├── README.md
         ├── COMPONENT_PROMPT.md
-        ├── CAN_PROTOCOL_ARCHITECTURE.md
         ├── include/
         │   └── can_driver.h
         └── can_driver.c
@@ -111,4 +110,4 @@ idf_component_register(
 - Main firmware: `/ots-fw-main/`
 - Audio firmware: `/ots-fw-audiomodule/`
 - Component architecture: `/ots-fw-main/docs/COMPONENTS_ARCHITECTURE.md`
-- CAN protocol: `/ots-fw-shared/components/can_driver/CAN_PROTOCOL_ARCHITECTURE.md`
+- CAN protocol: `/prompts/CANBUS_MESSAGE_SPEC.md` (specification) and `/doc/developer/canbus-protocol.md` (implementation guide)

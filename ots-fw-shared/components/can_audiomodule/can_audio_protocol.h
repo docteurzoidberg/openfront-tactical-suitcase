@@ -10,11 +10,10 @@
  * @brief Audio-specific CAN protocol for OTS sound module
  * 
  * This file defines the audio module's CAN message format, IDs, and functions.
- * For generic multi-module CAN architecture, see:
- *   /ots-fw-shared/components/can_driver/CAN_PROTOCOL_ARCHITECTURE.md
  * 
  * Audio protocol documentation:
- *   /ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md
+ *   /prompts/CANBUS_MESSAGE_SPEC.md (protocol specification)
+ *   /doc/developer/canbus-protocol.md (implementation guide)
  */
 
 // ============================================================================
@@ -23,11 +22,12 @@
 
 #define CAN_ID_PLAY_SOUND       0x420  // main → audio (PLAY request with loop/volume)
 #define CAN_ID_STOP_SOUND       0x421  // main → audio (STOP by queue ID)
-#define CAN_ID_SOUND_STATUS     0x422  // audio → main (periodic status)
+#define CAN_ID_STOP_ALL         0x422  // main → audio (STOP ALL sounds)
 #define CAN_ID_SOUND_ACK        0x423  // audio → main (PLAY ACK with queue ID)
-#define CAN_ID_STOP_ALL         0x424  // main → audio (STOP ALL sounds)
+#define CAN_ID_STOP_ACK         0x424  // audio → main (STOP acknowledgment)
 #define CAN_ID_SOUND_FINISHED   0x425  // audio → main (sound playback finished)
-// 0x426-0x42F: Reserved for future audio features
+#define CAN_ID_SOUND_STATUS     0x426  // audio → main (periodic status - future enhancement)
+// 0x427-0x42F: Reserved for future audio features
 
 // ============================================================================
 // PLAY_SOUND MESSAGE (0x420)
@@ -46,7 +46,7 @@
 #define CAN_AUDIO_FLAG_STOP_ALL       (1 << 0)  // Stop all sounds (deprecated, use STOP_ALL)
 
 // ============================================================================
-// SOUND_STATUS MESSAGE (0x422)
+// SOUND_STATUS MESSAGE (0x426) - Future Enhancement
 // ============================================================================
 
 // State bits (byte 0)

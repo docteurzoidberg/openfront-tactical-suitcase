@@ -237,7 +237,7 @@ wss://ots-fw-main.local:3000/ws
 
 - **OTA Firmware Updates**: See `docs/OTA_GUIDE.md` for updating firmware (which may regenerate the certificate)
 - **OTS Documentation**: See `README.md` for general device setup
-- **WebSocket Protocol**: See `prompts/protocol-context.md` for technical details
+- **WebSocket Protocol**: See `prompts/WEBSOCKET_MESSAGE_SPEC.md` for technical details
 
 ---
 

@@ -207,4 +207,4 @@ const hasSpawned = myPlayer.hasSpawned ? myPlayer.hasSpawned() : false
 
 - [game-api.ts](./src/game/game-api.ts) - GameAPI interface and implementation
 - [openfront-bridge.ts](./src/game/openfront-bridge.ts) - Main game polling logic
-- [protocol-context.md](../prompts/protocol-context.md) - Event definitions
+- [WEBSOCKET_MESSAGE_SPEC.md](../prompts/WEBSOCKET_MESSAGE_SPEC.md) - Event definitions

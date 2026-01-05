@@ -48,6 +48,6 @@ For developers and makers working on OTS:
 
 ## 🔗 External Resources
 
-- [Protocol Specification](../prompts/protocol-context.md) - Complete message protocol
+- [Protocol Specification](../prompts/WEBSOCKET_MESSAGE_SPEC.md) - Complete message protocol
 - [Release Notes](../weekly_announces.md) - Version history and changelog
 - [Hardware Specs](../ots-hardware/) - PCB designs and module specifications

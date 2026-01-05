@@ -1,202 +1,249 @@
-# Git Workflow - OTS Project
+# Git Workflow - AI Assistant Guidelines
 
-## Overview
+## Purpose
 
-The OTS project follows a **trunk-based development** workflow with the `main` branch as the single source of truth. All changes are committed directly to `main` with proper commit messages and testing.
+This prompt guides AI assistants (GitHub Copilot) on how to handle git operations, commit messages, and version control workflows for the OTS project.
 
-## Branch Strategy
+## Project Git Strategy
 
-### Main Branch
-- **Branch**: `main`
-- **Purpose**: Production-ready code
-- **Protection**: All commits should be tested before pushing
-- **History**: Linear history preferred (no merge commits when possible)
+**Trunk-Based Development**: Single `main` branch, no long-lived feature branches.
 
-### Feature Branches (Optional)
-For complex features or experiments:
-```bash
-git checkout -b feature/nuke-tracking
-# ... work on feature ...
-git checkout main
-git merge --squash feature/nuke-tracking
-git commit -m "feat(firmware): implement nuke tracking system"
-```
+When suggesting git operations:
+- Always assume working on `main` branch
+- Recommend testing before committing
+- Suggest atomic commits (one logical change per commit)
+- Prefer rebase over merge for clean history
 
-## Commit Message Format
+## Commit Message Generation
 
-Follow **Conventional Commits** specification:
+### Format (Conventional Commits)
 
 ```
 <type>(<scope>): <subject>
 
-<body>
+[optional body]
 
-<footer>
+[optional footer]
 ```
 
-### Types
+### When to Generate Commit Messages
 
-| Type | Purpose | Example |
-|------|---------|---------|
-| **feat** | New feature | `feat(userscript): add death detection polling` |
-| **fix** | Bug fix | `fix(firmware): correct I2C address for LCD` |
-| **refactor** | Code restructuring | `refactor(server): extract WebSocket logic` |
-| **docs** | Documentation only | `docs: update hardware assembly guide` |
-| **style** | Code style (formatting) | `style(firmware): format with clang-format` |
-| **test** | Add/update tests | `test(userscript): add nuke tracker unit tests` |
-| **chore** | Maintenance tasks | `chore(release): version 2025-12-20.1` |
-| **perf** | Performance improvement | `perf(firmware): optimize LED blink timing` |
-| **build** | Build system changes | `build(server): upgrade to Nuxt 4.1` |
+**Always include commit message** when:
+- User asks to "commit" or "save changes"
+- User completes a feature implementation
+- User asks "what should the commit message be?"
+- Multiple files changed and user asks to finalize
 
-### Scopes
+**Types to use:**
 
-| Scope | Component |
-|-------|-----------|
-| `userscript` | ots-userscript |
-| `firmware` | ots-fw-main |
-| `server` | ots-simulator |
-| `hardware` | ots-hardware specs |
-| `protocol` | prompts/protocol-context.md |
-| `release` | Release automation |
-| `docs` | Documentation |
+| Type | Use When | Example |
+|------|----------|---------|
+| `feat` | New feature added | `feat(userscript): add nuke interception detection` |
+| `fix` | Bug fixed | `fix(firmware): correct LED blink timing` |
+| `refactor` | Code restructured, no behavior change | `refactor(server): extract WebSocket handler` |
+| `docs` | Documentation only | `docs: update hardware assembly guide` |
+| `style` | Formatting/style only | `style(firmware): apply clang-format` |
+| `test` | Tests added/updated | `test(userscript): add tracker unit tests` |
+| `chore` | Maintenance/tooling | `chore: update dependencies` |
+| `perf` | Performance improvement | `perf(firmware): optimize I2C polling` |
 
-### Examples
+**Scopes to use:**
 
-**Good commit messages:**
+- `userscript` - ots-userscript
+- `firmware` - ots-fw-main
+- `server` - ots-simulator (NOT ots-server)
+- `hardware` - ots-hardware specs
+- `protocol` - WEBSOCKET_MESSAGE_SPEC.md changes
+- `docs` - documentation
+- `shared` - ots-shared types
+
+### Commit Message Rules
+
+**Subject line:**
+- Start with lowercase (after scope)
+- No period at end
+- Imperative mood ("add" not "added" or "adds")
+- Max 72 characters
+- Be specific: ❌ "fix bug" ✅ "fix LCD ghosting on screen transitions"
+
+**Body (optional but recommended for non-trivial changes):**
+- Explain WHY, not WHAT (code shows what)
+- Wrap at 72 characters
+- Separate from subject with blank line
+- Use bullet points for multiple changes
+
+**Footer (optional):**
+- Reference issues: `Closes #42` or `Fixes #38`
+- Breaking changes: `BREAKING CHANGE: renamed API endpoint`
+
+### Example Generations
+
+**User asks: "Commit this nuke tracking feature"**
+
+You generate:
 ```bash
-feat(userscript): implement attack ratio control via slider
+git add ots-userscript/src/trackers/nuke-tracker.ts
+git commit -m "feat(userscript): implement nuke tracking with unitID
 
-- Add slider value polling every 100ms
-- Send set-troops-percent command on ≥1% change
-- Update HUD to show current ratio
+- Track individual nukes by unitID instead of timeouts
+- Support up to 32 simultaneous nukes
+- Emit NUKE_EXPLODED/NUKE_INTERCEPTED events
+- Update LED state only when all nukes of type resolve
 
-Closes #42
+Closes #42"
 ```
 
+**User asks: "Fix the I2C address issue"**
+
+You generate:
 ```bash
-fix(firmware): resolve LCD ghosting on screen transitions
-
-LCD was not clearing properly between screens, causing
-character overlap. Added explicit lcd_clear() call before
-each screen update.
-
-Fixes #38
+git add ots-fw-main/include/config.h
+git commit -m "fix(firmware): correct LCD I2C address from 0x3F to 0x27"
 ```
 
-```bash
-refactor(server): extract hardware module components
+## Protocol Change Workflow
 
-- Move NukeModule to components/hardware/NukeModule.vue
-- Move AlertModule to components/hardware/AlertModule.vue
-- Improve reusability and maintainability
-```
+**CRITICAL**: When user modifies protocol, guide them through proper order.
 
-**Bad commit messages:**
-```bash
-fix stuff
-updated files
-wip
-test
-minor changes
-```
+**Always follow this sequence:**
 
-## Workflow Steps
+1. **First**: Update `prompts/WEBSOCKET_MESSAGE_SPEC.md`
+2. **Second**: Update `ots-shared/src/game.ts` (TypeScript types)
+3. **Third**: Update `ots-fw-main/include/protocol.h` (C types)
+4. **Fourth**: Update implementations (userscript, server, firmware modules)
 
-### 1. Before Starting Work
+**Suggest commits in this order:**
 
 ```bash
-# Ensure you're on main and up to date
-git checkout main
-git pull origin main
+# Step 1: Protocol spec
+git add prompts/WEBSOCKET_MESSAGE_SPEC.md
+git commit -m "docs(protocol): add NUKE_INTERCEPTED event definition"
 
-# Check working directory is clean
-git status
-```
-
-### 2. Make Changes
-
-Edit files, test locally:
-- **Userscript**: Build and test in browser
-- **Firmware**: Flash to device and verify
-- **Server**: Run dev server and test UI
-
-### 3. Stage and Commit
-
-```bash
-# Stage specific files (preferred)
-git add ots-userscript/src/main.user.ts
-git add ots-userscript/package.json
-
-# Or stage all changes
-git add -A
-
-# Commit with descriptive message
-git commit -m "feat(userscript): add game end detection"
-```
-
-### 4. Push to Remote
-
-```bash
-# Push to origin
-git push origin main
-
-# If remote has changes, pull first
-git pull --rebase origin main
-git push origin main
-```
-
-## Special Workflows
-
-### Protocol Changes
-
-**CRITICAL**: Protocol changes must be synchronized across all components.
-
-```bash
-# 1. Update source of truth FIRST
-git add prompts/protocol-context.md
-git commit -m "docs(protocol): add NUKE_INTERCEPTED event"
-
-# 2. Update TypeScript implementation
+# Step 2: TypeScript types
 git add ots-shared/src/game.ts
 git commit -m "feat(shared): add NUKE_INTERCEPTED event type"
 
-# 3. Update firmware implementation
-git add ots-fw-main/include/protocol.h
-git add ots-fw-main/src/protocol.c
-git commit -m "feat(firmware): add NUKE_INTERCEPTED event handler"
+# Step 3: Firmware types
+git add ots-fw-main/include/protocol.h ots-fw-main/src/protocol.c
+git commit -m "feat(firmware): add NUKE_INTERCEPTED event enum and parser"
 
-# 4. Update implementations
+# Step 4: Implementations
 git add ots-userscript/src/trackers/nuke-tracker.ts
-git add ots-simulator/app/composables/useGameSocket.ts
+git add ots-simulator/server/routes/ws.ts
 git add ots-fw-main/src/nuke_module.c
-git commit -m "feat: implement NUKE_INTERCEPTED event across components"
+git commit -m "feat: implement NUKE_INTERCEPTED handling across all components
 
-# 5. Push all changes
-git push origin main
+- Userscript: Emit event when nuke deleted before arrival
+- Server: Broadcast event to all connected clients
+- Firmware: Clear nuke from tracker and update LED state"
 ```
 
-**Order matters:**
-1. Protocol spec (`prompts/protocol-context.md`)
-2. Shared types (`ots-shared`)
-3. Firmware types (`protocol.h`)
-4. Implementations (userscript, server, firmware modules)
+**Never suggest updating implementations before types are in place.**
 
-### Release Workflow
+## When User Asks About Git Operations
 
-Use the automated release script:
+### "How do I commit this?"
+
+Generate appropriate commit message based on files changed and context.
+
+### "Should I create a branch?"
+
+Answer: "No, commit directly to `main`. This project uses trunk-based development. Test locally first, then commit and push."
+
+### "How do I undo this commit?"
+
+If not pushed:
+```bash
+git reset --soft HEAD~1  # Keep changes
+# or
+git reset --hard HEAD~1  # Discard changes
+```
+
+If pushed:
+```bash
+git revert <commit-hash>  # Create reverting commit
+```
+
+### "What files should I commit together?"
+
+Group by logical change:
+- ✅ Protocol change + type definitions + implementations (if tightly coupled)
+- ✅ Bug fix + related test
+- ❌ Multiple unrelated features
+- ❌ Feature + unrelated typo fix
+
+### "How do I check what changed?"
 
 ```bash
-# Standard release (updates all versions, builds, commits, tags)
-./release.sh -u -m "Feature: Game end detection and LCD persistence"
-
-# Review what will be committed
-git diff HEAD
-
-# If satisfied, push
-git push origin main --follow-tags
+git status           # See modified files
+git diff             # See changes
+git diff --staged    # See staged changes
 ```
 
-**Automated Release with release.sh:**
+## Release Workflow
+
+When user wants to create a release:
+
+```bash
+./release.sh -u -m "Release description"
+```
+
+Explain:
+- Script auto-updates versions in all projects
+- Creates git tag with date format (YYYY-MM-DD.N)
+- Commits version changes
+- User must push: `git push origin main --follow-tags`
+
+## Anti-Patterns to Avoid
+
+❌ **Don't suggest:**
+- Creating feature branches for simple changes
+- Merge commits (prefer rebase)
+- Generic commit messages ("fix", "update", "wip")
+- Committing without testing
+- Skipping WEBSOCKET_MESSAGE_SPEC.md when changing protocol
+- Using `any` type instead of proper protocol types
+
+✅ **Do suggest:**
+- Direct commits to main with good messages
+- Linear history with rebase
+- Specific, descriptive commit messages
+- Testing before commit
+- Protocol changes in proper order
+- Strongly typed protocol implementations
+
+## Quick Reference
+
+**Good commit message examples:**
+```
+feat(userscript): add game end detection with victory/defeat tracking
+fix(firmware): resolve WiFi reconnection timeout
+refactor(server): extract hardware module components
+docs(hardware): update wiring diagram for Alert Module
+style(userscript): format code with prettier
+test(firmware): add I2C communication tests
+chore(deps): update nuxt to 4.1.0
+perf(firmware): reduce LED update latency
+```
+
+**Bad commit message examples:**
+```
+fix bug          # ❌ Not descriptive
+updated code     # ❌ No context
+wip              # ❌ Not a complete change
+test             # ❌ Not descriptive
+minor changes    # ❌ Vague
+```
+
+## Reminder
+
+When helping users with git operations:
+1. Generate proper commit messages automatically
+2. Group related changes logically
+3. Follow protocol change order strictly
+4. Always include `-e esp32-s3-dev` for firmware builds
+5. Suggest testing before committing
+6. Keep commits atomic and focused
 
 The project includes `release.sh` for unified version management across all components:
 
@@ -501,7 +548,7 @@ git config --global diff.context 5
 - **Conventional Commits**: https://www.conventionalcommits.org/
 - **Git Best Practices**: https://git-scm.com/book/en/v2
 - **Release Process**: [`prompts/RELEASE.md`](RELEASE.md)
-- **Protocol Changes**: [`prompts/protocol-context.md`](protocol-context.md)
+- **Protocol Changes**: [`prompts/WEBSOCKET_MESSAGE_SPEC.md`](WEBSOCKET_MESSAGE_SPEC.md)
 
 ## Summary Checklist
 

@@ -2,14 +2,14 @@
 
 Any protocol change must stay consistent across:
 
-1. Repo root spec: `../../prompts/protocol-context.md` (single source of truth)
+1. Repo root spec: `../../prompts/WEBSOCKET_MESSAGE_SPEC.md` (single source of truth)
 2. Shared TS types: `../../ots-shared/src/game.ts`
 3. Firmware C types: `include/protocol.h` and `src/protocol.c`
 4. Implementations: server/userscript/firmware
 
 ## Workflow (Do This In Order)
 
-1. Update `../../prompts/protocol-context.md`
+1. Update `../../prompts/WEBSOCKET_MESSAGE_SPEC.md`
    - Add/modify message envelope and event/command payloads
    - Include JSON examples
 2. Update `../../ots-shared/src/game.ts`

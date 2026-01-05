@@ -44,8 +44,8 @@ OTS bridges the gap between digital gameplay and physical interaction, providing
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/ots.git
-cd ots
+git clone https://github.com/docteurzoidberg/openfront-tactical-suitcase.git
+cd openfront-tactical-suitcase
 
 # Install server dependencies
 cd ots-simulator
@@ -133,7 +133,7 @@ See [Developer Getting Started](doc/developer/getting-started.md) for complete s
 
 ### Software Features
 - **Real-time Event Tracking** - Detects nukes, invasions, game state changes
-- **Protocol-Driven** - Single source of truth in `prompts/protocol-context.md`
+- **Protocol-Driven** - Single source of truth in `prompts/WEBSOCKET_MESSAGE_SPEC.md`
 - **Hardware Emulation** - Full dashboard simulator for development
 - **Type Safety** - Shared TypeScript types across all components
 - **Modular Design** - Easy to add new modules or features
@@ -205,7 +205,7 @@ We welcome contributions! See [CONTRIBUTING.md](doc/developer/CONTRIBUTING.md) f
 ## 📖 Technical Documentation
 
 ### Protocol & Architecture
-- [Protocol Specification](prompts/protocol-context.md) - Complete WebSocket message format
+- [Protocol Specification](prompts/WEBSOCKET_MESSAGE_SPEC.md) - Complete WebSocket message format
 - [Firmware Architecture](doc/developer/architecture/firmware.md) - ESP32-S3 design
 - [Shared Components](doc/developer/architecture/shared-components.md) - Reusable code
 

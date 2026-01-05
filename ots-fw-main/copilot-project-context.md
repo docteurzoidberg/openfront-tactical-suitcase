@@ -6,13 +6,13 @@
 
 Goals:
 - Act as a **WebSocket client** connecting to `ots-simulator` game backend
-- Use the **same protocol** as defined in `prompts/protocol-context.md`
+- Use the **same protocol** as defined in `prompts/WEBSOCKET_MESSAGE_SPEC.md`
 - Provide modular hardware abstraction mirroring physical PCB modules
 - Support event-driven architecture with clean separation of concerns
 
 This firmware:
 - Maintains a stable WebSocket connection to the game server
-- Sends and receives messages conforming to `prompts/protocol-context.md`
+- Sends and receives messages conforming to `prompts/WEBSOCKET_MESSAGE_SPEC.md`
 - Uses hardware modules (Alert, Nuke, Main Power) with standardized interfaces
 - Implements event dispatcher for flexible event routing
 - Supports Over-The-Air (OTA) updates via HTTP
@@ -134,7 +134,7 @@ idf.py menuconfig
 
 - Connect to Wi-Fi using configured credentials with automatic reconnection.
 - Act as a **WebSocket client** connecting TO `ots-simulator` game backend.
-- Implement the same **message envelope** (`type`, `payload`) as described in `prompts/protocol-context.md`.
+- Implement the same **message envelope** (`type`, `payload`) as described in `prompts/WEBSOCKET_MESSAGE_SPEC.md`.
 - Keep the **game state** and **event notifications** consistent with the `ots-simulator` simulator and `ots-userscript`.
 - React to incoming `state` and `event` messages by updating hardware (LEDs, outputs).
 - Monitor hardware inputs (buttons, sensors) and send `cmd` messages to the server.
@@ -205,15 +205,44 @@ ots-fw-main/
 
 ## Synchronization with `ots-simulator` and `ots-userscript`
 
-- The **authoritative specification** is `prompts/protocol-context.md` at repo root
-- Event types defined in `protocol.h` must stay in sync with prompts/protocol-context.md:
+**WebSocket Protocol:**
+- **Specification**: [`/prompts/WEBSOCKET_MESSAGE_SPEC.md`](../../prompts/WEBSOCKET_MESSAGE_SPEC.md) - Single source of truth (authoritative)
+- **Developer Guide**: [`/doc/developer/websocket-protocol.md`](../../doc/developer/websocket-protocol.md) - Implementation patterns and debugging
+- **C Implementation**: `ots-fw-main/include/protocol.h` and `src/protocol.c`
+
+🤖 **AI Guidelines: WebSocket Protocol Changes**
+
+When user requests protocol changes (new events, commands, or data fields):
+
+1. **Update BOTH files in this order:**
+   - First: `prompts/WEBSOCKET_MESSAGE_SPEC.md` (add event definition with JSON example)
+   - Second: `doc/developer/websocket-protocol.md` (add C implementation examples)
+
+2. **Keep them synchronized:**
+   - Spec shows WHAT messages look like (JSON structure, data fields)
+   - Dev doc shows HOW to implement in C (cJSON parsing, event handling)
+   - Both must reflect the same protocol version
+
+3. **Firmware-specific updates:**
+   - Update `include/protocol.h` (add to `game_event_type_t` enum)
+   - Update `src/protocol.c` (add string conversion)
+   - Add hardware module event handler
+   - Document hardware behavior in spec (LED states, timing)
+
+4. **Verification checklist:**
+   - [ ] Event exists in spec with JSON example and hardware behavior
+   - [ ] Event has C parsing example in dev doc
+   - [ ] Both files mention same data field names
+   - [ ] Hardware behavior documented in both files
+
+- Event types defined in `protocol.h` must stay in sync with the specification:
   - Game events: `GAME_START`, `GAME_END`, `WIN`, `LOOSE`
   - Nuke events: `NUKE_LAUNCHED`, `HYDRO_LAUNCHED`, `MIRV_LAUNCHED`, `NUKE_EXPLODED`, `NUKE_INTERCEPTED`
   - Alert events: `ALERT_ATOM`, `ALERT_HYDRO`, `ALERT_MIRV`, `ALERT_LAND`, `ALERT_NAVAL`
   - Internal events: `INTERNAL_EVENT_NETWORK_CONNECTED`, `INTERNAL_EVENT_WS_CONNECTED`, etc.
 - Game phases in `game_state.h` must match ots-shared: `LOBBY`, `SPAWNING`, `IN_GAME`, `WON`, `LOST`, `ENDED`
 - When adding new events:
-  1. Update `prompts/protocol-context.md`
+  1. Update `prompts/WEBSOCKET_MESSAGE_SPEC.md`
   2. Add to `protocol.h` enum
   3. Update `protocol.c` string conversions
   4. Add handlers in appropriate hardware modules
@@ -437,7 +466,7 @@ See `docs/OTA_GUIDE.md` for detailed instructions and troubleshooting.
 
 ### Protocol Changes
 
-1. Update `prompts/protocol-context.md` at repo root
+1. Update `prompts/WEBSOCKET_MESSAGE_SPEC.md` at repo root
 2. Update event types in `include/protocol.h`
 3. Add string conversions in `src/protocol.c`
 4. Update handlers in relevant modules
@@ -473,19 +502,42 @@ See `docs/OTA_GUIDE.md` for detailed instructions and troubleshooting.
 
 ## CAN Protocol Documentation (Audio Module Integration)
 
+**CAN Bus Protocol:**
+- **Specification**: [`/prompts/CANBUS_MESSAGE_SPEC.md`](../prompts/CANBUS_MESSAGE_SPEC.md) - Single source of truth (authoritative)
+- **Developer Guide**: [`/doc/developer/canbus-protocol.md`](../doc/developer/canbus-protocol.md) - Implementation patterns and debugging
+- **Component APIs**: `/ots-fw-shared/components/*/COMPONENT_PROMPT.md` files for hardware abstraction
+
+🤖 **AI Guidelines: CAN Protocol Changes**
+
+When user requests CAN protocol changes (new messages, CAN IDs, or data fields):
+
+1. **Update BOTH files in this order:**
+   - First: `prompts/CANBUS_MESSAGE_SPEC.md` (add message definition with byte layout)
+   - Second: `doc/developer/canbus-protocol.md` (add C implementation examples)
+
+2. **Keep them synchronized:**
+   - Spec shows WHAT messages look like (CAN ID, DLC, byte layout, data fields)
+   - Dev doc shows HOW to implement in C (code examples, patterns, debugging)
+   - Both must reflect the same CAN IDs and message formats
+
+3. **Firmware-specific updates:**
+   - Update shared components (`can_audiomodule`) if protocol-level changes
+   - Update module handlers (`sound_module.c`) for behavior changes
+   - Document hardware behavior in spec (LED states, timing)
+
+4. **Verification checklist:**
+   - [ ] Message exists in spec with byte layout diagram
+   - [ ] Message has C implementation example in dev doc
+   - [ ] Both files mention same CAN IDs
+   - [ ] Hardware behavior documented in both files
+
 **When implementing CAN communication with audio module**:
-1. ⚠️ **Reference `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md` for message formats**
+1. ⚠️ **Reference `/prompts/CANBUS_MESSAGE_SPEC.md` for message formats**
 2. Use the **shared component**: `/ots-fw-shared/components/can_audiomodule/`
 3. Use queue IDs (1-255) to track and control individual sounds
 4. Implement retry logic for mixer-full errors (wait 500ms, retry once)
 5. Set 200ms timeout for ACK responses
-6. **Update shared component if protocol needs change**
-
-**Protocol Documentation:**
-- `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md` - Audio module protocol specification
-- `/ots-fw-shared/prompts/CAN_PROTOCOL_INTEGRATION.md` - Integration guide with examples
-- `/ots-fw-shared/components/can_audiomodule/COMPONENT_PROMPT.md` - Shared component usage
-- `/ots-fw-shared/components/can_driver/CAN_PROTOCOL_ARCHITECTURE.md` - Multi-module architecture (future)
+6. **Update both protocol files if message formats need change**
 
 ## Hardware Driver Components
 

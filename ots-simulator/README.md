@@ -75,7 +75,7 @@ Currently implemented modules:
 ### Nuke Control Panel
 - Three buttons: Atom, Hydro, MIRV
 - Sends `send-nuke` commands to userscript
-- Receives `NUKE_LAUNCHED`/`HYDRO_LAUNCHED`/`MIRV_LAUNCHED` events and blinks LEDs for 4 seconds
+- Receives `NUKE_LAUNCHED` events (with nukeType data field) and blinks LEDs for 4 seconds
 - Component: `app/components/hardware/NukeModule.vue`
 - Spec: `/ots-hardware/modules/nuke-module.md`
 
@@ -88,7 +88,7 @@ The dashboard displays all events from the game:
 - `ALERT_LAND`, `ALERT_NAVAL` - Incoming invasions (15s duration)
 
 **Launch Events** (from dashboard or hardware buttons):
-- `NUKE_LAUNCHED`, `HYDRO_LAUNCHED`, `MIRV_LAUNCHED` - Nuke fired
+- `NUKE_LAUNCHED` - Nuke fired (nukeType in data: atom/hydro/mirv)
 
 **Outcome Events** (informational):
 - `NUKE_EXPLODED` - Tracked nuke reached target
@@ -103,7 +103,7 @@ The dashboard displays all events from the game:
 
 ## Protocol
 
-All WebSocket messages follow the protocol defined in `/prompts/protocol-context.md`.
+All WebSocket messages follow the protocol defined in `/prompts/WEBSOCKET_MESSAGE_SPEC.md`.
 
 See `ots-shared/src/game.ts` for TypeScript type definitions.
 

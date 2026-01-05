@@ -202,7 +202,7 @@ In `ots-simulator` emulator mode:
    - Add heartbeat mechanism
 
 4. **Sound Catalog Sync**:
-   - Create definitive sound list in `/prompts/protocol-context.md`
+   - Create definitive sound list in `/prompts/WEBSOCKET_MESSAGE_SPEC.md`
    - Sync indices between firmware and audio module
    - Document SD card file naming convention
 
@@ -217,5 +217,5 @@ In `ots-simulator` emulator mode:
 - **CAN Protocol**: `ots-fw-main/include/can_protocol.h`, `ots-fw-main/src/can_protocol.c`
 - **CAN Driver**: `/ots-fw-shared/components/can_driver/` (see `COMPONENT_PROMPT.md`)
 - **Audio Firmware**: `ots-fw-audiomodule/` (separate project)
-- **Protocol Spec**: `/prompts/protocol-context.md` (Sound Events section)
+- **Protocol Spec**: `/prompts/WEBSOCKET_MESSAGE_SPEC.md` (Sound Events section)
 - **Hardware Module Interface**: `ots-fw-main/include/hardware_module.h`

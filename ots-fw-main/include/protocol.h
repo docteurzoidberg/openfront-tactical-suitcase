@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Game event types - must stay in sync with protocol-context.md and ots-shared/src/game.ts
+// Game event types - must stay in sync with WEBSOCKET_MESSAGE_SPEC.md and ots-shared/src/game.ts
 typedef enum {
     GAME_EVENT_INFO = 0,
     GAME_EVENT_ERROR,
@@ -16,7 +16,7 @@ typedef enum {
     GAME_EVENT_NUKE_LAUNCHED,
     GAME_EVENT_NUKE_EXPLODED,
     GAME_EVENT_NUKE_INTERCEPTED,
-    GAME_EVENT_ALERT_NUKE,
+    GAME_EVENT_ALERT_ATOM,
     GAME_EVENT_ALERT_HYDRO,
     GAME_EVENT_ALERT_MIRV,
     GAME_EVENT_ALERT_LAND,

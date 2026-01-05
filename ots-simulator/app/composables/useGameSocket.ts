@@ -77,7 +77,7 @@ const soundModulePowerOn = ref(true)
 const soundVolume = ref(80) // 0-100
 
 const localSoundCandidatesForId = (soundId: string): string[] => {
-  // Minimal catalog (keep in sync with prompts/protocol-context.md Sound Catalog)
+  // Minimal catalog (keep in sync with prompts/WEBSOCKET_MESSAGE_SPEC.md Sound Catalog)
   if (soundId === 'game_start') {
     return ['/sounds/0001-game_start.mp3', '/sounds/0001-game_start.wav']
   }
@@ -325,7 +325,7 @@ export function useGameSocket() {
         }
 
         // Handle alert events
-        if (msg.payload.type === 'ALERT_NUKE') {
+        if (msg.payload.type === 'ALERT_ATOM') {
           startAlert('atom')
         } else if (msg.payload.type === 'ALERT_HYDRO') {
           startAlert('hydro')

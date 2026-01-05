@@ -15,8 +15,8 @@ This shared component enables both the **main controller** (`ots-fw-main`) and *
 ## Location
 
 - **Component**: `/ots-fw-shared/components/can_audiomodule/`
-- **Protocol Spec**: `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md`
-- **Integration Guide**: `/ots-fw-shared/prompts/CAN_PROTOCOL_INTEGRATION.md`
+- **Protocol Spec**: `/prompts/CANBUS_MESSAGE_SPEC.md`
+- **Developer Guide**: `/doc/developer/canbus-protocol.md`
 
 ## Files
 
@@ -299,7 +299,6 @@ Future versions may add:
 
 ## See Also
 
-- **Protocol Specification**: `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md`
-- **Integration Guide**: `/ots-fw-shared/prompts/CAN_PROTOCOL_INTEGRATION.md`
+- **Protocol Specification**: `/prompts/CANBUS_MESSAGE_SPEC.md`
+- **Developer Guide**: `/doc/developer/canbus-protocol.md`
 - **CAN Driver Component**: `/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md`
-- **Generic CAN Architecture**: `/ots-fw-shared/components/can_driver/CAN_PROTOCOL_ARCHITECTURE.md`

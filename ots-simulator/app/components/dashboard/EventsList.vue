@@ -269,7 +269,7 @@ interface EventFilter {
 }
 
 const eventFilters = ref<EventFilter[]>([
-  { types: ['ALERT_NUKE', 'ALERT_HYDRO', 'ALERT_MIRV', 'ALERT_LAND', 'ALERT_NAVAL'], label: 'Incoming Threats', enabled: true, color: 'bg-red-500' },
+  { types: ['ALERT_ATOM', 'ALERT_HYDRO', 'ALERT_MIRV', 'ALERT_LAND', 'ALERT_NAVAL'], label: 'Incoming Threats', enabled: true, color: 'bg-red-500' },
   { types: ['NUKE_LAUNCHED', 'NUKE_EXPLODED', 'NUKE_INTERCEPTED'], label: 'Nukes Sent', enabled: true, color: 'bg-orange-500' },
   { types: ['SOUND_PLAY'], label: 'Sounds', enabled: true, color: 'bg-cyan-500' },
   { types: ['CMD_SENT'], label: 'Commands', enabled: true, color: 'bg-blue-500' },

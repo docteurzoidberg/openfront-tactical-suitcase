@@ -102,7 +102,7 @@ Modular design with clear separation of concerns:
 
 - **Full Documentation**: [PROJECT_PROMPT.md](PROJECT_PROMPT.md)
 - **Hardware Spec**: `../ots-hardware/modules/sound-module.md`
-- **CAN Protocol**: `../prompts/protocol-context.md`
+- **CAN Protocol**: `../prompts/WEBSOCKET_MESSAGE_SPEC.md`
 
 ## Project Status
 

@@ -326,7 +326,7 @@ esp_err_t sound_module_stop(uint16_t sound_index, bool stop_all) {
 /**
  * @brief Map soundId string to soundIndex number
  * 
- * Canonical mapping from /prompts/protocol-context.md:
+ * Canonical mapping from /prompts/WEBSOCKET_MESSAGE_SPEC.md:
  * - game_start → 1
  * - game_player_death → 2
  * - game_victory → 3

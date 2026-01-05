@@ -12,7 +12,7 @@ Use this when adding or significantly changing a firmware hardware module.
 ## Preferred Approach
 
 1. Confirm the hardware behavior is defined in the hardware specs (repo root `ots-hardware/`).
-2. Confirm any new messages/events are defined in `../../prompts/protocol-context.md`.
+2. Confirm any new messages/events are defined in `../../prompts/WEBSOCKET_MESSAGE_SPEC.md`.
 3. Implement the module with minimal coupling:
    - init/update/handle_event/get_status/shutdown
 4. Add/adjust a module prompt in this folder documenting:

@@ -266,7 +266,7 @@ struct NukeModuleState {
 - Each LED has independent blink timer and state (non-blocking)
 - Multiple buttons can blink simultaneously
 - Blink duration configurable per button (default: 10 seconds)
-- Uses WebSocket protocol defined in `/prompts/protocol-context.md`
+- Uses WebSocket protocol defined in `/prompts/WEBSOCKET_MESSAGE_SPEC.md`
 - LEDs only respond to server events, not direct button presses
 - No cooldown restriction - rapid fire allowed
 - Module shares MCP23017 Board 0 with Main Power Module

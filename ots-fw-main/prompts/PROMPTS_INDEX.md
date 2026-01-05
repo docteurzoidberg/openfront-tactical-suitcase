@@ -58,7 +58,6 @@ Core system functionality with dedicated implementation guides:
 - `CERTIFICATE_INSTALLATION_CHROME.md`
 - `TEST_WIFI_PROVISIONING_FLOW.md`
 - `SOUND_MODULE_IMPLEMENTATION.md`
-- `CAN_COMPONENT_IMPLEMENTATION.md`
 
 For a quick overview, start at `../README.md`.
 
@@ -66,4 +65,4 @@ For a quick overview, start at `../README.md`.
 
 - Keep prompts **task-oriented** (what to do next, what to avoid), not a full spec.
 - Prefer **links to existing docs** over duplicating the same instructions.
-- If a change impacts protocol, start at the repo root `prompts/protocol-context.md`.
+- If a change impacts protocol, start at the repo root `prompts/WEBSOCKET_MESSAGE_SPEC.md`.

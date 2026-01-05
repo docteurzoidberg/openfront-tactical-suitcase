@@ -76,7 +76,7 @@ These system components need dedicated prompt files:
   - WebSocket message handling and serialization
   - cJSON usage patterns
   - Message routing to modules
-  - References: `protocol-context.md`, `ws_server.c`
+  - References: `WEBSOCKET_MESSAGE_SPEC.md`, `ws_server.c`
 
 ### Priority 2 (Infrastructure)
 - [ ] `I2C_COMPONENTS_PROMPT.md`
@@ -141,7 +141,7 @@ Total: 33 documentation files
 
 ## References
 
-- Root protocol: `/prompts/protocol-context.md`
+- Root protocol: `/prompts/WEBSOCKET_MESSAGE_SPEC.md`
 - Hardware specs: `/ots-hardware/modules/`
 - Server context: `/ots-simulator/copilot-project-context.md`
 - Userscript context: `/ots-userscript/copilot-project-context.md`

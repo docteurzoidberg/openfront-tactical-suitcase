@@ -15,12 +15,12 @@ OpenFront Tactical Suitcase (OTS) is a multi-component system bridging OpenFront
 
 ## Architecture & Protocol
 
-### Single Source of Truth: `/prompts/protocol-context.md`
+### Single Source of Truth: `/prompts/WEBSOCKET_MESSAGE_SPEC.md`
 
 **ALL protocol changes MUST start here.** This 1000+ line document defines WebSocket message envelopes, event types, and data structures for all components.
 
 **Protocol change workflow:**
-1. Update `/prompts/protocol-context.md` first
+1. Update `/prompts/WEBSOCKET_MESSAGE_SPEC.md` first
 2. Update TypeScript: `ots-shared/src/game.ts` 
 3. Update C firmware: `ots-fw-main/include/protocol.h`
 4. Update implementations in server/userscript/firmware
@@ -102,16 +102,16 @@ npm run watch  # Auto-rebuild on changes
 **Build (PlatformIO - preferred):**
 ```bash
 cd ots-fw-main
-pio run              # Build
-pio run -t upload    # Flash device
-pio device monitor   # Serial output
+pio run -e esp32-s3-dev              # Build
+pio run -e esp32-s3-dev -t upload    # Flash device
+pio device monitor                   # Serial output
 ```
 
 **Architecture:**
 - **Firmware acts as WebSocket SERVER** (not client) - userscript/dashboard connect TO firmware
 - **WSS support**: TLS-enabled WebSocket server (port 3000) for HTTPS page compatibility
 - Configure via `WS_USE_TLS` in `include/config.h` (WSS=1, WS=0)
-- Self-signed certificate in `certs/` (browsers show security warning)
+- Uses embedded self-signed certificate (browsers show security warning)
 
 **Module system:**
 - All modules implement `hardware_module_t` interface: `init`, `update`, `handle_event`, `get_status`, `shutdown`
@@ -206,10 +206,34 @@ pio device monitor               # Serial + interactive CLI
 - **can_discovery**: Module discovery protocol (MODULE_ANNOUNCE, MODULE_QUERY)
 - **can_audiomodule**: Audio module CAN protocol implementation
 
-**Documentation:**
-- `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md`: Audio module message specs
-- `/ots-fw-shared/prompts/CAN_PROTOCOL_INTEGRATION.md`: Integration guide
-- `/ots-fw-shared/prompts/CAN_PROTOCOL_ARCHITECTURE.md`: Multi-module design
+**CAN Bus Protocol:**
+- **Specification**: [`/prompts/CANBUS_MESSAGE_SPEC.md`](../prompts/CANBUS_MESSAGE_SPEC.md) - Single source of truth for CAN message formats
+- **Developer Guide**: [`/doc/developer/canbus-protocol.md`](../doc/developer/canbus-protocol.md) - Implementation patterns and code examples
+- **Component APIs**: Component-level docs in `/ots-fw-shared/components/*/COMPONENT_PROMPT.md`
+
+🤖 **AI Guidelines: CAN Protocol Changes**
+
+When user requests CAN protocol changes (new messages, CAN IDs, or data fields):
+
+1. **Update BOTH files in this order:**
+   - First: `prompts/CANBUS_MESSAGE_SPEC.md` (add message definition with byte layout)
+   - Second: `doc/developer/canbus-protocol.md` (add C implementation examples)
+
+2. **Keep them synchronized:**
+   - Spec shows WHAT messages look like (CAN ID, DLC, byte layout, data fields)
+   - Dev doc shows HOW to implement in C (code examples, patterns, debugging)
+   - Both must reflect the same CAN IDs and message formats
+
+3. **Firmware-specific updates:**
+   - Update shared components if protocol-level changes
+   - Update module-specific handlers for behavior changes
+   - Document hardware behavior in spec (LED states, timing)
+
+4. **Verification checklist:**
+   - [ ] Message exists in spec with byte layout diagram
+   - [ ] Message has C implementation example in dev doc
+   - [ ] Both files mention same CAN IDs
+   - [ ] Hardware behavior documented in both files
 
 **Usage:**
 Referenced in CMakeLists.txt via `EXTRA_COMPONENT_DIRS`:
@@ -249,7 +273,7 @@ npm run build   # Production build
 
 ### Adding New Event Types
 
-1. Define in `/prompts/protocol-context.md` with JSON examples
+1. Define in `/prompts/WEBSOCKET_MESSAGE_SPEC.md` with JSON examples
 2. Add to TypeScript enum in `ots-shared/src/game.ts`
 3. Add to C enum in `ots-fw-main/include/protocol.h`
 4. Add string conversion in `ots-fw-main/src/protocol.c`
@@ -274,7 +298,7 @@ npm run build   # Production build
 4. Run in simulator mode (a/c) to test module interactions
 
 **Adding CAN module support:**
-1. Define protocol in `/ots-fw-shared/prompts/CAN_*_PROTOCOL.md`
+1. Define protocol in `/prompts/CANBUS_MESSAGE_SPEC.md` and `/doc/developer/canbus-protocol.md`
 2. Create shared component in `/ots-fw-shared/components/can_<module>/`
 3. Update main controller to integrate new module
 4. Test with cantest simulator before physical module
@@ -283,7 +307,7 @@ npm run build   # Production build
 
 **Before making breaking changes:**
 - Verify impact across all 3 implementations (shared/server/firmware)
-- Update prompts/protocol-context.md version/changelog section
+- Update prompts/WEBSOCKET_MESSAGE_SPEC.md version/changelog section
 - Consider backward compatibility for OTA firmware updates
 - Test WebSocket message flow end-to-end
 
@@ -316,7 +340,8 @@ ots/
   release.sh                       # Automated release script
   weekly_announces.md              # Discord changelog history
   prompts/
-    protocol-context.md            # SOURCE OF TRUTH for WebSocket messages
+    WEBSOCKET_MESSAGE_SPEC.md      # SOURCE OF TRUTH for WebSocket messages
+    CANBUS_MESSAGE_SPEC.md         # SOURCE OF TRUTH for CAN bus protocol
     RELEASE.md                     # Release process and version management guide
   .github/
     copilot-instructions.md        # This file - workspace-level guidance
@@ -328,7 +353,6 @@ ots/
     components/
       can_driver/                  # Generic CAN bus driver (used by all firmwares)
         COMPONENT_PROMPT.md        # CAN driver documentation
-        CAN_PROTOCOL_ARCHITECTURE.md  # Multi-module CAN protocol design
   
   ots-hardware/                    # Hardware specs & module designs
     copilot-project-context.md     # Hardware-specific context
@@ -347,8 +371,7 @@ ots/
       components/hardware/         # Hardware module UI components
       composables/useGameSocket.ts # Dashboard WebSocket client
     server/routes/
-      ws-script.ts                 # Userscript WebSocket handler
-      ws-ui.ts                     # Dashboard WebSocket handler
+      ws.ts                        # Unified WebSocket handler (all clients)
   
   ots-userscript/                  # Tampermonkey userscript
     copilot-project-context.md     # Userscript-specific context
@@ -386,55 +409,22 @@ ots/
       nuke_state_manager.c         # Nuke state tracking
     CMakeLists.txt         # Component registration
 ```
-  ots-hardware/                    # Hardware specs & module designs
-    copilot-project-context.md     # Hardware-specific context
-    hardware-spec.md               # Controller & bus specification
-    modules/                       # Individual module specifications
-  
-  ots-shared/                      # Shared TypeScript types
-    src/
-      game.ts                      # TypeScript protocol implementation
-      index.ts
-  
-  ots-simulator/                      # Nuxt 4 dashboard + WebSocket server
-    copilot-project-context.md     # Server-specific context
-    app/
-      pages/index.vue              # Main dashboard
-      components/hardware/         # Hardware module UI components
-      composables/useGameSocket.ts # Dashboard WebSocket client
-    server/routes/
-      ws-script.ts                 # Userscript WebSocket handler
-      ws-ui.ts                     # Dashboard WebSocket handler
-  
-  ots-userscript/                  # Tampermonkey userscript
-    copilot-project-context.md     # Userscript-specific context
-    src/main.user.ts               # Entry point
-    build/userscript.ots.user.js   # Built output
-  
-  ots-fw-main/                     # ESP32-S3 firmware
-    copilot-project-context.md     # Firmware-specific context
-    platformio.ini
-    include/
-      protocol.h                   # C protocol implementation
-      *_module.h                   # Hardware module headers
-    src/
-      main.c
-      *_module.c                   # Hardware module implementations
-      nuke_state_manager.c         # Nuke state tracking
-```
 
 **No root-level package.json** - each subproject manages dependencies independently.
 
 ## Key Files & Patterns
 
-- **Protocol**: `/prompts/protocol-context.md` (1155 lines, complete specification)
+- **Protocol**: `/prompts/WEBSOCKET_MESSAGE_SPEC.md` (WebSocket message specification - SOURCE OF TRUTH)
+- **Protocol Guide**: `/doc/developer/websocket-protocol.md` (Developer implementation guide and patterns)
+- **CAN Protocol**: `/prompts/CANBUS_MESSAGE_SPEC.md` (CAN bus message specification - SOURCE OF TRUTH)
+- **CAN Guide**: `/doc/developer/canbus-protocol.md` (CAN implementation guide with C examples)
 - **Release Process**: `/prompts/RELEASE.md` (Complete guide to version management and tagging)
 - **Shared Components**: `/ots-fw-shared/components/` (Firmware code shared across projects)
   - CAN driver: `/ots-fw-shared/components/can_driver/`
 - **Component context**: Per-component `copilot-project-context.md` for detailed implementation guides
 - **Shared types**: `ots-shared/src/game.ts` (TypeScript protocol implementation)
 - **Firmware protocol**: `ots-fw-main/include/protocol.h` (C implementation)
-- **WebSocket handlers**: `ots-simulator/server/routes/ws-*.ts`
+- **WebSocket handlers**: `ots-simulator/server/routes/ws.ts`
 - **Userscript bridge**: `ots-userscript/src/game/openfront-bridge.ts`
 - **Hardware specs**: `ots-hardware/hardware-spec.md`, `ots-hardware/modules/*.md`
 
@@ -444,7 +434,7 @@ ots/
 ❌ **Don't** use timer-based LED control - use state-based tracking with unitIDs  
 ❌ **Don't** modify protocol without updating all 3 implementations  
 ❌ **Don't** add firmware `.c` files without updating CMakeLists.txt  
-❌ **Don't** use generic `data?: unknown` - specify exact data shape in prompts/protocol-context.md
+❌ **Don't** use generic `data?: unknown` - specify exact data shape in prompts/WEBSOCKET_MESSAGE_SPEC.md
 
 ## Technologies & Conventions
 

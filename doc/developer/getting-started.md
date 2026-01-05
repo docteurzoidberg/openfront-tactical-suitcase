@@ -1,6 +1,8 @@
 # Developer Getting Started
 
-Set up your development environment to build and modify OTS.
+Set up your development environment to build and modify OTS in 10 minutes.
+
+> 📚 **Need more details?** See [Development Environment](development-environment.md) for comprehensive setup, IDE configuration, and troubleshooting.
 
 ## 📋 Prerequisites
 
@@ -44,8 +46,8 @@ pio --version           # Should be 6.x+ (after installing PlatformIO)
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/ots.git
-cd ots
+git clone https://github.com/docteurzoidberg/openfront-tactical-suitcase.git
+cd openfront-tactical-suitcase
 
 # Repository structure:
 # ots/
@@ -208,7 +210,7 @@ ots/
 │   └── pcbs/              # Circuit board designs
 │
 └── prompts/               # 📝 AI Assistant Context
-    └── protocol-context.md  # WebSocket protocol spec
+    └── WEBSOCKET_MESSAGE_SPEC.md  # WebSocket protocol spec
 ```
 
 See [Repository Overview](repository-overview.md) for detailed breakdown.
@@ -339,9 +341,10 @@ SUCCESS
 
 ### Essential Reading
 
-1. **[Repository Overview](repository-overview.md)** - Understand codebase structure
-2. **[Architecture](architecture/)** - System design and protocols
-3. **[Coding Standards](standards/coding-standards.md)** - Code style and conventions
+1. **[Development Environment](development-environment.md)** - Detailed setup, IDE config, troubleshooting
+2. **[Repository Overview](repository-overview.md)** - Understand codebase structure
+3. **[Architecture](architecture/)** - System design and protocols
+4. **[Coding Standards](standards/coding-standards.md)** - Code style and conventions
 
 ### Development Guides
 

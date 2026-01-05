@@ -561,6 +561,6 @@ static void parse_troop_data(const char* json_data) {
 
 - Display specification: `/ots-hardware/DISPLAY_SCREENS_SPEC.md`
 - LCD driver: `include/lcd_driver.h`, `src/lcd_driver.c`
-- Protocol: `/prompts/protocol-context.md`
+- Protocol: `/prompts/WEBSOCKET_MESSAGE_SPEC.md`
 - Game state: `include/game_state.h`
 - Similar module: `TROOPS_MODULE_PROMPT.md` (shares troops display logic)

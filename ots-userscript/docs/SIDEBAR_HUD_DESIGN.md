@@ -333,7 +333,7 @@ Storage keys managed via `GM_setValue`/`GM_getValue`:
 
 - Main context: `/ots-userscript/copilot-project-context.md`
 - Features doc: `/ots-userscript/docs/HUD_FEATURES.md`
-- Protocol spec: `/prompts/protocol-context.md`
+- Protocol spec: `/prompts/WEBSOCKET_MESSAGE_SPEC.md`
 - Source code: `/ots-userscript/src/hud/sidebar-hud.ts`
 
 ---

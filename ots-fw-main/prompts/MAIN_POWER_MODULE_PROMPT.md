@@ -474,7 +474,7 @@ pio run -t upload --upload-port 192.168.x.x
 - **Main Firmware Context**: `copilot-project-context.md`
 - **WebSocket Server**: `ws_server.h` - Connection status source
 - **Hardware I/O**: See "Hardware I/O Architecture" in `copilot-project-context.md`
-- **Protocol Specification**: `../protocol-context.md` (repository root)
+- **Protocol Specification**: `../WEBSOCKET_MESSAGE_SPEC.md` (repository root)
 
 ## Important Notes
 

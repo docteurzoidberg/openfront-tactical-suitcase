@@ -67,7 +67,7 @@ See docs/TESTING.md for the full test matrix and expected output.
 
 Protocol is defined at the repo root:
 
-- ../prompts/protocol-context.md
+- ../prompts/WEBSOCKET_MESSAGE_SPEC.md
 
 If you change the protocol, update the shared types and keep firmware/server/userscript in sync.
 

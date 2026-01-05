@@ -5,7 +5,7 @@
  * Handles incoming audio CAN messages (PLAY_SOUND, STOP_SOUND) and sends
  * periodic STATUS messages on the CAN bus.
  * 
- * See /ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md for protocol details.
+ * See /prompts/CANBUS_MESSAGE_SPEC.md for protocol details.
  */
 
 #pragma once

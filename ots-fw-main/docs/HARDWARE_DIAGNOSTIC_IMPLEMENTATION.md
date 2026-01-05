@@ -270,7 +270,7 @@ Sound Module: ✗ Not Present
 ## Files Changed
 
 ### Completed (userscript + server)
-- ✅ `/prompts/protocol-context.md` - Protocol documentation
+- ✅ `/prompts/WEBSOCKET_MESSAGE_SPEC.md` - Protocol documentation
 - ✅ `/ots-shared/src/game.ts` - TypeScript types
 - ✅ `/ots-simulator/server/routes/ws.ts` - Simulator response
 - ✅ `/ots-userscript/src/hud/sidebar-hud.ts` - Diagnostic button & handler

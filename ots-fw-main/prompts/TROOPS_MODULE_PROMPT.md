@@ -10,7 +10,7 @@ You are implementing the **Troops Module** for the OTS (OpenFront Tactical Stati
 - **Display**: 2×16 character I2C LCD (HD44780 via PCF8574 backpack)
 - **Input**: Potentiometer slider via I2C ADC (**ADS1015** 12-bit)
 - **I2C Bus**: Shared with MCP23017 expanders (GPIO8 SDA, GPIO9 SCL)
-- **Protocol**: WebSocket JSON messages (see `/prompts/protocol-context.md`)
+- **Protocol**: WebSocket JSON messages (see `/prompts/WEBSOCKET_MESSAGE_SPEC.md`)
 
 ## Hardware Components
 
@@ -514,6 +514,6 @@ int16_t ads1015_read_adc(uint8_t channel) {
 
 ## References
 
-- Main protocol: `/prompts/protocol-context.md`
+- Main protocol: `/prompts/WEBSOCKET_MESSAGE_SPEC.md`
 - Hardware spec: `/ots-hardware/modules/troops-module.md`
 - Other module implementations: `/ots-fw-main/prompts/ALERT_MODULE_PROMPT.md`

@@ -7,7 +7,7 @@
 **Architecture:** Plain ESP-IDF (no ESP-ADF dependency) for maximum compatibility and control.
 
 **Hardware spec:** `../ots-hardware/modules/sound-module.md`  
-**CAN Protocol:** `../prompts/protocol-context.md` (CAN IDs 0x420-0x423)
+**CAN Protocol:** `../prompts/CANBUS_MESSAGE_SPEC.md` (CAN IDs 0x410-0x42F)
 
 ## Hardware Platform
 
@@ -243,7 +243,7 @@ Byte 5-7: Reserved
 
 ### Sound Index Mapping
 
-See `../prompts/protocol-context.md` for canonical soundId → soundIndex mapping table.
+See `../prompts/WEBSOCKET_MESSAGE_SPEC.md` for canonical soundId → soundIndex mapping table.
 
 ## Project Structure
 
@@ -584,17 +584,42 @@ Part of the OpenFront Tactical Suitcase project.
 
 ## CAN Protocol Documentation (CRITICAL)
 
-**When modifying the CAN protocol** (adding messages, changing formats, etc.):
-1. ⚠️ **UPDATE `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md` FIRST**
-2. Update the shared component: `/ots-fw-shared/components/can_audiomodule/`
-3. Update handlers in `src/can_audio_handler.c` if needed
-4. Test changes in both audio module AND main controller firmware
+**CAN Bus Protocol:**
+- **Specification**: [`/prompts/CANBUS_MESSAGE_SPEC.md`](../prompts/CANBUS_MESSAGE_SPEC.md) - Single source of truth (authoritative)
+- **Developer Guide**: [`/doc/developer/canbus-protocol.md`](../doc/developer/canbus-protocol.md) - Implementation patterns and debugging
+- **Component APIs**: `/ots-fw-shared/components/*/COMPONENT_PROMPT.md` files for hardware abstraction
 
-**Protocol Documentation:**
-- `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md` - Complete audio protocol specification
-- `/ots-fw-shared/components/can_audiomodule/COMPONENT_PROMPT.md` - Shared component usage
-- `/ots-fw-shared/prompts/CAN_PROTOCOL_INTEGRATION.md` - Integration with multi-module architecture
-- `/ots-fw-shared/components/can_driver/CAN_PROTOCOL_ARCHITECTURE.md` - Generic multi-module protocol (Phase 2+)
+🤖 **AI Guidelines: CAN Protocol Changes**
+
+When user requests CAN protocol changes (new messages, CAN IDs, or data fields):
+
+1. **Update BOTH files in this order:**
+   - First: `prompts/CANBUS_MESSAGE_SPEC.md` (add message definition with byte layout)
+   - Second: `doc/developer/canbus-protocol.md` (add C implementation examples)
+
+2. **Keep them synchronized:**
+   - Spec shows WHAT messages look like (CAN ID, DLC, byte layout, data fields)
+   - Dev doc shows HOW to implement in C (code examples, patterns, debugging)
+   - Both must reflect the same CAN IDs and message formats
+
+3. **Audio module-specific updates:**
+   - Update shared component (`can_audiomodule`) if protocol-level changes
+   - Update handlers in `src/can_audio_handler.c` for behavior changes
+   - Test changes in BOTH audio module AND main controller firmware
+   - Document sound playback behavior in spec
+
+4. **Verification checklist:**
+   - [ ] Message exists in spec with byte layout diagram
+   - [ ] Message has C implementation example in dev doc
+   - [ ] Both files mention same CAN IDs
+   - [ ] Audio behavior documented in both files
+
+**When modifying the CAN protocol** (adding messages, changing formats, etc.):
+1. ⚠️ **UPDATE `/prompts/CANBUS_MESSAGE_SPEC.md` FIRST**
+2. Update `/doc/developer/canbus-protocol.md` with implementation examples
+3. Update the shared component: `/ots-fw-shared/components/can_audiomodule/`
+4. Update handlers in `src/can_audio_handler.c` if needed
+5. Test changes in both audio module AND main controller firmware
 
 ## Related Projects
 

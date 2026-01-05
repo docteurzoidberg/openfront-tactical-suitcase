@@ -394,7 +394,7 @@ After WSS testing is successful:
 
 ## References
 
-- **Protocol Specification**: `/prompts/protocol-context.md`
+- **Protocol Specification**: `/prompts/WEBSOCKET_MESSAGE_SPEC.md`
 - **Firmware Context**: `copilot-project-context.md`
 - **Certificate Generation**: `certs/generate_cert.sh`
 - **WebSocket Server**: `src/ws_server.c`

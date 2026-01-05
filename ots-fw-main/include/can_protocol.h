@@ -11,11 +11,14 @@
  * Defines message IDs, payload formats, and helper functions for sound module communication.
  */
 
-// CAN message ID definitions (from sound-module.md spec)
-#define CAN_ID_PLAY_SOUND   0x420  // main → sound
-#define CAN_ID_STOP_SOUND   0x421  // main → sound
-#define CAN_ID_SOUND_STATUS 0x422  // sound → main
-#define CAN_ID_SOUND_ACK    0x423  // sound → main
+// CAN message ID definitions (from prompts/CANBUS_MESSAGE_SPEC.md)
+#define CAN_ID_PLAY_SOUND       0x420  // main → audio (PLAY request)
+#define CAN_ID_STOP_SOUND       0x421  // main → audio (STOP by queue ID)
+#define CAN_ID_STOP_ALL         0x422  // main → audio (STOP ALL sounds)
+#define CAN_ID_SOUND_ACK        0x423  // audio → main (PLAY ACK with queue ID)
+#define CAN_ID_STOP_ACK         0x424  // audio → main (STOP acknowledgment)
+#define CAN_ID_SOUND_FINISHED   0x425  // audio → main (sound playback finished)
+#define CAN_ID_SOUND_STATUS     0x426  // audio → main (periodic status - future)
 
 // CAN command codes
 #define CAN_CMD_PLAY_SOUND  0x01

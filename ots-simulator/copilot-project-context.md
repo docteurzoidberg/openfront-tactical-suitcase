@@ -64,7 +64,7 @@ This server also acts as a **hardware emulator** during development: when real h
   - Commands from UI are broadcast to all peers
   - Sends connection/disconnection INFO events for userscript status
 - `../../ots-shared/src/game.ts`
-  - Shared TypeScript types (kept in sync with `/prompts/protocol-context.md`)
+  - Shared TypeScript types (kept in sync with `/prompts/WEBSOCKET_MESSAGE_SPEC.md`)
   - Includes `NukeType`, `SendNukeCommand`, `NukeSentEventData` for hardware module
 
 ## WebSocket & Status Semantics
@@ -93,13 +93,42 @@ This server also acts as a **hardware emulator** during development: when real h
 
 ## Messages & Types
 
-Messages follow the shared `IncomingMessage` / `OutgoingMessage` types defined in `/prompts/protocol-context.md`:
+**WebSocket Protocol:**
+- **Specification**: [`/prompts/WEBSOCKET_MESSAGE_SPEC.md`](../../prompts/WEBSOCKET_MESSAGE_SPEC.md) - Single source of truth
+- **Developer Guide**: [`/doc/developer/websocket-protocol.md`](../../doc/developer/websocket-protocol.md) - Implementation patterns and best practices
+- **Shared Types**: `ots-shared/src/game.ts` - TypeScript implementation
+
+🤖 **AI Guidelines: WebSocket Protocol Changes**
+
+When user requests protocol changes (new events, commands, or data fields):
+
+1. **Update BOTH files in this order:**
+   - First: `prompts/WEBSOCKET_MESSAGE_SPEC.md` (add event definition with JSON example)
+   - Second: `doc/developer/websocket-protocol.md` (add implementation examples and patterns)
+
+2. **Keep them synchronized:**
+   - Spec shows WHAT messages look like (JSON structure, data fields)
+   - Dev doc shows HOW to implement (code examples, debugging tips)
+   - Both must reflect the same protocol version
+
+3. **Server-specific updates:**
+   - Update WebSocket handler in `server/routes/ws.ts` for routing
+   - Update composables in `app/composables/` for UI handling
+   - Add hardware emulator logic if applicable
+
+4. **Verification checklist:**
+   - [ ] Event exists in spec with JSON example
+   - [ ] Event has server implementation example in dev doc
+   - [ ] Both files mention same data field names
+   - [ ] Server broadcast logic documented in dev doc
+
+Messages follow the shared `IncomingMessage` / `OutgoingMessage` types defined in the specification:
 
 - `type: 'event'` – carries a `GameEvent` with:
   - `type: GameEventType` - All event types defined in protocol:
     - Game lifecycle: `GAME_START`, `GAME_END`, `WIN`, `LOOSE`
     - Alert events: `ALERT_ATOM`, `ALERT_HYDRO`, `ALERT_MIRV`, `ALERT_LAND`, `ALERT_NAVAL`
-    - Launch events: `NUKE_LAUNCHED`, `HYDRO_LAUNCHED`, `MIRV_LAUNCHED`
+    - Launch events: `NUKE_LAUNCHED` (with nukeType: atom/hydro/mirv)
     - Outcome events: `NUKE_EXPLODED`, `NUKE_INTERCEPTED`
     - Info events: `INFO`, `HARDWARE_TEST`
   - `timestamp`, optional `message`, optional `data`
@@ -126,7 +155,7 @@ The Nuke Control Panel uses these specific message patterns:
 {
   type: 'event',
   payload: {
-    type: 'NUKE_LAUNCHED',  // or 'HYDRO_LAUNCHED', 'MIRV_LAUNCHED'
+    type: 'NUKE_LAUNCHED',
     timestamp: number,
     message: 'atom launched',
     data: { nukeType: 'atom' | 'hydro' | 'mirv', method: 'game.sendNuke()' }
@@ -134,7 +163,7 @@ The Nuke Control Panel uses these specific message patterns:
 }
 ```
 
-When the UI receives a nuke launched event (NUKE_LAUNCHED, HYDRO_LAUNCHED, or MIRV_LAUNCHED), it triggers a 4-second LED blink on the corresponding button. Multiple nukes can blink independently.
+When the UI receives a NUKE_LAUNCHED event, it triggers a 4-second LED blink on the corresponding button based on data.nukeType (atom/hydro/mirv). Multiple nukes can blink independently.
 
 **Alert Events**: The Alert Module receives alert events (`ALERT_ATOM`, `ALERT_HYDRO`, `ALERT_MIRV`, `ALERT_LAND`, `ALERT_NAVAL`) which trigger corresponding alert LEDs with automatic timeouts (10s for nukes, 15s for invasions).
 
@@ -159,7 +188,7 @@ When the UI receives a nuke launched event (NUKE_LAUNCHED, HYDRO_LAUNCHED, or MI
   - Follow unit scaling rules (K/M/B) and text alignment (right/left)
   - Match screen transitions and event-to-screen mappings
 - Keep shared types in `ots-shared` as the single source of truth
-- Protocol definitions live in `/prompts/protocol-context.md` - update there first
+- Protocol definitions live in `/prompts/WEBSOCKET_MESSAGE_SPEC.md` - update there first
 - When adding new hardware modules:
   1. Define in `/ots-hardware/modules/<module-name>.md`
   2. Add types to `ots-shared/src/game.ts`

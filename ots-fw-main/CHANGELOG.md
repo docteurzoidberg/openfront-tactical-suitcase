@@ -144,7 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Module Architecture**: Each physical PCB = one software module with standardized interface
 - **Module Manager**: Supports up to 8 hardware modules with registration and coordination
 - **Event Flow**: Button → Event Dispatcher → Hardware Modules → LED Controller
-- **Protocol Alignment**: Event types now match protocol-context.md specification
+- **Protocol Alignment**: Event types now match WEBSOCKET_MESSAGE_SPEC.md specification
 - **Code Quality**: No compilation errors, cleaner architecture, better maintainability
 
 ### Added - 2025-12-15 (Troops Module)

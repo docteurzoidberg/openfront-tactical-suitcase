@@ -14,7 +14,7 @@
 ### Features
 
 - [ ] CAN bus sound module integration
-  - Protocol defined in `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md`
+  - Protocol defined in `/prompts/CANBUS_MESSAGE_SPEC.md`
   - Shared component: `/ots-fw-shared/components/can_audiomodule/`
 
 ## Completed

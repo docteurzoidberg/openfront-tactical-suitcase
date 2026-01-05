@@ -288,5 +288,5 @@ static char *TAG = "OTS_MODULE";  // Modifiable string pointer
 ## References
 
 - **Main Context**: [ots-fw-main/copilot-project-context.md](copilot-project-context.md)
-- **Protocol Spec**: [/protocol-context.md](../protocol-context.md)
+- **Protocol Spec**: [/WEBSOCKET_MESSAGE_SPEC.md](../WEBSOCKET_MESSAGE_SPEC.md)
 - **Hardware Modules**: [ots-hardware/](../ots-hardware/)

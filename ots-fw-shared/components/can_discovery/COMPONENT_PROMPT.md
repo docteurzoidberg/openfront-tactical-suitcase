@@ -222,4 +222,5 @@ Each module reserves a 16-ID block:
 
 - `/ots-fw-shared/components/can_driver/` - Generic CAN driver
 - `/ots-fw-shared/components/can_audiomodule/` - Audio protocol
-- `/ots-fw-shared/prompts/CAN_PROTOCOL_ARCHITECTURE.md` - Multi-module architecture
+- `/prompts/CANBUS_MESSAGE_SPEC.md` - CAN bus protocol specification
+- `/doc/developer/canbus-protocol.md` - Implementation guide with examples

@@ -468,7 +468,7 @@ Pin mappings in `include/module_io.h`:
 ## Related Documentation
 
 - **Main Firmware Context**: `copilot-project-context.md`
-- **Protocol Specification**: `../protocol-context.md` (repository root)
+- **Protocol Specification**: `../WEBSOCKET_MESSAGE_SPEC.md` (repository root)
 - **Hardware I/O**: See "Hardware I/O Architecture" in `copilot-project-context.md`
 - **MCP23017 Library**: Adafruit MCP23017 Arduino Library documentation
 - **Alert Module**: `prompts/ALERT_MODULE_PROMPT.md` (similar blink logic)

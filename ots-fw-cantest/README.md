@@ -2,6 +2,11 @@
 
 Interactive CAN bus testing tool for OTS project development and debugging.
 
+## CAN Protocol Reference
+
+- **Protocol Specification**: [`/prompts/CANBUS_MESSAGE_SPEC.md`](../prompts/CANBUS_MESSAGE_SPEC.md) - Message formats, CAN IDs, byte layouts
+- **Developer Guide**: [`/doc/developer/canbus-protocol.md`](../doc/developer/canbus-protocol.md) - Implementation examples and debugging
+
 ## Overview
 
 This test firmware runs on an ESP32-S3 DevKit board and provides:
@@ -269,5 +274,6 @@ When adding support for new module types:
 ## See Also
 
 - **CAN Discovery Protocol**: `/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md`
-- **CAN Sound Protocol**: `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md`
+- **CAN Protocol Spec**: `/prompts/CANBUS_MESSAGE_SPEC.md`
+- **Developer Guide**: `/doc/developer/canbus-protocol.md`
 - **CAN Driver Component**: `/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md`

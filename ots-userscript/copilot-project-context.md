@@ -187,6 +187,50 @@ Source: https://github.com/openfrontio/OpenFrontIO/tree/main/src/client/graphics
   - HUD status shows `DISCONNECTED` or `ERROR`.
   - Exponential backoff auto-reconnect (starting at 2s, up to ~15s).
 
+**WebSocket Protocol:**
+- **Specification**: [`/prompts/WEBSOCKET_MESSAGE_SPEC.md`](../prompts/WEBSOCKET_MESSAGE_SPEC.md) - Single source of truth
+- **Developer Guide**: [`/doc/developer/websocket-protocol.md`](../doc/developer/websocket-protocol.md) - Implementation patterns and best practices
+- **Shared Types**: `ots-shared/src/game.ts` - TypeScript implementation
+
+🤖 **AI Guidelines: WebSocket Protocol Changes**
+
+When user requests protocol changes (new events, commands, or data fields):
+
+1. **Update BOTH files in this order:**
+   - First: `prompts/WEBSOCKET_MESSAGE_SPEC.md` (add event definition with JSON example)
+   - Second: `doc/developer/websocket-protocol.md` (add implementation examples and patterns)
+
+2. **Keep them synchronized:**
+   - Spec shows WHAT messages look like (JSON structure, data fields)
+   - Dev doc shows HOW to implement (code examples, debugging tips)
+   - Both must reflect the same protocol version
+
+3. **Common workflow:**
+   ```
+   User: "Add TROOPS_UPDATED event"
+   
+   Step 1: Update prompts/WEBSOCKET_MESSAGE_SPEC.md
+   - Add event type to reference
+   - Add JSON example
+   - Document data fields
+   
+   Step 2: Update doc/developer/websocket-protocol.md
+   - Add detection example (userscript)
+   - Add handling example (firmware)
+   - Add debugging section
+   
+   Step 3: Update implementations
+   - ots-shared/src/game.ts (TypeScript types)
+   - ots-fw-main/include/protocol.h (C types)
+   - Actual code in userscript/simulator/firmware
+   ```
+
+4. **Verification checklist:**
+   - [ ] Event exists in spec with JSON example
+   - [ ] Event has implementation example in dev doc
+   - [ ] Both files mention same data field names
+   - [ ] Code examples in dev doc match spec structure
+
 Messages follow the shared types defined in `ots-shared/src/game.ts`:
 
 - Outgoing:
@@ -546,7 +590,7 @@ When you add or change behavior in `src/main.user.ts` or other source files, rem
 
 - Update this file to reflect any new commands, message shapes, HUD features, or behavior changes.
 - Rebuild the userscript via `npm run build` and reinstall it in Tampermonkey.
-- Keep the description of the WebSocket protocol in sync with `ots-shared/src/game.ts` and `/prompts/protocol-context.md`.
+- Keep the description of the WebSocket protocol in sync with `ots-shared/src/game.ts` and `/prompts/WEBSOCKET_MESSAGE_SPEC.md`.
 - Update filter systems if adding new event types.
 - Add sound toggles if introducing new sound events.
 - Document any new tabs or UI sections in this file.

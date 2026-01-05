@@ -219,7 +219,7 @@ CAN Transceiver CANL → CAN Bus Low
 
 This component provides the **hardware layer** only. For multi-module systems with automatic discovery and routing, see:
 
-**[CAN_PROTOCOL_ARCHITECTURE.md](CAN_PROTOCOL_ARCHITECTURE.md)** - Complete protocol architecture for:
+**[CANBUS_MESSAGE_SPEC.md](/prompts/CANBUS_MESSAGE_SPEC.md)** - Complete protocol specification for:
 - Module discovery and addressing
 - Generic message routing
 - Module type registry

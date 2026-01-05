@@ -29,7 +29,7 @@ static struct {
     .active = false
 };
 
-// Audio Module CAN IDs (from CAN_SOUND_PROTOCOL.md)
+// Audio Module CAN IDs (from /prompts/CANBUS_MESSAGE_SPEC.md)
 #define CAN_ID_PLAY_SOUND      0x420
 #define CAN_ID_STOP_SOUND      0x421
 #define CAN_ID_STOP_ALL        0x422

@@ -494,7 +494,7 @@ WebSocket → Server/Firmware → Play sound
 ## References
 
 - Main context: `/ots-userscript/copilot-project-context.md`
-- Protocol spec: `/prompts/protocol-context.md`
+- Protocol spec: `/prompts/WEBSOCKET_MESSAGE_SPEC.md`
 - Shared types: `/ots-shared/src/game.ts`
 - Source code: `/ots-userscript/src/hud/sidebar-hud.ts`
 

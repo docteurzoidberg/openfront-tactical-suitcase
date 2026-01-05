@@ -104,6 +104,6 @@ npm run watch
 
 ## Related Documentation
 
-- **Protocol**: `/prompts/protocol-context.md` - WebSocket message spec
+- **Protocol**: `/prompts/WEBSOCKET_MESSAGE_SPEC.md` - WebSocket message spec
 - **Project Context**: `../copilot-project-context.md` - AI assistant guide
 - **Tracker Details**: `game/trackers/README.md` - Entity tracking details

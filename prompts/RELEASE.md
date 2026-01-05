@@ -1,337 +1,249 @@
-# OTS Release Process
+# Release Process - AI Assistant Guidelines
 
-## Overview
+## Purpose
 
-The OTS project uses a unified release system managed by the `release.sh` script at the repository root. This script handles version updates, builds, git commits, and tagging for all three components: userscript, firmware, and server.
+This prompt guides AI assistants on how to help users with the OTS release process when they explicitly ask for release assistance.
 
-## Tag Format
+**IMPORTANT**: Do NOT proactively suggest releases. Only help when user asks.
 
-Releases use a **date-based versioning** scheme with auto-incrementing revisions:
+## When User Asks About Releases
 
-```
-YYYY-MM-DD.N
-```
+### User Says: "How do I create a release?"
 
-- **YYYY-MM-DD**: Release date
-- **N**: Revision number (1, 2, 3, ...) for multiple releases on the same day
-
-**Examples:**
-- `2025-12-20.1` - First release on December 20, 2025
-- `2025-12-20.2` - Second release on the same day
-- `2025-12-21.1` - First release on December 21, 2025
-
-## Release Script Usage
-
-### Basic Commands
+Explain the automated workflow:
 
 ```bash
-# List existing releases
+# Standard release (all components)
+./release.sh -u -p -m "Description of changes"
+```
+
+**What this does:**
+1. Auto-increments version (YYYY-MM-DD.N format)
+2. Updates version strings in userscript, firmware, server
+3. Builds all components
+4. Creates git commit
+5. Creates annotated git tag
+6. Pushes to remote
+
+### User Says: "Create a release for me"
+
+Suggest command based on what they've been working on:
+
+**If firmware changes:**
+```bash
+./release.sh -u -m "Fix: LED timing improvements" firmware
+```
+
+**If userscript changes:**
+```bash
+./release.sh -u -m "Feature: New game event detection" userscript
+```
+
+**If multiple components:**
+```bash
+./release.sh -u -m "Feature: Protocol update across stack" userscript firmware server
+```
+
+**Always explain:** The script will auto-increment today's version number (e.g., 2026-01-05.1, 2026-01-05.2, etc.)
+
+### User Says: "List releases" or "Show releases"
+
+```bash
 ./release.sh -l
-
-# Create release (manual workflow)
-./release.sh -m "Release description"
-
-# Update versions, build, commit, and tag (automatic workflow)
-./release.sh -u -m "Release description"
-
-# Release and push to remote
-./release.sh -u -p -m "Release description"
-```
-
-### Options
-
-| Option | Description |
-|--------|-------------|
-| `-u` | Update version strings in all projects before tagging |
-| `-p` | Push commit and tag to remote repository |
-| `-m <msg>` | Release description (used in git tag annotation) |
-| `-l` | List all existing release tags |
-| `-h` | Show help message |
-
-### Selecting Projects
-
-By default, all projects are included. To select specific projects:
-
-```bash
-# Release only userscript
-./release.sh -u -m "Userscript fix" userscript
-
-# Release userscript and firmware
-./release.sh -u -m "Hardware updates" userscript firmware
-
-# Release all (explicit)
-./release.sh -u -m "Full release" userscript firmware server
 ```
 
 ## Version Management
 
-The release script updates version strings in these files:
+### Where Versions Are Stored
 
-### Userscript
-- `ots-userscript/package.json` → `"version": "YYYY-MM-DD.N"`
-- `ots-userscript/src/main.user.ts` → `const VERSION = 'YYYY-MM-DD.N'`
+**Userscript:**
+- `ots-userscript/package.json` → `"version"` field
+- `ots-userscript/src/main.user.ts` → `VERSION` constant
 
-### Firmware
-- `ots-fw-main/include/config.h` → `#define OTS_FIRMWARE_VERSION "YYYY-MM-DD.N"`
+**Firmware:**
+- `ots-fw-main/include/config.h` → `OTS_FIRMWARE_VERSION` macro
 
-### Server
-- `ots-simulator/package.json` → `"version": "YYYY-MM-DD.N"`
+**Server:**
+- `ots-simulator/package.json` → `"version"` field
 
-## Build Process
+**The release script updates all automatically** with `-u` flag.
 
-The release script automatically builds all selected projects:
+## Release Script Options
 
-1. **Userscript**: `npm run build` in `ots-userscript/`
-   - Output: `build/userscript.ots.user.js` (~76KB)
-   - Version injected into Tampermonkey header
+| Flag | Meaning | When to Use |
+|------|---------|-------------|
+| `-u` | Update versions | Always use unless user manually updated versions |
+| `-p` | Push to remote | Use for production releases |
+| `-m` | Release message | Always required, describe what changed |
+| `-l` | List releases | Show existing tags |
 
-2. **Firmware**: `pio run` in `ots-fw-main/`
-   - Output: `.pio/build/esp32-s3-dev/firmware.bin` (~1MB)
-   - Version displayed in boot log
+## Common User Scenarios
 
-3. **Server**: `npm run build` in `ots-simulator/`
-   - Output: `.output/` directory (Nuxt production build)
-   - Version displayed in dashboard header
-
-**Build Validation**: If any build fails, the release is aborted. No commit or tag is created.
-
-## Git Workflow
-
-When using the `-u` flag, the release script follows this workflow:
-
-1. **Update Versions**: Replace version strings in all project files
-2. **Build Projects**: Execute build commands and verify success
-3. **Commit Changes**: Create commit with all version updates and build outputs
-4. **Create Tag**: Annotate tag pointing to the commit
-5. **Push (optional)**: Push commit and tag to origin
-
-### Commit Format
-
-```
-chore(release): version YYYY-MM-DD.N
-
-Projects: userscript, firmware, server
-<Release description>
-```
-
-### Tag Annotation
-
-```
-OTS Release YYYY-MM-DD.N
-
-<Release description>
-
-Projects: userscript, firmware, server
-```
-
-## Common Scenarios
-
-### First Release of the Day
+### "I want to test a release locally first"
 
 ```bash
-./release.sh -u -p -m "Feature: Game end detection and LCD persistence"
+# Create release without pushing
+./release.sh -u -m "Test release description"
+
+# User can verify, then manually push:
+git push origin main --follow-tags
 ```
 
-Creates tag `2025-12-20.1`, commits changes, pushes to remote.
+### "Release failed, what do I do?"
 
-### Second Release (Same Day)
+**If build failed:**
+```bash
+# Fix the build error first, then run again
+./release.sh -u -m "Same description"
+```
+
+**If tag already exists:**
+```bash
+# Delete local tag
+git tag -d 2026-01-05.1
+
+# Run release again
+./release.sh -u -m "Updated description"
+```
+
+### "I need to release only one component"
 
 ```bash
-./release.sh -u -p -m "Hotfix: Button debouncing"
+# Userscript only
+./release.sh -u -m "Fix: HUD positioning" userscript
+
+# Firmware only
+./release.sh -u -m "Fix: I2C timeout" firmware
+
+# Server only
+./release.sh -u -m "Feature: New dashboard widget" server
 ```
 
-Creates tag `2025-12-20.2` (auto-increments revision).
-
-### Userscript-Only Release
+### "The version is wrong"
 
 ```bash
-./release.sh -u -m "Fix: HUD position persistence" userscript
-```
-
-Updates and builds only the userscript, creates tag `2025-12-20.N`.
-
-### Local Testing (No Push)
-
-```bash
-./release.sh -u -m "Test release"
-```
-
-Creates commit and tag locally. Verify before pushing:
-
-```bash
-git log -1 --oneline
-git show 2025-12-20.N --stat
-git push origin HEAD && git push origin 2025-12-20.N
-```
-
-### Manual Workflow (No Version Updates)
-
-If you've already updated versions manually:
-
-```bash
-./release.sh -m "Manual version updates"
-```
-
-Skips version replacement, only creates tag from current state.
-
-## Verification
-
-After running a release, verify:
-
-```bash
-# Check tag was created
-git tag -n5 2025-12-20.N
-
-# View commit with all changes
-git show 2025-12-20.N --stat
-
-# Verify working directory is clean
-git status --short
-
-# Check builds were created
-ls -lh ots-userscript/build/userscript.ots.user.js
-ls -lh ots-fw-main/.pio/build/esp32-s3-dev/firmware.bin
-ls -ld ots-simulator/.output
-```
-
-## Weekly Changelog
-
-Update `weekly_announces.md` before releasing:
-
-```markdown
-## Week of December 16-20, 2025
-
-🎮 **Game Integration:**
-- Feature description
-
-🚀 **Firmware:**
-- Hardware improvements
-
-🛠️ **Dashboard:**
-- UI updates
-```
-
-This provides a summary for Discord announcements and release notes.
-
-## Troubleshooting
-
-### Build Failure
-
-If a build fails, the release is aborted:
-
-```
-❌ userscript build failed
-Release aborted - build failures detected
-```
-
-**Fix**: Resolve build errors and run release script again.
-
-### Uncommitted Changes Warning
-
-If you have uncommitted changes without `-u` flag:
-
-```
-⚠ Warning: You have uncommitted changes.
-```
-
-**Options:**
-- Use `-u` flag to automatically commit
-- Commit changes manually first
-- Stash changes: `git stash`
-
-### Tag Already Exists
-
-If tag exists locally:
-
-```bash
-git tag -d 2025-12-20.1
-./release.sh -u -m "New description"
-```
-
-If tag exists on remote:
-
-```bash
-git push origin :refs/tags/2025-12-20.1
-```
-
-### Version Mismatch
-
-If versions are out of sync, use `-u` flag to reset all:
-
-```bash
+# The -u flag resets all versions to the new tag
 ./release.sh -u -m "Sync all versions"
 ```
 
-## Best Practices
+## Build Validation
 
-1. **Always Use `-u` Flag**: Ensures version consistency across all projects
-2. **Test Before Pushing**: Use local release first, verify, then use `-p`
-3. **Meaningful Descriptions**: Write clear release messages for tag annotations
-4. **Update Changelog**: Keep `weekly_announces.md` current for Discord posts
-5. **Build Verification**: Script handles this automatically - don't skip builds
-6. **One Tag Per Release**: Don't reuse or force-push tags (breaks history)
+The release script builds:
 
-## Integration with CI/CD
+1. **Userscript**: `npm run build` → `build/userscript.ots.user.js` (~76KB)
+2. **Firmware**: `pio run -e esp32-s3-dev` → `.pio/build/esp32-s3-dev/firmware.bin` (~1MB)
+3. **Server**: `npm run build` → `.output/` directory
 
-The release tags can trigger automated deployments:
+**If any build fails, the entire release is aborted.** No commit or tag is created.
 
-- **Userscript**: Auto-publish to Tampermonkey store
-- **Firmware**: OTA update distribution
-- **Server**: Production deployment to hosting
+## Tag Format
 
-Tag format enables filtering: `refs/tags/2025-*` for all 2025 releases.
+**Date-based versioning:** `YYYY-MM-DD.N`
 
-## Version Display
+- First release today: `2026-01-05.1`
+- Second release today: `2026-01-05.2`
+- First release tomorrow: `2026-01-06.1`
 
-### Userscript
-Console log on load:
+**The script auto-increments N for same-day releases.**
+
+## What AI Should NOT Do
+
+❌ **Don't suggest releases unprompted** - Wait for user to ask
+❌ **Don't suggest skipping builds** - Script validates automatically
+❌ **Don't suggest manual version updates** - Use `-u` flag instead
+❌ **Don't suggest force-pushing tags** - Creates history conflicts
+❌ **Don't suggest `npm version`** - Use `release.sh` instead
+
+## What AI Should Do
+
+✅ **Wait for user to ask about releases**
+✅ **Suggest appropriate release command** based on changes
+✅ **Explain what the script will do** before running
+✅ **Help debug build failures** if release aborts
+✅ **Remind about `-p` flag** for pushing to remote
+✅ **Suggest testing locally first** if user is unsure
+
+## Integration with Other Workflows
+
+### After Protocol Changes
+
+If user changed `prompts/WEBSOCKET_MESSAGE_SPEC.md` and implementations:
+
+```bash
+# All components likely changed
+./release.sh -u -m "Protocol: Add NUKE_INTERCEPTED event" userscript firmware server
 ```
-[OTS Userscript] Version 2025-12-20.1
+
+### After Git Workflow
+
+If user completed feature with proper commits:
+
+```bash
+# Create release when feature is complete
+./release.sh -u -p -m "Feature: [description from commits]"
 ```
 
-Tampermonkey header:
-```
-// @version     2025-12-20.1
-```
+### Before OTA Update
 
-### Firmware
-Boot log banner:
-```
-===========================================
-OTS Firmware v2025-12-20.1
-Firmware: ots-fw-main
-===========================================
+If user wants to deploy firmware OTA:
+
+```bash
+# Create release first
+./release.sh -u -m "Firmware: OTA update with new features" firmware
+
+# Then user can upload firmware.bin via OTA
 ```
 
-### Server
-Dashboard header badge:
+## Troubleshooting Patterns
+
+### User: "Release script says uncommitted changes"
+
+**Response:** Either commit them first, or use `-u` flag to auto-commit:
+```bash
+./release.sh -u -m "Description"
 ```
-v2025-12-20.1
+
+### User: "Wrong version number in dashboard/logs"
+
+**Response:** Use `-u` flag to sync all versions:
+```bash
+./release.sh -u -m "Version sync"
 ```
 
-## Release Checklist
+### User: "How do I undo a release?"
 
-Before running release script:
+**Response:** If not pushed yet:
+```bash
+git tag -d 2026-01-05.1
+git reset --soft HEAD~1
+```
 
-- [ ] All features tested and working
-- [ ] Code committed (or ready for auto-commit with `-u`)
-- [ ] Weekly changelog updated
-- [ ] No build errors
-- [ ] Version numbers ready to be updated
+If already pushed, don't undo - create a new release with fixes.
 
-After release:
+## Quick Reference for AI
 
-- [ ] Verify tag created: `git tag -l | tail -1`
-- [ ] Verify builds exist and are correct size
-- [ ] Test userscript in browser
-- [ ] Flash firmware to device (if hardware changes)
-- [ ] Deploy server (if backend changes)
-- [ ] Post weekly changelog to Discord
-- [ ] Push to remote: `-p` flag or manual push
+**User wants to release → Suggest:**
+```bash
+./release.sh -u -p -m "Description"
+```
 
-## Support
+**User wants to test first → Suggest:**
+```bash
+./release.sh -u -m "Description"
+# Then manually: git push origin main --follow-tags
+```
 
-For issues with the release process:
-- Check `release.sh` source code (heavily commented)
-- Review git logs: `git log --oneline --decorate`
-- Test with `-l` flag first (list-only, no changes)
+**User asks "what versions?" → Suggest:**
+```bash
+./release.sh -l
+```
+
+**Build failed → Explain:**
+"The release was aborted because [component] build failed. Fix the build error and run the release command again."
+
+## Related Documentation
+
+For detailed release process documentation, refer users to:
+- **User guide**: `doc/developer/releases.md`
+- **Git workflow**: `prompts/GIT_WORKFLOW.md` (AI prompt)
+- **Weekly changelog**: `weekly_announces.md`

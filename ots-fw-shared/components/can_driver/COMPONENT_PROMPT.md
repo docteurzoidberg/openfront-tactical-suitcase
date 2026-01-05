@@ -558,8 +558,8 @@ dependencies:
 
 This component is **hardware-only**. For multi-module CAN protocol architecture, see:
 
-- `/components/can_driver/CAN_PROTOCOL_ARCHITECTURE.md` - Multi-module protocol design
-- `/ots-fw-main/docs/CAN_MULTI_MODULE_ROADMAP.md` - Implementation roadmap
+- `/prompts/CANBUS_MESSAGE_SPEC.md` - CAN bus protocol specification
+- `/doc/developer/canbus-protocol.md` - Implementation guide with C examples
 
 **Current audio protocol** (application-specific):
 - Message IDs: 0x420-0x423 (play/stop/status/ack)

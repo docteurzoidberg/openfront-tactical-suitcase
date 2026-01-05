@@ -13,7 +13,7 @@ const char* event_type_to_string(game_event_type_t type) {
         case GAME_EVENT_NUKE_LAUNCHED: return "NUKE_LAUNCHED";
         case GAME_EVENT_NUKE_EXPLODED: return "NUKE_EXPLODED";
         case GAME_EVENT_NUKE_INTERCEPTED: return "NUKE_INTERCEPTED";
-        case GAME_EVENT_ALERT_NUKE: return "ALERT_NUKE";
+        case GAME_EVENT_ALERT_ATOM: return "ALERT_ATOM";
         case GAME_EVENT_ALERT_HYDRO: return "ALERT_HYDRO";
         case GAME_EVENT_ALERT_MIRV: return "ALERT_MIRV";
         case GAME_EVENT_ALERT_LAND: return "ALERT_LAND";
@@ -43,7 +43,7 @@ game_event_type_t string_to_event_type(const char *str) {
     if (strcmp(str, "NUKE_LAUNCHED") == 0) return GAME_EVENT_NUKE_LAUNCHED;
     if (strcmp(str, "NUKE_EXPLODED") == 0) return GAME_EVENT_NUKE_EXPLODED;
     if (strcmp(str, "NUKE_INTERCEPTED") == 0) return GAME_EVENT_NUKE_INTERCEPTED;
-    if (strcmp(str, "ALERT_NUKE") == 0) return GAME_EVENT_ALERT_NUKE;
+    if (strcmp(str, "ALERT_ATOM") == 0) return GAME_EVENT_ALERT_ATOM;
     if (strcmp(str, "ALERT_HYDRO") == 0) return GAME_EVENT_ALERT_HYDRO;
     if (strcmp(str, "ALERT_MIRV") == 0) return GAME_EVENT_ALERT_MIRV;
     if (strcmp(str, "ALERT_LAND") == 0) return GAME_EVENT_ALERT_LAND;

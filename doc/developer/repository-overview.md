@@ -15,8 +15,7 @@ ots/                                 # Monorepo root
 │   └── developer/                  # Developer docs (you are here!)
 │
 ├── prompts/                        # 🤖 AI Assistant Context
-│   ├── protocol-context.md         # SOURCE OF TRUTH for WebSocket protocol
-│   ├── DEVELOPMENT_SETUP.md
+│   ├── WEBSOCKET_MESSAGE_SPEC.md         # SOURCE OF TRUTH for WebSocket protocol
 │   ├── GIT_WORKFLOW.md
 │   └── RELEASE.md
 │
@@ -345,7 +344,7 @@ interface IncomingMessage { type: 'event' | 'cmd'; payload: ... }
 interface OutgoingMessage { type: 'event' | 'cmd'; payload: ... }
 ```
 
-**IMPORTANT**: These types must stay in sync with `prompts/protocol-context.md` and `ots-fw-main/include/protocol.h`.
+**IMPORTANT**: These types must stay in sync with `prompts/WEBSOCKET_MESSAGE_SPEC.md` and `ots-fw-main/include/protocol.h`.
 
 ## 🔩 ots-hardware (Hardware Specifications)
 
@@ -383,12 +382,12 @@ These specs drive firmware and UI implementation.
 
 | File | Purpose |
 |------|---------|
-| `protocol-context.md` | **SOURCE OF TRUTH** for WebSocket protocol (1155 lines) |
-| `DEVELOPMENT_SETUP.md` | Development environment setup |
+| `WEBSOCKET_MESSAGE_SPEC.md` | **SOURCE OF TRUTH** for WebSocket protocol (1155 lines) |
+
 | `GIT_WORKFLOW.md` | Git branching and commit conventions |
 | `RELEASE.md` | Release process and version management |
 
-**CRITICAL**: Always update `protocol-context.md` first when changing protocol.
+**CRITICAL**: Always update `WEBSOCKET_MESSAGE_SPEC.md` first when changing protocol.
 
 ## 🔄 Data Flow
 
