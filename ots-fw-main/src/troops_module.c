@@ -2,11 +2,10 @@
 #include "protocol.h"
 #include "ws_handlers.h"
 #include "event_dispatcher.h"
-#include "led_controller.h"
+#include "led_handler.h"
 #include "lcd_driver.h"
-#include "adc_driver.h"
 #include "adc_handler.h"
-#include "game_state.h"
+#include "game_state_manager.h"
 #include <string.h>
 #include <stdio.h>
 #include <esp_log.h>

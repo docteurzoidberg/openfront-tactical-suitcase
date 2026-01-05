@@ -17,8 +17,16 @@ import os
 from pathlib import Path
 from typing import Iterable
 
+# When run as PlatformIO extra script, use env variable
+# When run standalone, use __file__
+try:
+    Import("env")
+    # Get project directory from PlatformIO environment
+    ROOT = Path(env['PROJECT_DIR'])
+except (NameError, KeyError):
+    # Standalone execution
+    ROOT = Path(__file__).resolve().parents[1]
 
-ROOT = Path(__file__).resolve().parents[1]
 WEBAPP_DIR = ROOT / "webapp"
 OUT_HEADER = ROOT / "include" / "webapp" / "ots_webapp.h"
 

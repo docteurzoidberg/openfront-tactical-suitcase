@@ -1,6 +1,6 @@
 #include "adc_handler.h"
+#include "i2c_handler.h"
 #include "adc_driver.h"
-#include "i2c_bus.h"
 #include "event_dispatcher.h"
 #include "protocol.h"
 #include "esp_log.h"

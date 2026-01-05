@@ -1,5 +1,5 @@
-#ifndef LED_CONTROLLER_H
-#define LED_CONTROLLER_H
+#ifndef LED_HANDLER_H
+#define LED_HANDLER_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -96,4 +96,4 @@ bool led_controller_link_blink(uint32_t blink_rate_ms);
  */
 QueueHandle_t led_controller_get_queue(void);
 
-#endif // LED_CONTROLLER_H
+#endif // LED_HANDLER_H

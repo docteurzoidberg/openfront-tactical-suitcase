@@ -1,10 +1,13 @@
 #include "sound_module.h"
 #include "can_protocol.h"
+#include "can_discovery.h"
 #include "protocol.h"
 #include "event_dispatcher.h"
 #include "cJSON.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <string.h>
 
 static const char *TAG = "SOUND_MODULE";
@@ -17,10 +20,16 @@ typedef struct {
     uint32_t sounds_failed;
     uint16_t last_sound_index;
     uint64_t last_play_time;
+    
+    // Discovery state
+    bool audio_module_discovered;
+    uint8_t audio_module_version_major;
+    uint8_t audio_module_version_minor;
 } sound_module_state_t;
 
 static sound_module_state_t s_state = {0};
 static uint16_t s_request_counter = 0;
+static TaskHandle_t s_can_rx_task = NULL;
 
 // Forward declarations
 static esp_err_t sound_init(void);
@@ -33,6 +42,41 @@ static esp_err_t sound_shutdown(void);
 static uint16_t map_event_to_sound_index(game_event_type_t event_type);
 static esp_err_t parse_sound_play_data(const char *json_data, uint16_t *sound_index, 
                                        bool *interrupt, bool *high_priority);
+
+/**
+ * @brief CAN RX task - receives discovery announcements and sound status
+ */
+static void can_rx_task(void *arg) {
+    can_frame_t frame;
+    ESP_LOGI(TAG, "CAN RX task started");
+    
+    while (1) {
+        // Wait for CAN frames (blocking)
+        if (can_driver_receive(&frame, portMAX_DELAY) == ESP_OK) {
+            // Handle MODULE_ANNOUNCE (discovery)
+            if (frame.id == CAN_ID_MODULE_ANNOUNCE) {
+                module_info_t info;
+                if (can_discovery_parse_announce(&frame, &info) == ESP_OK) {
+                    if (info.module_type == MODULE_TYPE_AUDIO) {
+                        s_state.audio_module_discovered = true;
+                        s_state.audio_module_version_major = info.version_major;
+                        s_state.audio_module_version_minor = info.version_minor;
+                        ESP_LOGI(TAG, "Audio module v%d.%d discovered on CAN block 0x%02X",
+                                 info.version_major, info.version_minor, info.can_block_base);
+                    }
+                }
+            }
+            // Handle SOUND_ACK (0x423) - future implementation
+            else if (frame.id == 0x423) {
+                ESP_LOGI(TAG, "Received SOUND_ACK (parsing not yet implemented)");
+            }
+            // Handle SOUND_FINISHED (0x425) - future implementation
+            else if (frame.id == 0x425) {
+                ESP_LOGI(TAG, "Received SOUND_FINISHED (parsing not yet implemented)");
+            }
+        }
+    }
+}
 
 // Module interface
 static hardware_module_t s_sound_module = {
@@ -70,6 +114,33 @@ static esp_err_t sound_init(void) {
     s_state.sounds_failed = 0;
     s_state.last_sound_index = 0;
     s_state.last_play_time = 0;
+    s_state.audio_module_discovered = false;
+    
+    // Start CAN RX task to receive discovery announcements and responses
+    BaseType_t task_ret = xTaskCreate(can_rx_task, "can_rx", 4096, NULL, 5, &s_can_rx_task);
+    if (task_ret != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create CAN RX task");
+        return ESP_FAIL;
+    }
+    
+    // Send module discovery query
+    ESP_LOGI(TAG, "Discovering CAN modules...");
+    ret = can_discovery_query_all();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to send discovery query: %s", esp_err_to_name(ret));
+    }
+    
+    // Wait for discovery responses
+    vTaskDelay(pdMS_TO_TICKS(500));
+    
+    if (s_state.audio_module_discovered) {
+        ESP_LOGI(TAG, "✓ Audio module v%d.%d detected",
+                 s_state.audio_module_version_major,
+                 s_state.audio_module_version_minor);
+    } else {
+        ESP_LOGW(TAG, "✗ No audio module detected - sound features disabled");
+        s_state.can_ready = false;  // Disable sound features
+    }
     
     ESP_LOGI(TAG, "Sound module initialized successfully");
     ESP_LOGI(TAG, "Mode: MOCK (CAN messages logged only)");
@@ -169,6 +240,12 @@ static esp_err_t sound_shutdown(void) {
     
     // Stop all sounds before shutdown
     sound_module_stop(CAN_SOUND_INDEX_ANY, true);
+    
+    // Stop CAN RX task
+    if (s_can_rx_task) {
+        vTaskDelete(s_can_rx_task);
+        s_can_rx_task = NULL;
+    }
     
     s_state.initialized = false;
     s_state.can_ready = false;

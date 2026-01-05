@@ -1,22 +1,58 @@
-# CAN Driver - Future Shared Component
+# CAN Driver - Shared Component Status
 
 ## Overview
 
-The CAN driver is currently implemented as mock code within `ots-fw-main` for development purposes. This document outlines the plan to extract it into a shared ESP-IDF component that can be used by both:
+The CAN driver is implemented as a shared ESP-IDF component used by both:
 
 - **ots-fw-main** (main controller ESP32-S3)
 - **ots-fw-audiomodule** (audio controller ESP32-A1S)
 
 ## Current Status (January 2026)
 
-**Location:** 
-- `ots-fw-main/include/can_driver.h`
-- `ots-fw-main/src/can_driver.c`
+**✅ IMPLEMENTED**
 
-**Implementation:** MOCK MODE
-- CAN messages are logged to serial output
-- No physical CAN bus transmission
-- Used for protocol development and testing
+**Location:** `/ots-fw-shared/components/can_driver/`
+
+**Features:**
+- ✅ Mock mode for development (logs to serial)
+- ✅ Physical TWAI mode for production (auto-detected)
+- ✅ Hardware auto-detection at runtime
+- ✅ Shared between main controller and audio module
+- ✅ Module discovery protocol implemented
+- ✅ Integrated in both firmwares
+
+**Related Components:**
+- **CAN Driver**: `/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md` - Hardware layer
+- **CAN Discovery**: `/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md` - ✅ **Module discovery** (boot-time)
+- **CAN Audio Module**: `/ots-fw-shared/components/can_audiomodule/COMPONENT_PROMPT.md` - Audio protocol implementation
+
+## Discovery Protocol (✅ Implemented)
+
+The system uses **boot-time module discovery** to detect CAN modules:
+
+```
+1. Main controller boots, sends MODULE_QUERY (0x411)
+2. Modules respond with MODULE_ANNOUNCE (0x410)
+3. Main controller waits 500ms for responses
+4. Modules registered in module registry
+5. No further discovery traffic (zero runtime overhead)
+```
+
+**Discovery Component**: `/ots-fw-shared/components/can_discovery/`
+- Boot-time only (no heartbeat overhead)
+- Module type identification (AUDIO = 0x01)
+- Version tracking
+- CAN block allocation
+- Capability flags (STATUS, OTA, BATTERY)
+
+**Integration Status:**
+- ✅ Audio module responds to discovery queries
+- ✅ Main controller queries and tracks discovered modules
+- ✅ Sound module gracefully disables if no audio module found
+- ✅ Both projects build successfully
+
+For complete discovery protocol documentation, see:  
+**`/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md`**
 
 ## Future Implementation Plan
 

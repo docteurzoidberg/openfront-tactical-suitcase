@@ -1,5 +1,5 @@
-#ifndef SERIAL_COMMANDS_H
-#define SERIAL_COMMANDS_H
+#ifndef SERIAL_COMMAND_HANDLER_H
+#define SERIAL_COMMAND_HANDLER_H
 
 #include "esp_err.h"
 

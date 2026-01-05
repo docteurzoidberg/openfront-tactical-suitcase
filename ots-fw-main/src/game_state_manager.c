@@ -1,5 +1,5 @@
-#include "game_state.h"
-#include "led_controller.h"
+#include "game_state_manager.h"
+#include "led_handler.h"
 #include "esp_log.h"
 
 static const char *TAG = "OTS_GAME_STATE";

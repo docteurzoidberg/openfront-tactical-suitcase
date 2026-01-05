@@ -1,5 +1,5 @@
-#ifndef RGB_STATUS_H
-#define RGB_STATUS_H
+#ifndef RGB_HANDLER_H
+#define RGB_HANDLER_H
 
 #include "esp_err.h"
 #include <stdint.h>
@@ -50,4 +50,4 @@ void rgb_status_set(rgb_status_t status);
  */
 rgb_status_t rgb_status_get(void);
 
-#endif // RGB_STATUS_H
+#endif // RGB_HANDLER_H

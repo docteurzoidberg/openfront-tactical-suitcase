@@ -12,8 +12,8 @@
 
 #include "system_status_module.h"
 #include "lcd_driver.h"
-#include "i2c_bus.h"
-#include "game_state.h"
+#include "i2c_handler.h"
+#include "game_state_manager.h"
 #include "protocol.h"
 #include "network_manager.h"
 #include "http_server.h"

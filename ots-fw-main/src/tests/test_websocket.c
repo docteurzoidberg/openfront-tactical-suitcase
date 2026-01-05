@@ -37,7 +37,7 @@
 #include "network_manager.h"
 #include "http_server.h"
 #include "ws_handlers.h"
-#include "rgb_status.h"
+#include "rgb_handler.h"
 #include "protocol.h"
 #include "wifi_credentials.h"
 #include "event_dispatcher.h"

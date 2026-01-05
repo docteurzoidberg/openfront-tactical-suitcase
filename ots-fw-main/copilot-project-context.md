@@ -471,6 +471,22 @@ See `docs/OTA_GUIDE.md` for detailed instructions and troubleshooting.
 - Test OTA update procedure
 - Verify firmware size fits in partition (max ~2MB per partition)
 
+## CAN Protocol Documentation (Audio Module Integration)
+
+**When implementing CAN communication with audio module**:
+1. ⚠️ **Reference `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md` for message formats**
+2. Use the **shared component**: `/ots-fw-shared/components/can_audiomodule/`
+3. Use queue IDs (1-255) to track and control individual sounds
+4. Implement retry logic for mixer-full errors (wait 500ms, retry once)
+5. Set 200ms timeout for ACK responses
+6. **Update shared component if protocol needs change**
+
+**Protocol Documentation:**
+- `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md` - Audio module protocol specification
+- `/ots-fw-shared/prompts/CAN_PROTOCOL_INTEGRATION.md` - Integration guide with examples
+- `/ots-fw-shared/components/can_audiomodule/COMPONENT_PROMPT.md` - Shared component usage
+- `/ots-fw-shared/components/can_driver/CAN_PROTOCOL_ARCHITECTURE.md` - Multi-module architecture (future)
+
 ## Hardware Driver Components
 
 All hardware-specific logic is isolated into **independent ESP-IDF components**. For detailed information:
@@ -484,6 +500,7 @@ All hardware-specific logic is isolated into **independent ESP-IDF components**.
   - **CAN Driver**: [/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md](/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md)
     - Generic CAN bus (TWAI) driver with mock fallback
     - Used by sound_module.c
+    - **Protocol docs**: See "CAN Protocol Documentation" section above
   - **MCP23017 Driver**: [components/mcp23017_driver/COMPONENT_PROMPT.md](components/mcp23017_driver/COMPONENT_PROMPT.md)
     - I2C 16-pin I/O expander for buttons and LEDs
     - Used by all hardware modules via io_expander.c

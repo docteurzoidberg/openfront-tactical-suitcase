@@ -1,15 +1,18 @@
 # CAN Driver Component - Implementation Summary
 
-## ✅ Generic Hardware-Level CAN Driver Created
+## ✅ Generic Hardware-Level CAN Driver + Discovery Protocol
 
-Successfully extracted CAN driver into a reusable ESP-IDF component at `/components/can_driver/`.
+Successfully created CAN infrastructure as reusable ESP-IDF components:
+- **CAN Driver**: `/ots-fw-shared/components/can_driver/` - Hardware layer
+- **CAN Discovery**: `/ots-fw-shared/components/can_discovery/` - ✅ **Boot-time module discovery**
+- **CAN Audio Module**: `/ots-fw-shared/components/can_audiomodule/` - Audio protocol implementation
 
 ## Architecture
 
-### Generic Hardware Layer (Shared Component)
-**Location:** `/components/can_driver/`
+### Layer 1: Generic Hardware Layer (Shared Component)
+**Location:** `/ots-fw-shared/components/can_driver/`
 - **can_driver.h** - Generic CAN frame TX/RX interface
-- **can_driver.c** - Hardware abstraction (mock mode + TWAI placeholders)
+- **can_driver.c** - Hardware abstraction (mock mode + TWAI auto-detection)
 - **CMakeLists.txt** - ESP-IDF component build config
 - **idf_component.yml** - Component dependencies
 
@@ -17,86 +20,221 @@ Successfully extracted CAN driver into a reusable ESP-IDF component at `/compone
 - Generic `can_frame_t` structure (ID, DLC, data, extended, RTR)
 - Hardware-agnostic API (no protocol specifics)
 - Mock mode for development without hardware
+- Physical TWAI mode auto-detected at runtime
 - Statistics tracking (TX/RX counts, errors)
 - Filter configuration support
 - Thread-safe operation
 
-### Application Protocol Layer (Firmware-Specific)
-**Location:** `/ots-fw-main/include/can_protocol.h` + `src/can_protocol.c`
-- Sound module CAN protocol definitions (IDs 0x420-0x423)
-- Helper functions: `can_build_play_sound()`, `can_build_stop_sound()`
-- Parser functions: `can_parse_sound_status()`, `can_parse_sound_ack()`
-- Protocol constants and flags
+### Layer 2: Discovery Protocol (Shared Component) ✅ NEW
+
+**Location:** `/ots-fw-shared/components/can_discovery/`
+- **can_discovery.h** - Discovery protocol API and constants
+- **can_discovery.c** - Implementation (query/announce)
+- **COMPONENT_PROMPT.md** - Complete documentation
+
+**Features:**
+- ✅ Boot-time module detection (no heartbeat overhead)
+- ✅ Module type identification (AUDIO = 0x01)
+- ✅ Version tracking (firmware major/minor)
+- ✅ Capability flags (STATUS, OTA, BATTERY)
+- ✅ CAN block allocation (0x42 = 0x420-0x42F for audio)
+- ✅ Graceful degradation if modules missing
+
+**CAN IDs:**
+- **0x410**: MODULE_ANNOUNCE (module → main)
+- **0x411**: MODULE_QUERY (main → modules)
+
+**Message Format:**
+```c
+// MODULE_ANNOUNCE (0x410)
+frame.data[0] = module_type;      // 0x01 = AUDIO
+frame.data[1] = version_major;    // e.g., 1
+frame.data[2] = version_minor;    // e.g., 0
+frame.data[3] = capabilities;     // 0x01 = STATUS
+frame.data[4] = can_block;        // 0x42 (0x420-0x42F)
+frame.data[5] = node_id;          // reserved (0x00)
+```
+
+**Discovery Flow:**
+```
+Main Controller              Audio Module
+     │                            │
+     │ ─ MODULE_QUERY (0x411) ──→ │
+     │                            │
+     │ ←─ MODULE_ANNOUNCE ────────│
+     │    (AUDIO v1.0, block 0x42)│
+     │                            │
+[Wait 500ms]                      │
+[Build registry]                  │
+     ▼                            ▼
+  Ready                        Ready
+```
+
+### Layer 3: Application Protocol Layer (Firmware-Specific)
+
+**Location (Main):** `/ots-fw-main/include/can_protocol.h` + `src/can_protocol.c`
+- Sound module integration with discovery
+- CAN RX task receives MODULE_ANNOUNCE messages
+- Tracks `audio_module_discovered` flag
+- Disables sound features if no module found
+
+**Location (Audio):** `/ots-fw-audiomodule/src/can_audio_handler.c`
+- Responds to MODULE_QUERY automatically
+- Handles sound protocol (PLAY_SOUND, STOP_SOUND, etc.)
+- Uses CAN IDs 0x420-0x425
 
 ## Component Structure
 
 ```
-components/can_driver/
-├── CMakeLists.txt              # Component build config
-├── idf_component.yml           # Dependencies (idf >= 5.0)
-├── README.md                   # Usage documentation
-├── include/
-│   └── can_driver.h           # Public API
-└── can_driver.c                # Implementation
+ots-fw-shared/components/
+├── can_driver/                    # Layer 1: Hardware
+│   ├── CMakeLists.txt
+│   ├── idf_component.yml
+│   ├── COMPONENT_PROMPT.md
+│   ├── include/can_driver.h
+│   └── can_driver.c
+│
+├── can_discovery/                 # Layer 2: Discovery ✅ NEW
+│   ├── CMakeLists.txt
+│   ├── idf_component.yml
+│   ├── COMPONENT_PROMPT.md       # Complete API docs
+│   ├── include/can_discovery.h
+│   └── can_discovery.c
+│
+└── can_audiomodule/               # Layer 3: Audio Protocol
+    ├── CMakeLists.txt
+    ├── idf_component.yml
+    ├── COMPONENT_PROMPT.md
+    ├── include/can_audio_protocol.h
+    └── can_audio_handler.c
 ```
 
-## Usage in Firmware
+## Discovery Integration
 
-### ots-fw-main
+### Module Side (e.g., Audio Module)
 
 **CMakeLists.txt:**
 ```cmake
-REQUIRES can_driver  # Added to component requirements
+REQUIRES can_driver can_discovery  # Added discovery
 ```
 
-**Code:**
-```c
-#include "can_driver.h"      // Generic driver
-#include "can_protocol.h"    // Protocol definitions
-
-// Initialize
-can_config_t config = CAN_CONFIG_DEFAULT();
-can_driver_init(&config);
-
-// Build protocol message
-can_frame_t frame;
-can_build_play_sound(sound_index, flags, volume, req_id, &frame);
-
-// Send via generic driver
-can_driver_send(&frame);
-```
-
-### ots-fw-audiomodule (Future)
-
-**CMakeLists.txt:**
-```cmake
-REQUIRES can_driver  # Same generic driver
-```
-
-**Code:**
+**Code (can_audio_handler.c):**
 ```c
 #include "can_driver.h"
+#include "can_discovery.h"
 
-// Receive frames
-can_frame_t frame;
-if (can_driver_receive(&frame, 100) == ESP_OK) {
-    // Parse PLAY_SOUND command
-    if (frame.id == 0x420 && frame.data[0] == 0x01) {
-        uint16_t sound_idx = frame.data[2] | (frame.data[3] << 8);
-        // Play sound from SD card
+void can_rx_task(void *arg) {
+    can_frame_t frame;
+    while (1) {
+        if (can_driver_receive(&frame, portMAX_DELAY) == ESP_OK) {
+            // Handle discovery query
+            if (frame.id == CAN_ID_MODULE_QUERY) {
+                can_discovery_handle_query(&frame, MODULE_TYPE_AUDIO,
+                                          1, 0, MODULE_CAP_STATUS, 0x42, 0);
+            }
+            
+            // Handle sound protocol messages...
+        }
     }
 }
 ```
 
-## Current Mode: Mock
+### Main Controller Side
+
+**CMakeLists.txt:**
+```cmake
+REQUIRES can_driver can_discovery  # Added discovery
+```
+
+**Code (sound_module.c):**
+```c
+#include "can_driver.h"
+#include "can_discovery.h"
+
+static bool audio_module_discovered = false;
+static uint8_t audio_module_version_major = 0;
+static uint8_t audio_module_version_minor = 0;
+
+void can_rx_task(void *arg) {
+    can_frame_t frame;
+    while (1) {
+        if (can_driver_receive(&frame, portMAX_DELAY) == ESP_OK) {
+            // Parse MODULE_ANNOUNCE
+            if (frame.id == CAN_ID_MODULE_ANNOUNCE) {
+                module_info_t info;
+                if (can_discovery_parse_announce(&frame, &info) == ESP_OK) {
+                    if (info.module_type == MODULE_TYPE_AUDIO) {
+                        audio_module_discovered = true;
+                        audio_module_version_major = info.version_major;
+                        audio_module_version_minor = info.version_minor;
+                        ESP_LOGI(TAG, "✓ Audio module v%d.%d discovered",
+                                 info.version_major, info.version_minor);
+                    }
+                }
+            }
+            
+            // Handle sound ACKs, FINISHED, etc...
+        }
+    }
+}
+
+esp_err_t sound_init(void) {
+    // ... CAN init ...
+    
+    // Query for modules
+    ESP_LOGI(TAG, "Discovering CAN modules...");
+    can_discovery_query_all();
+    vTaskDelay(pdMS_TO_TICKS(500));  // Wait for responses
+    
+    if (audio_module_discovered) {
+        ESP_LOGI(TAG, "✓ Audio module v%d.%d detected",
+                 audio_module_version_major, audio_module_version_minor);
+        s_state.can_ready = true;
+    } else {
+        ESP_LOGW(TAG, "✗ No audio module detected - sound features disabled");
+        s_state.can_ready = false;
+    }
+    
+    return ESP_OK;
+}
+```
+
+## Usage in Firmware
+
+### ots-fw-main (Main Controller)
+
+**Build Status:** ✅ SUCCESS (1,068,176 bytes)
+
+**Integration:**
+- ✅ CAN driver initialized
+- ✅ Discovery component integrated
+- ✅ Sends MODULE_QUERY on boot
+- ✅ Receives MODULE_ANNOUNCE messages
+- ✅ Tracks discovered audio module
+- ✅ Gracefully disables sound if no module
+
+### ots-fw-audiomodule (Audio Module)
+
+**Build Status:** ✅ SUCCESS (1,161,563 bytes)
+
+**Integration:**
+- ✅ CAN driver initialized
+- ✅ Discovery component integrated
+- ✅ Responds to MODULE_QUERY
+- ✅ Sends MODULE_ANNOUNCE with AUDIO type, v1.0, block 0x42
+- ✅ Handles sound protocol (PLAY, STOP, etc.)
+
+## Current Mode: Mock + Auto-Detection
 
 **Behavior:**
-- CAN frames logged to serial output
-- No physical bus transmission
+- Hardware auto-detected at runtime (GPIO test)
+- Mock mode used if no CAN transceiver detected
+- CAN frames logged to serial output in mock mode
 - Perfect for protocol development
 - Statistics tracking functional
+- Discovery works in both mock and physical modes
 
-**Serial Output:**
+**Serial Output (Mock Mode):**
 ```
 [CAN_DRV] Initializing CAN driver in MOCK mode
 [CAN_PROTO] Build PLAY_SOUND: idx=10 flags=0x02 vol=255 reqID=1

@@ -18,8 +18,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "adc_handler.h"
+#include "i2c_handler.h"
 #include "adc_driver.h"
-#include "i2c_bus.h"
 
 #include "ots_logging.h"
 

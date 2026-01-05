@@ -7,11 +7,24 @@
 - Mock mode for development without hardware
 - TWAI physical bus support with fallback
 - Statistics tracking and error handling
+- **Location:** `/ots-fw-shared/components/can_driver/`
+
+✅ **Discovery Protocol Complete** ✅ NEW
+- Boot-time module detection (no heartbeat overhead)
+- Module type identification (AUDIO = 0x01)
+- Version tracking and capability flags
+- CAN block allocation (audio uses 0x420-0x42F)
+- Graceful degradation if modules missing
+- **Location:** `/ots-fw-shared/components/can_discovery/`
+- **Documentation:** `/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md`
 
 ✅ **Audio Module Protocol Implemented**
-- Application-specific protocol in `can_protocol.h`
-- Message IDs 0x420-0x423 for audio commands
-- Sound module integration working
+- Application-specific protocol in CAN block 0x420-0x42F
+- Discovery integration (responds to MODULE_QUERY)
+- Sound play/stop commands with queue tracking
+- Both main controller and audio module integrated
+- **Build Status:** Both projects compile successfully
+- **Documentation:** `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md`
 
 ## Future Multi-Module Architecture
 
@@ -26,78 +39,118 @@ The OTS suitcase will expand to support multiple CAN-based modules:
 
 **Challenge:** We don't know what module types will be added in the future.
 
-**Solution:** Generic protocol with automatic discovery and routing.
+**Solution:** ✅ Generic discovery protocol implemented + future routing enhancement.
 
 ### Architecture Overview
 
-See **`/components/can_driver/CAN_PROTOCOL_ARCHITECTURE.md`** for complete specification.
+See **`/ots-fw-shared/prompts/CAN_PROTOCOL_ARCHITECTURE.md`** for complete specification.
 
 **Key concepts:**
-1. **Priority-based CAN IDs**: Emergency → High → Normal → Low
-2. **Module Discovery**: Automatic enumeration on bus startup
-3. **Dynamic Registry**: Controller maintains list of active modules
-4. **Message Routing**: Route incoming messages to appropriate handlers
-5. **Module Type Adapters**: Each module type has its own protocol handler
+1. ✅ **Boot-time Discovery**: Automatic module detection at startup (implemented)
+2. ✅ **Module Type Registry**: Each module has type ID and version (implemented)
+3. ✅ **CAN Block Allocation**: Modules get dedicated CAN ID ranges (implemented)
+4. 📋 **Message Routing**: Route incoming messages to appropriate handlers (future)
+5. 📋 **Module Type Adapters**: Each module type has its own protocol handler (future)
 
-### CAN ID Structure
+### Discovery Protocol (✅ Implemented)
+
+**CAN IDs:**
+- **0x410**: MODULE_ANNOUNCE (module → main)
+- **0x411**: MODULE_QUERY (main → all modules)
+
+**Flow:**
+```
+Main Controller                Audio Module
+     │                              │
+     │ ──── MODULE_QUERY (0x411) ──→│
+     │                              │
+     │ ←── MODULE_ANNOUNCE (0x410) ─│
+     │     (type=AUDIO, v1.0)       │
+     │                              │
+[Wait 500ms]                        │
+[Build registry]                    │
+     ▼                              ▼
+  Ready                          Ready
+```
+
+**Module Types:**
+- 0x00: NONE (reserved)
+- 0x01: AUDIO (✅ implemented)
+- 0x02-0xFF: Future modules
+
+**Capabilities:**
+- bit 0: MODULE_CAP_STATUS (sends periodic status)
+- bit 1: MODULE_CAP_OTA (supports OTA updates)
+- bit 2: MODULE_CAP_BATTERY (battery powered)
+
+### CAN ID Allocation
 
 ```
-11-bit ID: [PPP][TTTT][AAAA]
-           Priority(3) Type(4) Address(4)
-
-Example IDs:
-0x00F - Emergency broadcast
-0x223 - Command to module at address 3
-0x345 - Status from module at address 5
+0x000-0x00F - System broadcast
+0x010-0x3FF - Reserved for future generic protocol
+0x410-0x411 - Discovery protocol (✅ implemented)
+0x420-0x42F - Audio module (✅ allocated)
+0x430-0x43F - Display module (future)
+0x440-0x44F - Lighting module (future)
+0x450-0x7FF - Other module types (future)
 ```
-
-### Message Classes
-
-- **0x00-0x0F**: System (ping, reset, error)
-- **0x10-0x1F**: Discovery & configuration
-- **0x20-0x2F**: Generic commands
-- **0x30-0x3F**: Responses
-- **0x40-0x4F**: Status & events
-- **0x50-0xFF**: Module-specific
 
 ## Implementation Phases
 
-### Phase 1: Current (Audio Module Only)
+### Phase 1: Current (Audio Module + Discovery)
 
-**Status:** ✅ Complete
+**Status:** ✅ Complete (January 2026)
 
 **Components:**
-- `can_driver` - Generic hardware layer
-- `can_protocol.{h,c}` - Audio-specific protocol
-- `sound_module.c` - Audio module integration
+- ✅ `can_driver` - Generic hardware layer
+- ✅ `can_discovery` - Boot-time module detection
+- ✅ `can_protocol.{h,c}` - Audio-specific protocol
+- ✅ `sound_module.c` - Audio module integration with discovery
 
-**Limitations:**
-- Single module type supported
-- Fixed addressing (audio at 0x420-0x423)
-- No discovery protocol
-- Manual configuration
+**Features:**
+- ✅ Audio module auto-detected at boot
+- ✅ Main controller disables sound if no module found
+- ✅ Version tracking (audio module v1.0)
+- ✅ CAN block allocation (0x42 = 0x420-0x42F)
+- ✅ Zero runtime discovery overhead (boot-time only)
 
-### Phase 2: Generic Protocol Foundation
+**Build Status:**
+- ✅ ots-fw-main: 1,068,176 bytes (50.9%)
+- ✅ ots-fw-audiomodule: 1,161,563 bytes (27.7%)
 
-**Status:** 📋 Planned
+### Phase 2: Multi-Module Registry & Routing
+
+**Status:** 📋 Planned (Future Enhancement)
 
 **Tasks:**
-1. Add `can_protocol.h` to component (generic protocol definitions)
-2. Implement `can_module_registry.c` (module discovery and tracking)
-3. Implement `can_message_router.c` (dynamic message routing)
-4. Add heartbeat/keepalive mechanism
-5. Create module type registry
+1. ✅ Discovery protocol (DONE)
+2. 📋 Implement module registry service in fw-main
+3. 📋 Add dynamic message routing
+4. 📋 Create adapter pattern for module types
+5. 📋 Add module enumeration API
+6. 📋 Support hot-plug detection (optional)
 
 **Files to create:**
 ```
-ots-fw-shared/components/can_driver/
-├── include/
-│   └── can_protocol.h       # Generic protocol (NEW)
-├── can_module_registry.c    # Module management (NEW)
-└── can_message_router.c     # Message routing (NEW)
+ots-fw-main/src/
+├── can_module_service.c      # Module registry and lifecycle (NEW)
+└── can_adapters/             # Protocol adapters (NEW)
+    ├── audio_adapter.c       # Wraps existing sound_module
+    ├── display_adapter.c     # Future display module
+    └── generic_adapter.c     # Fallback for unknown types
 ```
 
-**Backward compatibility:** Audio module protocol stays in fw-main as first module-specific adapter.
+**Discovery already provides:**
+- ✅ Module type identification
+- ✅ Version tracking
+- ✅ CAN block allocation
+- ✅ Capability flags
+
+**Future routing would add:**
+- 📋 Automatic handler registration
+- 📋 Message dispatch to correct adapter
+- 📋 Multiple module instances (e.g., 2 displays)
+- 📋 Hot-plug detection (optional)
 
 ### Phase 3: Multi-Module Support in fw-main
 

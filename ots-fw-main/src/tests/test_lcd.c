@@ -10,7 +10,7 @@
 
 #include "esp_log.h"
 
-#include "i2c_bus.h"
+#include "i2c_handler.h"
 #include "lcd_driver.h"
 
 #include <stdio.h>

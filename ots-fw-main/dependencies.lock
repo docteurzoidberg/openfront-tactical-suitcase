@@ -1,4 +1,10 @@
 dependencies:
+  can_driver:
+    dependencies: []
+    source:
+      path: /home/drzoid/dev/openfront/ots/ots-fw-shared/components/can_driver
+      type: local
+    version: 1.0.0
   espressif/mdns:
     component_hash: 29e47564b1a7ee778135e17fbbf2a2773f71c97ebabfe626c8eda7c958a7ad16
     dependencies:
@@ -14,8 +20,9 @@ dependencies:
       type: idf
     version: 5.4.2
 direct_dependencies:
+- espressif/can_driver
 - espressif/mdns
 - idf
-manifest_hash: 7585dfd7cb196527351fc34d3e8e48e39aba15e38fc4d3956a4d3242ec8c0a4b
+manifest_hash: 4ff78d91db019a8343f4e143e60ce781c4ed5370b1353613e1c035c60bfd1d2c
 target: esp32s3
 version: 2.0.0

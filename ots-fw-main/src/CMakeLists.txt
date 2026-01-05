@@ -104,12 +104,12 @@ if(TEST_BUILD)
             "ws_handlers.c"
             "ws_protocol.c"
             "event_dispatcher.c"
-            "led_controller.c"
-            "game_state.c"
+            "led_handler.c"
+            "game_state_manager.c"
             "network_manager.c"
-            "i2c_bus.c"
+            "i2c_handler.c"
             "adc_handler.c"
-            "rgb_status.c"
+            "rgb_handler.c"
             "ots_logging.c"
             "nvs_storage.c"
             "wifi_credentials.c"
@@ -155,7 +155,7 @@ if(TEST_BUILD)
     elseif(TEST_NAME STREQUAL "test-adc")
         set(COMPONENT_SRCS
             "ots_logging.c"
-            "i2c_bus.c"
+            "i2c_handler.c"
             "tests/test_adc.c"
         )
         set(COMPONENT_REQUIRES
@@ -165,7 +165,7 @@ if(TEST_BUILD)
     elseif(TEST_NAME STREQUAL "test-lcd")
         set(COMPONENT_SRCS
             "ots_logging.c"
-            "i2c_bus.c"
+            "i2c_handler.c"
             "tests/test_lcd.c"
         )
         set(COMPONENT_REQUIRES
@@ -179,23 +179,23 @@ else()
     # Production firmware: all sources
     set(COMPONENT_SRCS
         "main.c"
-        "i2c_bus.c"
+        "i2c_handler.c"
         "module_io.c"
         "protocol.c"
         "tls_creds.c"
         "ws_handlers.c"
         "webapp_handlers.c"
         "ws_protocol.c"
-        "led_controller.c"
+        "led_handler.c"
         "button_handler.c"
         "adc_handler.c"
         "io_task.c"
-        "game_state.c"
+        "game_state_manager.c"
         "network_manager.c"
         "ota_manager.c"
         "event_dispatcher.c"
         "module_manager.c"
-        "nuke_tracker.c"
+        "nuke_state_manager.c"
         "nuke_module.c"
         "alert_module.c"
         "main_power_module.c"
@@ -203,12 +203,12 @@ else()
         "troops_module.c"
         "sound_module.c"
         "can_protocol.c"
-        "rgb_status.c"
+        "rgb_handler.c"
         "ots_logging.c"
         "nvs_storage.c"
         "wifi_credentials.c"
         "device_settings.c"
-        "serial_commands.c"
+        "serial_command_handler.c"
         "dns_captive_portal.c"
     )
     set(COMPONENT_REQUIRES
@@ -225,6 +225,7 @@ else()
         esp_http_server_core
         ws2812_rmt
         can_driver
+        can_discovery
     )
 endif()
 

@@ -1,4 +1,4 @@
-#include "serial_commands.h"
+#include "serial_command_handler.h"
 
 #include "config.h"
 #include "wifi_credentials.h"

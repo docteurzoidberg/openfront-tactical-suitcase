@@ -1,5 +1,5 @@
-#ifndef NUKE_TRACKER_H
-#define NUKE_TRACKER_H
+#ifndef NUKE_STATE_MANAGER_H
+#define NUKE_STATE_MANAGER_H
 
 #include <stdint.h>
 #include <stdbool.h>
