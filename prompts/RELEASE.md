@@ -19,11 +19,13 @@ Explain the automated workflow:
 
 **What this does:**
 1. Auto-increments version (YYYY-MM-DD.N format)
-2. Updates version strings in userscript, firmware, server
-3. Builds all components
-4. Creates git commit
-5. Creates annotated git tag
-6. Pushes to remote
+2. Strips `-dev` suffix from all project versions
+3. Updates version strings in all 5 projects (ots-userscript, ots-fw-main, ots-fw-audiomodule, ots-simulator, ots-website)
+4. Builds all components
+5. Creates git commit (tagged)
+6. Auto-bumps to next dev version (N+1-dev)
+7. Creates second commit (not tagged)
+8. Optionally pushes to remote
 
 ### User Says: "Create a release for me"
 
@@ -96,6 +98,42 @@ Suggest command based on what they've been working on:
 
 ## Release Script Options
 
+### Command Syntax
+
+```bash
+./release.sh [OPTIONS] [PROJECT...]
+```
+
+**Pattern for AI agents:**
+```bash
+./release.sh -u -m "Description" [project1] [project2] ...
+```
+
+**Key rules:**
+- `-m "message"` is REQUIRED (except with `-l` or `-h`)
+- `-u` is REQUIRED to update version files (almost always needed)
+- `-p` is OPTIONAL (adds push to remote after tagging)
+- Projects are OPTIONAL (defaults to `all` if omitted)
+- Multiple projects can be specified: `ots-userscript ots-fw-main`
+
+**Most common usage:**
+```bash
+./release.sh -u -m "Brief description of changes" all
+```
+
+### Available Projects
+
+| Project Name | Short Alias | Updates |
+|--------------|-------------|----------|
+| `ots-userscript` | `userscript`, `us` | Userscript for browser |
+| `ots-fw-main` | `firmware`, `fw` | Main ESP32-S3 controller |
+| `ots-fw-audiomodule` | `audiomodule`, `am` | ESP32-A1S audio module |
+| `ots-simulator` | `server`, `sv` | Dashboard/backend server |
+| `ots-website` | `website`, `ws` | VitePress documentation |
+| `all` | (default) | All 5 projects |
+
+### Command Flags
+
 | Flag | Meaning | When to Use |
 |------|---------|-------------|
 | `-u` | Update versions | Always use unless user manually updated versions |
@@ -136,13 +174,19 @@ git tag -d 2026-01-05.1
 
 ```bash
 # Userscript only
-./release.sh -u -m "Fix: HUD positioning" userscript
+./release.sh -u -m "Fix: HUD positioning" ots-userscript
 
-# Firmware only
-./release.sh -u -m "Fix: I2C timeout" firmware
+# Main firmware only
+./release.sh -u -m "Fix: I2C timeout" ots-fw-main
 
-# Server only
-./release.sh -u -m "Feature: New dashboard widget" server
+# Audio module only
+./release.sh -u -m "Fix: CAN bus stability" ots-fw-audiomodule
+
+# Server/dashboard only
+./release.sh -u -m "Feature: New dashboard widget" ots-simulator
+
+# Website only
+./release.sh -u -m "Docs: Update installation guide" ots-website
 ```
 
 ### "The version is wrong"
@@ -154,13 +198,22 @@ git tag -d 2026-01-05.1
 
 ## Build Validation
 
-The release script builds:
+The release script builds all selected projects:
 
-1. **Userscript**: `npm run build` → `build/userscript.ots.user.js` (~76KB)
-2. **Firmware**: `pio run -e esp32-s3-dev` → `.pio/build/esp32-s3-dev/firmware.bin` (~1MB)
-3. **Server**: `npm run build` → `.output/` directory
+1. **ots-userscript**: `npm run build` → `build/userscript.ots.user.js` (~76KB)
+2. **ots-fw-main**: `pio run -e esp32-s3-dev` → `.pio/build/esp32-s3-dev/firmware.bin` (~1MB)
+3. **ots-fw-audiomodule**: `pio run -e esp32-a1s-espidf` → `.pio/build/esp32-a1s-espidf/firmware.bin` (~800KB)
+4. **ots-simulator**: `npm run build` → `.output/` directory
+5. **ots-website**: `npm run build` → `.vitepress/dist/` directory
 
-**If any build fails, the entire release is aborted.** No commit or tag is created.
+**If any build fails:**
+- The entire release is aborted
+- No commit or tag is created
+- **Last 30 lines of build output are displayed** for debugging
+- Version files remain updated (can retry after fixing)
+
+**Build output visibility:**
+The script now captures and displays build errors automatically, making it easy to identify issues without manually rebuilding.
 
 ## Tag Format
 
@@ -172,22 +225,67 @@ The release script builds:
 
 **The script auto-increments N for same-day releases.**
 
+## How AI Should Run Release Script
+
+### Step-by-Step Process
+
+When user requests a release, follow this pattern:
+
+1. **Determine which projects changed**
+   - Check recent commits or user description
+   - Default to `all` if unsure
+
+2. **Construct the command**
+   ```bash
+   ./release.sh -u -m "Brief description" [projects]
+   ```
+
+3. **Execute and monitor**
+   - Run the command
+   - If build fails, the script will show error output
+   - Help user fix the error and retry
+
+4. **Verify success**
+   - Script will show: ✓ All builds successful
+   - Script will show: ✓ Tag created: YYYY-MM-DD.N
+   - Two commits created (release + dev bump)
+
+### Example Decision Tree
+
+**User says:** "I fixed a bug in the userscript"
+**AI runs:** `./release.sh -u -m "Fix: HUD positioning bug" ots-userscript`
+
+**User says:** "I updated the protocol across everything"
+**AI runs:** `./release.sh -u -m "Protocol: Add new event types" all`
+
+**User says:** "Make a release"
+**AI runs:** `./release.sh -u -m "Release: [summarize recent changes]" all`
+
+**User says:** "Release and push to GitHub"
+**AI runs:** `./release.sh -u -p -m "Release: [description]" all`
+
 ## What AI Should NOT Do
 
 ❌ **Don't suggest releases unprompted** - Wait for user to ask
+❌ **Don't omit `-u` flag** - Almost always required for version updates
+❌ **Don't omit `-m` message** - Always required (script will fail without it)
 ❌ **Don't suggest skipping builds** - Script validates automatically
 ❌ **Don't suggest manual version updates** - Use `-u` flag instead
 ❌ **Don't suggest force-pushing tags** - Creates history conflicts
 ❌ **Don't suggest `npm version`** - Use `release.sh` instead
+❌ **Don't run without checking recent changes** - Message should be meaningful
 
 ## What AI Should Do
 
 ✅ **Wait for user to ask about releases**
+✅ **Always use `-u` flag** unless user explicitly says versions already updated
+✅ **Always use `-m` flag** with meaningful description
 ✅ **Suggest appropriate release command** based on changes
-✅ **Explain what the script will do** before running
-✅ **Help debug build failures** if release aborts
-✅ **Remind about `-p` flag** for pushing to remote
-✅ **Suggest testing locally first** if user is unsure
+✅ **Run the command directly** (don't just suggest it)
+✅ **Monitor build output** and help debug if failures occur
+✅ **Verify two commits created** (release + dev bump)
+✅ **Remind about `-p` flag** if user wants to push immediately
+✅ **Default to `all` projects** unless user specifies otherwise
 
 ## Integration with Other Workflows
 
@@ -197,7 +295,14 @@ If user changed `prompts/WEBSOCKET_MESSAGE_SPEC.md` and implementations:
 
 ```bash
 # All components likely changed
-./release.sh -u -m "Protocol: Add NUKE_INTERCEPTED event" userscript firmware server
+./release.sh -u -m "Protocol: Add NUKE_INTERCEPTED event" ots-userscript ots-fw-main ots-simulator
+```
+
+If CAN protocol changed (`prompts/CANBUS_MESSAGE_SPEC.md`):
+
+```bash
+# Main firmware and audio module
+./release.sh -u -m "CAN Protocol: Add new sound commands" ots-fw-main ots-fw-audiomodule
 ```
 
 ### After Git Workflow
@@ -245,6 +350,19 @@ git reset --soft HEAD~1
 ```
 
 If already pushed, don't undo - create a new release with fixes.
+
+### User: "What's the development workflow with versions?"
+
+**Response:** The release script manages this automatically:
+
+1. **During development**: All projects have `-dev` suffix (e.g., `2026-01-05.2-dev`)
+2. **Create release**: `./release.sh -u -m "..."` strips `-dev` and tags
+3. **Auto-bump**: Script automatically bumps to next dev version (`2026-01-05.3-dev`)
+4. **Result**: Two commits created:
+   - Release commit (tagged: `2026-01-05.2`)
+   - Dev version bump (untagged: `2026-01-05.3-dev`)
+
+This keeps development versions clearly distinguished from release versions.
 
 ## Quick Reference for AI
 

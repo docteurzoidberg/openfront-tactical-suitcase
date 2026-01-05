@@ -67,7 +67,7 @@ update_version() {
     
     case $project in
         userscript)
-            echo -e "${BLUE}Updating userscript version to ${version}${NC}"
+            echo -e "${BLUE}Updating ots-userscript version to ${version}${NC}"
             
             # Update package.json
             if [ -f "ots-userscript/package.json" ]; then
@@ -83,7 +83,7 @@ update_version() {
             ;;
             
         firmware)
-            echo -e "${BLUE}Updating firmware version to ${version}${NC}"
+            echo -e "${BLUE}Updating ots-fw-main version to ${version}${NC}"
             
             # Update config.h
             if [ -f "ots-fw-main/include/config.h" ]; then
@@ -93,7 +93,7 @@ update_version() {
             ;;
             
         audiomodule)
-            echo -e "${BLUE}Updating audio module version to ${version}${NC}"
+            echo -e "${BLUE}Updating ots-fw-audiomodule version to ${version}${NC}"
             
             # Update main.c
             if [ -f "ots-fw-audiomodule/src/main.c" ]; then
@@ -103,7 +103,7 @@ update_version() {
             ;;
             
         website)
-            echo -e "${BLUE}Updating website version to ${version}${NC}"
+            echo -e "${BLUE}Updating ots-website version to ${version}${NC}"
             
             # Update package.json
             if [ -f "ots-website/package.json" ]; then
@@ -113,7 +113,7 @@ update_version() {
             ;;
             
         server)
-            echo -e "${BLUE}Updating server version to ${version}${NC}"
+            echo -e "${BLUE}Updating ots-simulator version to ${version}${NC}"
             
             # Update package.json
             if [ -f "ots-simulator/package.json" ]; then
@@ -130,56 +130,71 @@ build_project() {
     
     case $project in
         userscript)
-            echo -e "${BLUE}Building userscript...${NC}"
-            if (cd ots-userscript && npm run build > /dev/null 2>&1); then
+            echo -e "${BLUE}Building ots-userscript...${NC}"
+            local build_output=$(cd ots-userscript && npm run build 2>&1)
+            if [ $? -eq 0 ]; then
                 echo -e "  ${GREEN}✓${NC} ots-userscript/build/userscript.ots.user.js"
                 return 0
             else
-                echo -e "  ${RED}✗${NC} Userscript build failed!"
+                echo -e "  ${RED}✗${NC} ots-userscript build failed!"
+                echo -e "${RED}Build output:${NC}"
+                echo "$build_output" | tail -30
                 return 1
             fi
             ;;
             
         firmware)
-            echo -e "${BLUE}Building firmware...${NC}"
-            if (cd ots-fw-main && pio run -e esp32-s3-dev > /dev/null 2>&1); then
+            echo -e "${BLUE}Building ots-fw-main...${NC}"
+            local build_output=$(cd ots-fw-main && pio run -e esp32-s3-dev 2>&1)
+            if [ $? -eq 0 ]; then
                 echo -e "  ${GREEN}✓${NC} ots-fw-main/.pio/build/esp32-s3-dev/firmware.bin"
                 return 0
             else
-                echo -e "  ${RED}✗${NC} Firmware build failed!"
+                echo -e "  ${RED}✗${NC} ots-fw-main build failed!"
+                echo -e "${RED}Build output:${NC}"
+                echo "$build_output" | tail -30
                 return 1
             fi
             ;;
             
         server)
-            echo -e "${BLUE}Building server...${NC}"
-            if (cd ots-simulator && npm run build > /dev/null 2>&1); then
+            echo -e "${BLUE}Building ots-simulator...${NC}"
+            local build_output=$(cd ots-simulator && npm run build 2>&1)
+            if [ $? -eq 0 ]; then
                 echo -e "  ${GREEN}✓${NC} ots-simulator/.output/"
                 return 0
             else
-                echo -e "  ${RED}✗${NC} Server build failed!"
+                echo -e "  ${RED}✗${NC} ots-simulator build failed!"
+                echo -e "${RED}Build output:${NC}"
+                echo "$build_output" | tail -30
                 return 1
             fi
             ;;
             
         audiomodule)
-            echo -e "${BLUE}Building audio module...${NC}"
-            if (cd ots-fw-audiomodule && pio run -e esp32-a1s-espidf > /dev/null 2>&1); then
+            echo -e "${BLUE}Building ots-fw-audiomodule...${NC}"
+            local build_output=$(cd ots-fw-audiomodule && pio run -e esp32-a1s-espidf 2>&1)
+            if [ $? -eq 0 ]; then
                 echo -e "  ${GREEN}✓${NC} ots-fw-audiomodule/.pio/build/esp32-a1s-espidf/firmware.bin"
                 return 0
             else
-                echo -e "  ${RED}✗${NC} Audio module build failed!"
+                echo -e "  ${RED}✗${NC} ots-fw-audiomodule build failed!"
+                echo -e "${RED}Build output:${NC}"
+                echo "$build_output" | tail -30
                 return 1
             fi
             ;;
             
         website)
-            echo -e "${BLUE}Building website...${NC}"
-            if (cd ots-website && npm run build > /dev/null 2>&1); then
+            echo -e "${BLUE}Building ots-website...${NC}"
+            local build_output=$(cd ots-website && npm run build 2>&1)
+            if [ $? -eq 0 ]; then
                 echo -e "  ${GREEN}✓${NC} ots-website/.vitepress/dist/"
                 return 0
             else
-                echo -e "  ${RED}✗${NC} Website build failed!"
+                echo -e "  ${RED}✗${NC} ots-website build failed!"
+                echo -e "${RED}Build output:${NC}"
+                echo "$build_output" | tail -30
                 return 1
             fi
             ;;
