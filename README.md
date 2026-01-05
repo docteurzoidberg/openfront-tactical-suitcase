@@ -72,7 +72,7 @@ See [Developer Getting Started](doc/developer/getting-started.md) for complete s
 |-----------|-------------|------------|
 | **ots-fw-main/** | Main ESP32-S3 controller firmware | C, ESP-IDF, PlatformIO |
 | **ots-fw-audiomodule/** | ESP32-A1S audio playback module | C, ESP-IDF, CAN bus |
-| **ots-fw-cantest/** | CAN bus testing and debugging tool | C, ESP-IDF |
+| **ots-fw-cantest/** | CAN bus testing tool ⚠️ WIP/Untested | C, ESP-IDF |
 | **ots-fw-shared/** | Shared ESP-IDF components (CAN drivers) | C, ESP-IDF |
 | **ots-simulator/** | Nuxt dashboard + WebSocket simulator | Vue 3, Nuxt 4, TypeScript |
 | **ots-userscript/** | Browser extension (Tampermonkey) | TypeScript, esbuild |

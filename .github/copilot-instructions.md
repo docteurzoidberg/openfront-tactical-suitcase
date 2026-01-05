@@ -7,7 +7,7 @@ OpenFront Tactical Suitcase (OTS) is a multi-component system bridging OpenFront
 - **ots-userscript**: TypeScript Tampermonkey script polling game state every 100ms
 - **ots-fw-main**: ESP32-S3 firmware (PlatformIO/ESP-IDF) with hardware modules
 - **ots-fw-audiomodule**: ESP32-A1S audio playback module with CAN bus integration
-- **ots-fw-cantest**: ESP32-S3 CAN bus testing/debugging tool
+- **ots-fw-cantest**: ESP32-S3 CAN bus testing/debugging tool (⚠️ WIP/Untested)
 - **ots-fw-shared**: Shared ESP-IDF components (CAN driver, discovery, audio protocol)
 - **ots-shared**: Shared TypeScript protocol types
 - **ots-hardware**: Hardware module specifications
@@ -340,9 +340,15 @@ ots/
   release.sh                       # Automated release script
   weekly_announces.md              # Discord changelog history
   prompts/
+    README.md                      # Prompts directory index
     WEBSOCKET_MESSAGE_SPEC.md      # SOURCE OF TRUTH for WebSocket messages
     CANBUS_MESSAGE_SPEC.md         # SOURCE OF TRUTH for CAN bus protocol
+    DOCUMENTATION_GUIDELINES.md    # VitePress documentation standards for AI
     RELEASE.md                     # Release process and version management guide
+    GIT_WORKFLOW.md                # Git branching, commits, and PR process
+    PLATFORMIO_WORKFLOW.md         # PlatformIO build system guidelines for AI
+    PROMPT_REVIEW_GUIDE.md         # Documentation review workflow system
+    PROMPT_REVIEW_PLAN.md          # Progress tracking for documentation updates
   .github/
     copilot-instructions.md        # This file - workspace-level guidance
     workflows/
@@ -419,6 +425,10 @@ ots/
 - **CAN Protocol**: `/prompts/CANBUS_MESSAGE_SPEC.md` (CAN bus message specification - SOURCE OF TRUTH)
 - **CAN Guide**: `/doc/developer/canbus-protocol.md` (CAN implementation guide with C examples)
 - **Release Process**: `/prompts/RELEASE.md` (Complete guide to version management and tagging)
+- **Git Workflow**: `/prompts/GIT_WORKFLOW.md` (Git branching, commits, and PR process)
+- **Documentation Standards**: `/prompts/DOCUMENTATION_GUIDELINES.md` (VitePress markdown and writing guidelines)
+- **PlatformIO Guide**: `/prompts/PLATFORMIO_WORKFLOW.md` (Build system guidelines for AI)
+- **Prompts Index**: `/prompts/README.md` (Complete index of all prompt files)
 - **Shared Components**: `/ots-fw-shared/components/` (Firmware code shared across projects)
   - CAN driver: `/ots-fw-shared/components/can_driver/`
 - **Component context**: Per-component `copilot-project-context.md` for detailed implementation guides

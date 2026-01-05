@@ -26,7 +26,7 @@ ots/                                 # Monorepo root
 ├── ots-userscript/                 # 🔧 Browser Extension
 ├── ots-fw-main/                    # 🎛️ Main Firmware
 ├── ots-fw-audiomodule/             # 🔊 Audio Firmware
-├── ots-fw-cantest/                 # 🧪 CAN Testing Tool
+├── ots-fw-cantest/                 # 🧪 CAN Testing Tool (⚠️ WIP/Untested)
 ├── ots-fw-shared/                  # 📦 Shared Firmware Components
 ├── ots-shared/                     # 🔗 Shared TypeScript Types
 └── ots-hardware/                   # 🔩 Hardware Specs
