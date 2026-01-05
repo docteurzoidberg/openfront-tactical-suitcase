@@ -373,7 +373,7 @@ Once WSS is working, test with the full OTS system:
 
 1. **Start OTS Server** (in separate terminal):
    ```bash
-   cd /home/drzoid/dev/openfront/ots/ots-server
+   cd /home/drzoid/dev/openfront/ots/ots-simulator
    npm run dev
    ```
 

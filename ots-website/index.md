@@ -34,7 +34,7 @@ The OpenFront Tactical Suitcase (OTS) is a physical hardware controller for the 
 ## Components
 
 - **ots-fw-main**: ESP32-S3 firmware for the main controller
-- **ots-server**: Nuxt dashboard and WebSocket server
+- **ots-simulator**: Nuxt dashboard and WebSocket simulator
 - **ots-userscript**: Browser userscript that bridges game state to hardware
 - **ots-hardware**: Hardware specifications and module designs
 

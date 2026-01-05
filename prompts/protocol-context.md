@@ -4,7 +4,7 @@
 
 This protocol defines the **shared WebSocket message format** for:
 
-- `ots-server` (Nuxt 4 app + Nitro WebSocket server)
+- `ots-simulator` (Nuxt 4 app + Nitro WebSocket simulator)
 - `ots-userscript` (Tampermonkey userscript bridge)
 - `ots-fw-main` (ESP32-S3 device firmware)
 
@@ -227,7 +227,7 @@ Set the troop deployment percentage (from hardware troops module).
 - Updates any UI displays showing selected troop count
 
 #### `hardware-diagnostic`
-Request hardware diagnostic information from the device (firmware or ots-server simulator).
+Request hardware diagnostic information from the device (firmware or ots-simulator simulator).
 
 **Flow**: Userscript → Server/Firmware → Response with `HARDWARE_DIAGNOSTIC` event
 
@@ -741,14 +741,14 @@ This table is the single source of truth for mapping `soundId` → `soundIndex` 
 
 Notes:
 - **Sound Module (SD card)** uses `/sounds/NNNN.mp3` preferred, `/sounds/NNNN.wav` fallback.
-- **Local dev assets (dashboard)** live in `ots-server/public/sounds/` and can include a descriptive suffix.
+- **Local dev assets (dashboard)** live in `ots-simulator/public/sounds/` and can include a descriptive suffix.
 
 | soundId | soundIndex | Sound Module SD path | Local dev file (recommended) |
 |---|---:|---|---|
-| `game_start` | 1 | `/sounds/0001.mp3` (or `.wav`) | `ots-server/public/sounds/0001-game_start.mp3` |
-| `game_player_death` | 2 | `/sounds/0002.mp3` (or `.wav`) | `ots-server/public/sounds/0002-game_player_death.mp3` |
-| `game_victory` | 3 | `/sounds/0003.mp3` (or `.wav`) | `ots-server/public/sounds/0003-game_victory.mp3` |
-| `game_defeat` | 4 | `/sounds/0004.mp3` (or `.wav`) | `ots-server/public/sounds/0004-game_defeat.mp3` |
+| `game_start` | 1 | `/sounds/0001.mp3` (or `.wav`) | `ots-simulator/public/sounds/0001-game_start.mp3` |
+| `game_player_death` | 2 | `/sounds/0002.mp3` (or `.wav`) | `ots-simulator/public/sounds/0002-game_player_death.mp3` |
+| `game_victory` | 3 | `/sounds/0003.mp3` (or `.wav`) | `ots-simulator/public/sounds/0003-game_victory.mp3` |
+| `game_defeat` | 4 | `/sounds/0004.mp3` (or `.wav`) | `ots-simulator/public/sounds/0004-game_defeat.mp3` |
 
 #### `HARDWARE_DIAGNOSTIC`
 Response event containing hardware diagnostic information from the device (firmware or simulator).
@@ -781,7 +781,7 @@ Response event containing hardware diagnostic information from the device (firmw
 
 **Data Fields:**
 - `version` (string): Firmware version or software version (e.g., "2025-12-20.1")
-- `deviceType` (string): `"firmware"` for ESP32 device, `"simulator"` for ots-server
+- `deviceType` (string): `"firmware"` for ESP32 device, `"simulator"` for ots-simulator
 - `serialNumber` (string): Unique device identifier (hardcoded, immutable)
   - Format: `OTS-FW-XXXXXX` for firmware devices
   - Format: `OTS-SIM-XXXXXX` for simulators
@@ -828,7 +828,7 @@ Response event containing hardware diagnostic information from the device (firmw
 }
 ```
 
-**Example - ots-server simulator with all features:**
+**Example - ots-simulator simulator with all features:**
 ```json
 {
   "type": "event",
@@ -1338,7 +1338,7 @@ ADC_ADDRESS = 0x48  // ADS1115 ADC
 
 ---
 
-## Server-Side Behavior (`ots-server`)
+## Server-Side Behavior (`ots-simulator`)
 
 The Nuxt/Nitro server has dual roles:
 
@@ -1394,7 +1394,7 @@ The server also acts as a **WebSocket client** connecting to the firmware's WebS
 
 ### Emulator Mode
 
-When hardware is not available, `ots-server` can run in **emulator mode**:
+When hardware is not available, `ots-simulator` can run in **emulator mode**:
 - Simulates hardware firmware behavior
 - Vue components in `app/components/hardware/` mimic physical modules
 - User interactions in UI generate `cmd` messages as if from real hardware
@@ -1403,16 +1403,16 @@ When hardware is not available, `ots-server` can run in **emulator mode**:
 
 ## Firmware Behavior (`ots-fw-main`)
 
-**Note**: The firmware acts as a **WebSocket server**, not a client. The `ots-server` connects TO the firmware.
+**Note**: The firmware acts as a **WebSocket server**, not a client. The `ots-simulator` connects TO the firmware.
 
 The firmware will:
 
 - Host a WebSocket server for the OTS backend to connect to.
 - Encode/decode JSON messages that match the `IncomingMessage` / `OutgoingMessage` envelopes above.
-- Receive from ots-server:
+- Receive from ots-simulator:
   - `state` messages containing current game state.
   - `event` messages for game events.
-- Send to ots-server:
+- Send to ots-simulator:
   - `cmd` messages from hardware modules (button presses, sensor inputs, etc.).
   - `event` messages for hardware-specific events (errors, status changes).
 
@@ -1429,7 +1429,7 @@ Implementation details (e.g., ArduinoJson, ESP-IDF WebSocket server, etc.) are u
   - Update this file with the new shapes/semantics.
   - Then update:
     - `ots-shared/src/game.ts` (TypeScript types)
-    - `ots-server` routes and composables
+    - `ots-simulator` routes and composables
     - `ots-userscript` message producers/consumers
     - `ots-fw-main` C++ structures and parsers
 - Wherever possible, extend the protocol in a **backwards-compatible** way (e.g., optional fields, new event types) instead of breaking changes.

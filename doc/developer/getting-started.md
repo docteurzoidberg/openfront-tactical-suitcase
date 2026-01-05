@@ -49,7 +49,7 @@ cd ots
 
 # Repository structure:
 # ots/
-#   ├── ots-server/        # Nuxt dashboard
+#   ├── ots-simulator/        # Nuxt dashboard
 #   ├── ots-userscript/    # Browser extension
 #   ├── ots-fw-main/       # Main controller firmware
 #   ├── ots-fw-audiomodule # Audio module firmware
@@ -62,7 +62,7 @@ cd ots
 
 **Server (Nuxt Dashboard)**:
 ```bash
-cd ots-server
+cd ots-simulator
 npm install
 ```
 
@@ -83,7 +83,7 @@ npm run build  # Build shared types
 
 **Test Server**:
 ```bash
-cd ots-server
+cd ots-simulator
 npm run dev
 # Open http://localhost:3000
 # Dashboard should load with hardware emulator
@@ -173,7 +173,7 @@ See [Firmware Development](firmware-development.md) for details.
 ots/
 ├── doc/                    # Documentation (you are here!)
 │
-├── ots-server/            # 🌐 Nuxt Dashboard + WebSocket Server
+├── ots-simulator/            # 🌐 Nuxt Dashboard + WebSocket Server
 │   ├── app/               # Vue 3 components
 │   ├── server/routes/     # API endpoints + WebSocket handlers
 │   └── package.json       # Node.js dependencies
@@ -219,7 +219,7 @@ See [Repository Overview](repository-overview.md) for detailed breakdown.
 
 **Run development server** (dashboard):
 ```bash
-cd ots-server
+cd ots-simulator
 npm run dev  # Hot-reload on http://localhost:3000
 ```
 
@@ -293,7 +293,7 @@ You can develop most features without physical hardware:
 ### Verify Server Works
 
 ```bash
-cd ots-server
+cd ots-simulator
 npm run dev
 ```
 
@@ -328,7 +328,7 @@ SUCCESS
 
 ### Run Integration Test
 
-1. **Start server** (`npm run dev` in ots-server)
+1. **Start server** (`npm run dev` in ots-simulator)
 2. **Open OpenFront.io** in browser
 3. **Install userscript** (from build/)
 4. **Configure WebSocket**: Point to `ws://localhost:3000/ws`

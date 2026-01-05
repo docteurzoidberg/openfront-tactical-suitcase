@@ -1,6 +1,6 @@
 # OTS LCD Display Screens Specification
 
-This document describes all LCD display screens implemented in the OTS firmware. Use this specification to replicate the exact display behavior in the `ots-server` dashboard emulator.
+This document describes all LCD display screens implemented in the OTS firmware. Use this specification to replicate the exact display behavior in the `ots-simulator` dashboard emulator.
 
 ## Hardware Specifications
 
@@ -464,7 +464,7 @@ Line 2 (0,1): "                "  // All spaces (blank)
 }
 ```
 
-## Implementation Notes for ots-server Emulator
+## Implementation Notes for ots-simulator Emulator
 
 ### Display Component Requirements
 
@@ -641,4 +641,4 @@ The HD44780 LCD uses standard ASCII for most characters:
 **Related Documentation**:
 - `/prompts/protocol-context.md` - WebSocket protocol
 - `ots-fw-main/GAME_END_SCREEN.md` - Game end screen feature
-- `ots-server/copilot-project-context.md` - Server implementation guide
+- `ots-simulator/copilot-project-context.md` - Server implementation guide

@@ -143,5 +143,5 @@ Total: 33 documentation files
 
 - Root protocol: `/prompts/protocol-context.md`
 - Hardware specs: `/ots-hardware/modules/`
-- Server context: `/ots-server/copilot-project-context.md`
+- Server context: `/ots-simulator/copilot-project-context.md`
 - Userscript context: `/ots-userscript/copilot-project-context.md`

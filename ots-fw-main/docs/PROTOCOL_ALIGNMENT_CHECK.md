@@ -10,7 +10,7 @@ This document records the protocol alignment verification between firmware and T
 ## Component Versions
 
 - **ots-shared** (TypeScript types): Latest
-- **ots-server** (Nuxt dashboard): Latest
+- **ots-simulator** (Nuxt dashboard): Latest
 - **ots-userscript** (Tampermonkey): Latest
 - **ots-fw-main** (ESP32-S3 firmware): Updated
 

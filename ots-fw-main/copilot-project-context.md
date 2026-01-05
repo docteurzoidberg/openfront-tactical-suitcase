@@ -5,7 +5,7 @@
 `ots-fw-main` is an **ESP-IDF firmware** for an **ESP32-S3** dev board that acts as the hardware controller for the OpenFront.io game. The firmware connects to the game server via WebSocket and controls physical hardware modules through I2C I/O expanders.
 
 Goals:
-- Act as a **WebSocket client** connecting to `ots-server` game backend
+- Act as a **WebSocket client** connecting to `ots-simulator` game backend
 - Use the **same protocol** as defined in `prompts/protocol-context.md`
 - Provide modular hardware abstraction mirroring physical PCB modules
 - Support event-driven architecture with clean separation of concerns
@@ -133,9 +133,9 @@ idf.py menuconfig
 ## Responsibilities
 
 - Connect to Wi-Fi using configured credentials with automatic reconnection.
-- Act as a **WebSocket client** connecting TO `ots-server` game backend.
+- Act as a **WebSocket client** connecting TO `ots-simulator` game backend.
 - Implement the same **message envelope** (`type`, `payload`) as described in `prompts/protocol-context.md`.
-- Keep the **game state** and **event notifications** consistent with the `ots-server` simulator and `ots-userscript`.
+- Keep the **game state** and **event notifications** consistent with the `ots-simulator` simulator and `ots-userscript`.
 - React to incoming `state` and `event` messages by updating hardware (LEDs, outputs).
 - Monitor hardware inputs (buttons, sensors) and send `cmd` messages to the server.
 - Manage MCP23017 I/O expander boards for reading inputs and controlling outputs.
@@ -203,7 +203,7 @@ ots-fw-main/
   copilot-project-context.md
 ```
 
-## Synchronization with `ots-server` and `ots-userscript`
+## Synchronization with `ots-simulator` and `ots-userscript`
 
 - The **authoritative specification** is `prompts/protocol-context.md` at repo root
 - Event types defined in `protocol.h` must stay in sync with prompts/protocol-context.md:
@@ -217,15 +217,15 @@ ots-fw-main/
   2. Add to `protocol.h` enum
   3. Update `protocol.c` string conversions
   4. Add handlers in appropriate hardware modules
-  5. Update ots-server and ots-userscript
+  5. Update ots-simulator and ots-userscript
 
 ## WebSocket Behavior (Firmware)
 
-**Important**: The firmware acts as a **WebSocket client** connecting TO `ots-server`.
+**Important**: The firmware acts as a **WebSocket client** connecting TO `ots-simulator`.
 
 The firmware WebSocket client:
 
-- Connects to `ots-server` WebSocket endpoint (configured in `config.h`)
+- Connects to `ots-simulator` WebSocket endpoint (configured in `config.h`)
 - Sends handshake on connection: `{"type": "handshake", "clientType": "firmware"}`
 - Receives from server:
   - `event` messages with `GameEvent` payloads
@@ -441,7 +441,7 @@ See `docs/OTA_GUIDE.md` for detailed instructions and troubleshooting.
 2. Update event types in `include/protocol.h`
 3. Add string conversions in `src/protocol.c`
 4. Update handlers in relevant modules
-5. Update `ots-server` and `ots-userscript` implementations
+5. Update `ots-simulator` and `ots-userscript` implementations
 6. Test end-to-end event flow
 
 ### LCD Display Changes
@@ -450,7 +450,7 @@ See `docs/OTA_GUIDE.md` for detailed instructions and troubleshooting.
 2. Update `/ots-hardware/DISPLAY_SCREENS_SPEC.md` with new screen definitions
 3. Include exact text formatting, spacing, and character positions
 4. Document state transitions and event triggers
-5. Update `ots-server` emulator to match firmware behavior
+5. Update `ots-simulator` emulator to match firmware behavior
 6. Test display on physical hardware and verify spec accuracy
 
 ### Adding Hardware Modules

@@ -14,7 +14,7 @@ This folder provides the **TypeScript implementation** of types defined in `/pro
 
 ## Used By
 
-- **ots-server** - Nuxt server routes and composables
+- **ots-simulator** - Nuxt simulator routes and composables
 - **ots-userscript** - Browser userscript for OpenFront.io
 
 ## Usage

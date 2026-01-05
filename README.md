@@ -48,7 +48,7 @@ git clone https://github.com/yourusername/ots.git
 cd ots
 
 # Install server dependencies
-cd ots-server
+cd ots-simulator
 npm install
 npm run dev  # http://localhost:3000
 
@@ -74,7 +74,7 @@ See [Developer Getting Started](doc/developer/getting-started.md) for complete s
 | **ots-fw-audiomodule/** | ESP32-A1S audio playback module | C, ESP-IDF, CAN bus |
 | **ots-fw-cantest/** | CAN bus testing and debugging tool | C, ESP-IDF |
 | **ots-fw-shared/** | Shared ESP-IDF components (CAN drivers) | C, ESP-IDF |
-| **ots-server/** | Nuxt dashboard + WebSocket server | Vue 3, Nuxt 4, TypeScript |
+| **ots-simulator/** | Nuxt dashboard + WebSocket simulator | Vue 3, Nuxt 4, TypeScript |
 | **ots-userscript/** | Browser extension (Tampermonkey) | TypeScript, esbuild |
 | **ots-shared/** | Shared TypeScript protocol types | TypeScript |
 | **ots-hardware/** | Hardware specs, PCB designs, modules | Markdown, CAD |
@@ -216,7 +216,7 @@ We welcome contributions! See [CONTRIBUTING.md](doc/developer/CONTRIBUTING.md) f
 
 ### Component Context Files
 - [Firmware Context](ots-fw-main/copilot-project-context.md)
-- [Server Context](ots-server/copilot-project-context.md)
+- [Server Context](ots-simulator/copilot-project-context.md)
 - [Userscript Context](ots-userscript/copilot-project-context.md)
 - [Hardware Context](ots-hardware/copilot-project-context.md)
 

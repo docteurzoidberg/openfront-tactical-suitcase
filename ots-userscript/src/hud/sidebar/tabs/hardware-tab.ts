@@ -65,7 +65,7 @@ export class HardwareTab {
         <label style="display:flex;flex-direction:column;gap:4px;font-size:10px;color:#e5e7eb;">
           <span style="font-size:9px;font-weight:600;color:#9ca3af;letter-spacing:0.05em;">WEBSOCKET URL</span>
           <input id="ots-device-ws-url" type="text" placeholder="ws://ots-fw-main.local:3000/ws" value="${this.getWsUrl()}" style="font-size:10px;padding:6px 8px;border-radius:4px;border:1px solid rgba(148,163,184,0.4);background:rgba(15,23,42,0.7);color:#e5e7eb;outline:none;font-family:monospace;" />
-          <span style="font-size:8px;color:#64748b;">Connect to firmware device or ots-server</span>
+          <span style="font-size:8px;color:#64748b;">Connect to firmware device or ots-simulator</span>
         </label>
       </div>
       <div style="margin-bottom:12px;">

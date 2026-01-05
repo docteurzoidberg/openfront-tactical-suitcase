@@ -23,7 +23,7 @@ ots/                                 # Monorepo root
 ├── .github/                        # ⚙️ GitHub Configuration
 │   └── copilot-instructions.md     # Global AI assistant guidance
 │
-├── ots-server/                     # 🌐 Nuxt Dashboard
+├── ots-simulator/                     # 🌐 Nuxt Dashboard
 ├── ots-userscript/                 # 🔧 Browser Extension
 ├── ots-fw-main/                    # 🎛️ Main Firmware
 ├── ots-fw-audiomodule/             # 🔊 Audio Firmware
@@ -33,7 +33,7 @@ ots/                                 # Monorepo root
 └── ots-hardware/                   # 🔩 Hardware Specs
 ```
 
-## 🌐 ots-server (Nuxt Dashboard)
+## 🌐 ots-simulator (Nuxt Dashboard)
 
 **Purpose**: Web dashboard + WebSocket server for hardware emulation and game visualization
 
@@ -42,7 +42,7 @@ ots/                                 # Monorepo root
 ### Structure
 
 ```
-ots-server/
+ots-simulator/
 ├── app/                            # Nuxt application
 │   ├── pages/
 │   │   └── index.vue               # Main dashboard page
@@ -446,7 +446,7 @@ Game (places nuke on map)
 
 ```bash
 # Server
-cd ots-server && npm install && npm run build
+cd ots-simulator && npm install && npm run build
 
 # Userscript
 cd ots-userscript && npm install && npm run build
@@ -468,7 +468,7 @@ cd ots-fw-cantest && pio run -e esp32-s3-devkit
 
 | Task | Command |
 |------|---------|
-| Start dashboard dev server | `cd ots-server && npm run dev` |
+| Start dashboard dev server | `cd ots-simulator && npm run dev` |
 | Build userscript | `cd ots-userscript && npm run build` |
 | Flash firmware | `cd ots-fw-main && pio run -e esp32-s3-dev -t upload` |
 | Monitor serial | `pio device monitor` |

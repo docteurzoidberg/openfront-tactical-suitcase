@@ -96,9 +96,9 @@ update_version() {
             echo -e "${BLUE}Updating server version to ${version}${NC}"
             
             # Update package.json
-            if [ -f "ots-server/package.json" ]; then
-                sed -i "s/\"version\": \".*\"/\"version\": \"${version}\"/" ots-server/package.json
-                echo -e "  ${GREEN}✓${NC} ots-server/package.json"
+            if [ -f "ots-simulator/package.json" ]; then
+                sed -i "s/\"version\": \".*\"/\"version\": \"${version}\"/" ots-simulator/package.json
+                echo -e "  ${GREEN}✓${NC} ots-simulator/package.json"
             fi
             ;;
     esac
@@ -133,8 +133,8 @@ build_project() {
             
         server)
             echo -e "${BLUE}Building server...${NC}"
-            if (cd ots-server && npm run build > /dev/null 2>&1); then
-                echo -e "  ${GREEN}✓${NC} ots-server/.output/"
+            if (cd ots-simulator && npm run build > /dev/null 2>&1); then
+                echo -e "  ${GREEN}✓${NC} ots-simulator/.output/"
                 return 0
             else
                 echo -e "  ${RED}✗${NC} Server build failed!"
@@ -153,7 +153,7 @@ Usage: $0 [OPTIONS] PROJECT [PROJECT...]
 
 ${YELLOW}ProjectUpdate ots-userscript version
   firmware      Update ots-fw-main version
-  server        Update ots-server version
+  server        Update ots-simulator version
   all           Update all projects (default if none specified)
 
 ${YELLOW}Options:${NC}

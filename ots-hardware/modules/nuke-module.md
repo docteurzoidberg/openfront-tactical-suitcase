@@ -190,7 +190,7 @@ The module processes `event` messages to trigger LED blinking:
 
 ## UI Component Mockup
 
-Vue component path: `ots-server/app/components/hardware/NukeModule.vue`
+Vue component path: `ots-simulator/app/components/hardware/NukeModule.vue`
 
 ### Props
 ```typescript

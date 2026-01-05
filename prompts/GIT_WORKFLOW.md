@@ -54,7 +54,7 @@ Follow **Conventional Commits** specification:
 |-------|-----------|
 | `userscript` | ots-userscript |
 | `firmware` | ots-fw-main |
-| `server` | ots-server |
+| `server` | ots-simulator |
 | `hardware` | ots-hardware specs |
 | `protocol` | prompts/protocol-context.md |
 | `release` | Release automation |
@@ -167,7 +167,7 @@ git commit -m "feat(firmware): add NUKE_INTERCEPTED event handler"
 
 # 4. Update implementations
 git add ots-userscript/src/trackers/nuke-tracker.ts
-git add ots-server/app/composables/useGameSocket.ts
+git add ots-simulator/app/composables/useGameSocket.ts
 git add ots-fw-main/src/nuke_module.c
 git commit -m "feat: implement NUKE_INTERCEPTED event across components"
 
@@ -230,7 +230,7 @@ git add ots-fw-main/src/CMakeLists.txt
 git commit -m "feat(firmware): implement new-module hardware driver"
 
 # 3. Add UI component
-git add ots-server/app/components/hardware/NewModule.vue
+git add ots-simulator/app/components/hardware/NewModule.vue
 git commit -m "feat(server): add new-module emulator UI"
 
 # 4. Update protocol if needed
@@ -310,7 +310,7 @@ Create `.git/hooks/pre-commit`:
 #!/bin/bash
 # Run linters/formatters before commit
 cd ots-userscript && npm run lint
-cd ../ots-server && npm run lint
+cd ../ots-simulator && npm run lint
 # Add firmware formatting check if desired
 ```
 
@@ -386,7 +386,7 @@ git checkout 2025-12-20.1
 # Build that version
 cd ots-userscript && npm run build
 cd ../ots-fw-main && pio run
-cd ../ots-server && npm run build
+cd ../ots-simulator && npm run build
 
 # Return to latest
 git checkout main

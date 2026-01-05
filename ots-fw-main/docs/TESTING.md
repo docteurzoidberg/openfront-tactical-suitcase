@@ -330,7 +330,7 @@ I (9288) TEST_WS: RGB LED: Green (fully connected)
 
 **LED stays Orange:**
 - WiFi OK, but WebSocket failed
-- Check OTS server is running: `cd ots-server && npm run dev`
+- Check OTS server is running: `cd ots-simulator && npm run dev`
 - Verify server URL in config.h matches server address
 - Check firewall/network routing
 

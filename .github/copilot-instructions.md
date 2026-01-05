@@ -3,7 +3,7 @@
 ## Project Overview
 
 OpenFront Tactical Suitcase (OTS) is a multi-component system bridging OpenFront.io gameplay with physical hardware:
-- **ots-server**: Nuxt 4 + Vue 3 dashboard with Nitro WebSocket server
+- **ots-simulator**: Nuxt 4 + Vue 3 dashboard with Nitro WebSocket simulator
 - **ots-userscript**: TypeScript Tampermonkey script polling game state every 100ms
 - **ots-fw-main**: ESP32-S3 firmware (PlatformIO/ESP-IDF) with hardware modules
 - **ots-fw-audiomodule**: ESP32-A1S audio playback module with CAN bus integration
@@ -51,7 +51,7 @@ Critical implementation detail: Nukes are tracked by `unitID` (not timeouts):
 
 ## Component-Specific Conventions
 
-### ots-server (Nuxt 4)
+### ots-simulator (Nuxt 4)
 
 **Project modes:**
 - **Emulator mode**: Dashboard simulates hardware (development without physical device)
@@ -60,7 +60,7 @@ Critical implementation detail: Nukes are tracked by `unitID` (not timeouts):
 
 **Build/Dev:**
 ```bash
-cd ots-server
+cd ots-simulator
 npm install
 npm run dev     # Port 3000
 npm run build   # Production build
@@ -340,7 +340,7 @@ ots/
       game.ts                      # TypeScript protocol implementation
       index.ts
   
-  ots-server/                      # Nuxt 4 dashboard + WebSocket server
+  ots-simulator/                      # Nuxt 4 dashboard + WebSocket server
     copilot-project-context.md     # Server-specific context
     app/
       pages/index.vue              # Main dashboard
@@ -396,7 +396,7 @@ ots/
       game.ts                      # TypeScript protocol implementation
       index.ts
   
-  ots-server/                      # Nuxt 4 dashboard + WebSocket server
+  ots-simulator/                      # Nuxt 4 dashboard + WebSocket server
     copilot-project-context.md     # Server-specific context
     app/
       pages/index.vue              # Main dashboard
@@ -434,7 +434,7 @@ ots/
 - **Component context**: Per-component `copilot-project-context.md` for detailed implementation guides
 - **Shared types**: `ots-shared/src/game.ts` (TypeScript protocol implementation)
 - **Firmware protocol**: `ots-fw-main/include/protocol.h` (C implementation)
-- **WebSocket handlers**: `ots-server/server/routes/ws-*.ts`
+- **WebSocket handlers**: `ots-simulator/server/routes/ws-*.ts`
 - **Userscript bridge**: `ots-userscript/src/game/openfront-bridge.ts`
 - **Hardware specs**: `ots-hardware/hardware-spec.md`, `ots-hardware/modules/*.md`
 
@@ -459,7 +459,7 @@ ots/
 
 ## Testing & Debugging
 
-**Server:** `npm run dev` in `ots-server/`, check http://localhost:3000  
+**Simulator:** `npm run dev` in `ots-simulator/`, check http://localhost:3000  
 **Userscript:** Install from `ots-userscript/build/`, check browser console (opens on Tampermonkey install)  
 **Firmware:** `pio device monitor` for serial logs, check LED states physically  
 **Firmware tests:** Use `pio run -e test-<name> -t upload` for standalone hardware tests (see `docs/TESTING.md`)  
@@ -475,7 +475,7 @@ For detailed implementation guidance when working within specific components, re
 
 ### Project Context Files
 - **Hardware design**: [ots-hardware/copilot-project-context.md](../ots-hardware/copilot-project-context.md)
-- **Server/dashboard**: [ots-server/copilot-project-context.md](../ots-server/copilot-project-context.md)
+- **Simulator/dashboard**: [ots-simulator/copilot-project-context.md](../ots-simulator/copilot-project-context.md)
 - **Userscript**: [ots-userscript/copilot-project-context.md](../ots-userscript/copilot-project-context.md)
 - **Firmware**: [ots-fw-main/copilot-project-context.md](../ots-fw-main/copilot-project-context.md)
 

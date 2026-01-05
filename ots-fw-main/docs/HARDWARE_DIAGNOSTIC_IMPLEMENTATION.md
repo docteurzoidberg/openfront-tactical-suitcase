@@ -2,7 +2,7 @@
 
 ## Overview
 
-A hardware diagnostic command/response protocol has been added to allow remote querying of device hardware status. The userscript can request diagnostics, and both the simulator (ots-server) and firmware (ots-fw-main) respond with detailed hardware information.
+A hardware diagnostic command/response protocol has been added to allow remote querying of device hardware status. The userscript can request diagnostics, and both the simulator (ots-simulator) and firmware (ots-fw-main) respond with detailed hardware information.
 
 ## Protocol
 
@@ -272,7 +272,7 @@ Sound Module: ✗ Not Present
 ### Completed (userscript + server)
 - ✅ `/prompts/protocol-context.md` - Protocol documentation
 - ✅ `/ots-shared/src/game.ts` - TypeScript types
-- ✅ `/ots-server/server/routes/ws.ts` - Simulator response
+- ✅ `/ots-simulator/server/routes/ws.ts` - Simulator response
 - ✅ `/ots-userscript/src/hud/sidebar-hud.ts` - Diagnostic button & handler
 - ✅ `/ots-userscript/src/websocket/client.ts` - Command sending
 - ✅ `/ots-userscript/src/main.user.ts` - HUD initialization

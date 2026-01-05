@@ -47,7 +47,7 @@ All source code is available on GitHub:
 ### Repository Structure
 
 - `ots-fw-main/` - Main ESP32-S3 firmware
-- `ots-server/` - Nuxt dashboard and WebSocket server  
+- `ots-simulator/` - Nuxt dashboard and WebSocket simulator  
 - `ots-userscript/` - Browser userscript
 - `ots-hardware/` - Hardware specifications and PCB designs
 - `doc/` - Documentation (this website)

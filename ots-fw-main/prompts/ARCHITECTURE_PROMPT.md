@@ -290,7 +290,7 @@ See `docs/TESTING.md` for complete testing guide.
 Changes must be synchronized across:
 1. TypeScript: `ots-shared/src/game.ts`
 2. C Firmware: `ots-fw-main/include/protocol.h`
-3. Server: `ots-server/` handlers
+3. Server: `ots-simulator/` handlers
 4. Userscript: `ots-userscript/` trackers
 
 See `prompts/PROTOCOL_CHANGE_PROMPT.md` for workflow.

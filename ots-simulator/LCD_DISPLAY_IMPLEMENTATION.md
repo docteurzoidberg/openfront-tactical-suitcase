@@ -1,8 +1,8 @@
-# LCD Display Implementation - ots-server
+# LCD Display Implementation - ots-simulator
 
 ## Overview
 
-The ots-server dashboard now includes a full LCD display emulator that mirrors the firmware's display behavior exactly as specified in `/ots-hardware/DISPLAY_SCREENS_SPEC.md`.
+The ots-simulator dashboard now includes a full LCD display emulator that mirrors the firmware's display behavior exactly as specified in `/ots-hardware/DISPLAY_SCREENS_SPEC.md`.
 
 ## Implementation Summary
 

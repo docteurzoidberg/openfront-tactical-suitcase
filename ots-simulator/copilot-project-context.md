@@ -2,7 +2,7 @@
 
 ## Overview
 
-`ots-server` is a Nuxt-based dashboard and WebSocket backend that:
+`ots-simulator` is a Nuxt-based dashboard and WebSocket backend that:
 
 1. **Receives events from the userscript** via WebSocket (`/ws`)
 2. **Displays hardware module UI** in the dashboard (emulator mode)

@@ -75,7 +75,7 @@ The release script updates version strings in these files:
 - `ots-fw-main/include/config.h` → `#define OTS_FIRMWARE_VERSION "YYYY-MM-DD.N"`
 
 ### Server
-- `ots-server/package.json` → `"version": "YYYY-MM-DD.N"`
+- `ots-simulator/package.json` → `"version": "YYYY-MM-DD.N"`
 
 ## Build Process
 
@@ -89,7 +89,7 @@ The release script automatically builds all selected projects:
    - Output: `.pio/build/esp32-s3-dev/firmware.bin` (~1MB)
    - Version displayed in boot log
 
-3. **Server**: `npm run build` in `ots-server/`
+3. **Server**: `npm run build` in `ots-simulator/`
    - Output: `.output/` directory (Nuxt production build)
    - Version displayed in dashboard header
 
@@ -191,7 +191,7 @@ git status --short
 # Check builds were created
 ls -lh ots-userscript/build/userscript.ots.user.js
 ls -lh ots-fw-main/.pio/build/esp32-s3-dev/firmware.bin
-ls -ld ots-server/.output
+ls -ld ots-simulator/.output
 ```
 
 ## Weekly Changelog

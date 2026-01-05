@@ -13,8 +13,8 @@ Main controller and bus specification for the Openfront Tactical Suitcase.
   - Built-in USB for programming/debug
 
 ### Primary Functions
-1. **WebSocket Server**: Hosts WS server for ots-server client connection
-2. **Game State Receiver**: Receives game state updates from ots-server
+1. **WebSocket Server**: Hosts WS server for ots-simulator client connection
+2. **Game State Receiver**: Receives game state updates from ots-simulator
 3. **Bus Master**: Controls I2C and CAN bus communication with modules
 4. **State Distribution**: Distributes relevant game state to each module
 5. **Input Aggregation**: Collects module inputs and sends commands back
@@ -102,7 +102,7 @@ Each module can:
 
 The hardware uses the same protocol defined in `/prompts/protocol-context.md` at the WebSocket layer:
 
-### Incoming to Hardware (from ots-server)
+### Incoming to Hardware (from ots-simulator)
 ```json
 {
   "type": "state",
@@ -115,7 +115,7 @@ Main controller:
 2. Extracts relevant fields for each module
 3. Broadcasts via CAN or sends via I2C
 
-### Outgoing from Hardware (to ots-server)
+### Outgoing from Hardware (to ots-simulator)
 ```json
 {
   "type": "cmd",
@@ -126,7 +126,7 @@ Main controller:
 }
 ```
 
-Module → Main Controller → WebSocket → ots-server → userscript → game
+Module → Main Controller → WebSocket → ots-simulator → userscript → game
 
 ## Code Generation Requirements
 
@@ -142,8 +142,8 @@ From this spec, generate:
 - `ots-shared/src/hardware/commands.ts` - Hardware command types
 
 ### Server Emulator (TypeScript)
-- `ots-server/server/hardware/emulator.ts` - Virtual hardware state
-- `ots-server/server/hardware/module-registry.ts` - Module management
+- `ots-simulator/server/hardware/emulator.ts` - Virtual hardware state
+- `ots-simulator/server/hardware/module-registry.ts` - Module management
 
 ---
 

@@ -152,7 +152,7 @@ GAME_EVENT_HARDWARE_TEST   → SOUND_INDEX_TEST_BEEP (50)
 
 ## Emulator expectations (server)
 
-In `ots-server` emulator mode:
+In `ots-simulator` emulator mode:
 - It should be able to show "Sound requested: X" in the UI.
 - Actual audio playback in the browser is optional and can be added later.
 

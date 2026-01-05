@@ -114,9 +114,9 @@ For the canonical mapping of `soundId` → `soundIndex`, see `prompts/protocol-c
 
 ### Trigger source
 - `ots-userscript` emits events indicating a sound should play.
-- `ots-server` relays those events.
+- `ots-simulator` relays those events.
 - `ots-fw-main` receives them and issues a CAN request to the Sound Module.
-- In emulator mode, `ots-server` may simulate this behavior (and optionally play a local audio clip).
+- In emulator mode, `ots-simulator` may simulate this behavior (and optionally play a local audio clip).
 
 ### Recommended event modeling
 The cleanest approach is usually a **single generic event** like:
@@ -152,7 +152,7 @@ Alternatively, if you prefer explicit events (e.g. `SOUND_ALERT_ATOM`, `SOUND_NU
 
 ## UI Component Mockup (Emulator)
 
-Vue component path (planned): `ots-server/app/components/hardware/SoundModule.vue`
+Vue component path (planned): `ots-simulator/app/components/hardware/SoundModule.vue`
 
 ### Props
 ```ts

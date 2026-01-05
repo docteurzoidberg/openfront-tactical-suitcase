@@ -7,7 +7,7 @@ This directory contains hardware specifications and design documents for the **O
 This directory serves as the **source of truth** for hardware specifications. Module specifications here are used to:
 1. Guide firmware implementation in `ots-fw-main/`
 2. Generate TypeScript types for `ots-shared/`
-3. Create emulator logic for `ots-server/`
+3. Create emulator logic for `ots-simulator/`
 4. Build corresponding Vue UI components
 
 ## File Organization
@@ -43,9 +43,9 @@ The device uses a modular design where functionality is split across separate da
 2. **Define Module**: Fill out overview, components, communication, game state mapping
 3. **Implement Firmware**: Create C code in `ots-fw-main/src/` (`.c` and `.h` files)
 4. **Add to Build**: Update `ots-fw-main/src/CMakeLists.txt` SRCS list
-5. **Implement UI**: Create Vue component in `ots-server/app/components/hardware/`
+5. **Implement UI**: Create Vue component in `ots-simulator/app/components/hardware/`
 6. **Add Types**: Update `ots-shared/src/` with command/event types
-7. **Test with Emulator**: Use ots-server emulator mode to test without hardware
+7. **Test with Emulator**: Use ots-simulator emulator mode to test without hardware
 8. **Build Hardware**: Assemble physical module and integrate
 
 ## Module Naming Conventions

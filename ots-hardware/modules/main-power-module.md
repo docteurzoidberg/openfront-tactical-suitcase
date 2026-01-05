@@ -177,7 +177,7 @@ The module simply reflects the WebSocket connection state maintained by the `Ots
 
 ## UI Component Mockup
 
-Vue component path: `ots-server/app/components/hardware/MainPowerModule.vue`
+Vue component path: `ots-simulator/app/components/hardware/MainPowerModule.vue`
 
 ### Props
 ```typescript

@@ -11,7 +11,7 @@ The Openfront Tactical Suitcase is a physical hardware device that provides tact
 ### Main Controller
 - **MCU**: ESP32-S3
 - **Role**: Central coordinator and WebSocket server
-- **Connectivity**: Hosts WebSocket server for ots-server client to connect to
+- **Connectivity**: Hosts WebSocket server for ots-simulator client to connect to
 - **Bus Interface**: Controls and communicates with daughter boards via shared bus
 
 ### Module Bus Specification
@@ -29,11 +29,11 @@ The Openfront Tactical Suitcase is a physical hardware device that provides tact
 ### Firmware (ots-fw-main)
 - Runs on ESP32-S3 main controller
 - WebSocket **server** exposing hardware to network
-- Receives game state updates from ots-server
+- Receives game state updates from ots-simulator
 - Distributes state to modules via I2C/CAN
 - Collects input from modules and sends commands back
 
-### Server (ots-server)
+### Server (ots-simulator)
 Two roles:
 1. **Client mode**: Connects to real hardware WebSocket server
 2. **Emulator mode**: Emulates hardware firmware for dev/debug without physical device
@@ -48,7 +48,7 @@ Two roles:
 ```
 Game (userscript)
     ↓ WebSocket
-ots-server
+ots-simulator
     ↓ WebSocket (client connects to hardware server)
 Hardware (ESP32-S3) ← main controller
     ↓ I2C/CAN Bus

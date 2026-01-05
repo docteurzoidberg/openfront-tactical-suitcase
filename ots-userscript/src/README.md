@@ -33,7 +33,7 @@ src/
 │   └── dom.ts         DOM helpers
 │
 ├── websocket/         WebSocket client
-│   └── client.ts      Connection to ots-server/firmware
+│   └── client.ts      Connection to ots-simulator/firmware
 │
 └── main.user.ts       Entry point
 ```
@@ -59,7 +59,7 @@ Draggable, resizable sidebar interface:
 ### WebSocket (`websocket/`)
 
 Connects to:
-- **ots-server** (development) - Nuxt dashboard with emulator
+- **ots-simulator** (development) - Nuxt dashboard with emulator
 - **ots-fw-main** (production) - ESP32 firmware on physical device
 
 Features:

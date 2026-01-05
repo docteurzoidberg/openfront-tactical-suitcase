@@ -60,7 +60,7 @@ type ModuleEvent = {
 
 ## UI Component Mockup
 
-Vue component path: `ots-server/app/components/hardware/[ModuleName].vue`
+Vue component path: `ots-simulator/app/components/hardware/[ModuleName].vue`
 
 ### Props
 ```typescript

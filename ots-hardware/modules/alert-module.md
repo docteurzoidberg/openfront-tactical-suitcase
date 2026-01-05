@@ -158,7 +158,7 @@ The Alert Module is **output-only** and does not send commands to the server. It
 
 ## UI Component Mockup
 
-Vue component path: `ots-server/app/components/hardware/AlertModule.vue`
+Vue component path: `ots-simulator/app/components/hardware/AlertModule.vue`
 
 ### Props
 ```typescript

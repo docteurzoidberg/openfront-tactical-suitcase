@@ -5,7 +5,7 @@
 This guide walks you through setting up a complete development environment for the OpenFront Tactical Suitcase (OTS) project. The setup includes three main components:
 - **ots-userscript**: TypeScript Tampermonkey userscript
 - **ots-fw-main**: ESP32-S3 firmware (C/ESP-IDF)
-- **ots-server**: Nuxt 4 dashboard and WebSocket server
+- **ots-simulator**: Nuxt 4 dashboard and WebSocket simulator
 
 ## Prerequisites
 
@@ -123,7 +123,7 @@ ls -la
 # Should see:
 # - ots-userscript/
 # - ots-fw-main/
-# - ots-server/
+# - ots-simulator/
 # - ots-shared/
 # - ots-hardware/
 # - prompts/
@@ -176,11 +176,11 @@ npm run watch
 # Refresh browser page to test changes
 ```
 
-### B. Server (`ots-server`)
+### B. Server (`ots-simulator`)
 
 #### 1. Install Dependencies
 ```bash
-cd ots-server
+cd ots-simulator
 npm install
 ```
 
@@ -315,7 +315,7 @@ npm run build
 
 **Terminal 1 - Server:**
 ```bash
-cd ots-server
+cd ots-simulator
 npm run dev
 # Server at http://localhost:3000
 ```
@@ -505,7 +505,7 @@ Create `.vscode/settings.json` in project root:
   },
   "eslint.workingDirectories": [
     "ots-userscript",
-    "ots-server"
+    "ots-simulator"
   ],
   "files.exclude": {
     "**/node_modules": true,
@@ -550,7 +550,7 @@ Create `.vscode/launch.json`:
 
 ### Server Environment
 
-Create `ots-server/.env`:
+Create `ots-simulator/.env`:
 ```bash
 # Server Configuration
 PORT=3000
@@ -605,7 +605,7 @@ Edit `ots-fw-main/include/config.h`:
 - [ ] Test on https://openfront.io/
 
 ### Server Development
-- [ ] `cd ots-server && npm install`
+- [ ] `cd ots-simulator && npm install`
 - [ ] `npm run dev`
 - [ ] Open http://localhost:3000
 - [ ] Verify dashboard loads
@@ -626,7 +626,7 @@ Once your environment is set up:
 3. Check [`prompts/RELEASE.md`](RELEASE.md) for release procedures
 4. Explore component-specific docs:
    - `ots-userscript/copilot-project-context.md`
-   - `ots-server/copilot-project-context.md`
+   - `ots-simulator/copilot-project-context.md`
    - `ots-fw-main/copilot-project-context.md`
 
 ## Resources
