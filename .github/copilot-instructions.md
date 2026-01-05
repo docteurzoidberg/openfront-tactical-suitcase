@@ -6,6 +6,9 @@ OpenFront Tactical Suitcase (OTS) is a multi-component system bridging OpenFront
 - **ots-server**: Nuxt 4 + Vue 3 dashboard with Nitro WebSocket server
 - **ots-userscript**: TypeScript Tampermonkey script polling game state every 100ms
 - **ots-fw-main**: ESP32-S3 firmware (PlatformIO/ESP-IDF) with hardware modules
+- **ots-fw-audiomodule**: ESP32-A1S audio playback module with CAN bus integration
+- **ots-fw-cantest**: ESP32-S3 CAN bus testing/debugging tool
+- **ots-fw-shared**: Shared ESP-IDF components (CAN driver, discovery, audio protocol)
 - **ots-shared**: Shared TypeScript protocol types
 - **ots-hardware**: Hardware module specifications
 
@@ -138,6 +141,81 @@ Must update `src/CMakeLists.txt` SRCS list when adding `.c` files.
 **Build warnings to ignore:**
 - `esp_idf_size: error: unrecognized arguments: --ng` - non-blocking, ignore unless debugging size tools
 
+### ots-fw-audiomodule (ESP32-A1S Audio Module)
+
+**Build (PlatformIO):**
+```bash
+cd ots-fw-audiomodule
+pio run -e esp32-a1s-espidf      # Build
+pio run -e esp32-a1s-espidf -t upload  # Flash
+pio device monitor               # Serial output
+```
+
+**Architecture:**
+- Audio playback on ESP32-A1S AudioKit (ES8388 codec)
+- CAN bus integration for sound commands from main controller
+- SD card support for custom sound banks
+- Embedded WAV files for testing
+- Uses shared components: can_driver, can_audiomodule, can_discovery
+
+**Sound System:**
+- Audio mixer with up to 8 concurrent sounds
+- Queue management for sound commands
+- Volume control and fade effects
+- WAV file support (embedded + SD card)
+- Test tone generator
+
+**CAN Protocol:**
+- Responds to MODULE_QUERY with announcements
+- Handles PLAY_SOUND, STOP_SOUND, STOP_ALL commands
+- Sends ACK/NACK responses with status codes
+- Auto-sends SOUND_FINISHED when playback completes
+
+### ots-fw-cantest (CAN Bus Testing Tool)
+
+**Build (PlatformIO):**
+```bash
+cd ots-fw-cantest
+pio run -e esp32-s3-devkit       # Build
+pio run -e esp32-s3-devkit -t upload  # Flash
+pio device monitor               # Serial + interactive CLI
+```
+
+**Purpose:**
+- Validate CAN bus communications between main controller and modules
+- Debug protocol messages and timing
+- Simulate audio module or controller for testing
+
+**Operating Modes:**
+- **Monitor Mode** (m): Passive bus sniffer with timestamps and statistics
+- **Audio Module Simulator** (a): Auto-responds to discovery and sound commands
+- **Controller Simulator** (c): Manual command sending (discovery, play, stop)
+- **Interactive CLI**: Single-letter commands, help (h), real-time feedback
+
+**Features:**
+- Protocol decoder: Human-readable message parsing with raw hex
+- Statistics tracking: RX/TX/error counts, message rates
+- Uses shared components: can_driver, can_discovery
+- Lightweight: 242KB flash, 13KB RAM
+
+### ots-fw-shared (Shared ESP-IDF Components)
+
+**Components:**
+- **can_driver**: Generic CAN bus (TWAI) driver with mock fallback
+- **can_discovery**: Module discovery protocol (MODULE_ANNOUNCE, MODULE_QUERY)
+- **can_audiomodule**: Audio module CAN protocol implementation
+
+**Documentation:**
+- `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md`: Audio module message specs
+- `/ots-fw-shared/prompts/CAN_PROTOCOL_INTEGRATION.md`: Integration guide
+- `/ots-fw-shared/prompts/CAN_PROTOCOL_ARCHITECTURE.md`: Multi-module design
+
+**Usage:**
+Referenced in CMakeLists.txt via `EXTRA_COMPONENT_DIRS`:
+```cmake
+list(APPEND EXTRA_COMPONENT_DIRS "../ots-fw-shared/components")
+```
+
 ## Critical Workflows
 
 ### Adding New Event Types
@@ -157,6 +235,20 @@ Must update `src/CMakeLists.txt` SRCS list when adding `.c` files.
 4. Register in `main.c`: `module_manager_register(&module_name)`
 5. Create prompt file in `prompts/MODULE_NAME_PROMPT.md`
 6. Update `copilot-project-context.md` in firmware directory
+
+### CAN Bus Development
+
+**Testing CAN communications:**
+1. Use `ots-fw-cantest` to validate protocol messages
+2. Flash cantest to ESP32-S3 DevKit board
+3. Run in monitor mode (m) to sniff bus traffic
+4. Run in simulator mode (a/c) to test module interactions
+
+**Adding CAN module support:**
+1. Define protocol in `/ots-fw-shared/prompts/CAN_*_PROTOCOL.md`
+2. Create shared component in `/ots-fw-shared/components/can_<module>/`
+3. Update main controller to integrate new module
+4. Test with cantest simulator before physical module
 
 ### Protocol Evolution
 
