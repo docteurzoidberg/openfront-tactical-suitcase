@@ -1,0 +1,11 @@
+node_modules/
+.vitepress/dist/
+.vitepress/cache/
+.DS_Store
+*.log
+
+# Synced docs (don't commit, they're copied from ../doc/)
+user/
+!user/index.md
+developer/
+!developer/index.md

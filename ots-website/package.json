@@ -1,0 +1,16 @@
+{
+  "name": "ots-website",
+  "version": "1.0.0",
+  "description": "OpenFront Tactical Suitcase documentation website",
+  "type": "module",
+  "scripts": {
+    "sync": "rsync -av --delete --exclude='index.md' ../doc/user/ ./user/ && rsync -av --delete --exclude='index.md' ../doc/developer/ ./developer/",
+    "dev": "npm run sync && vitepress dev",
+    "build": "npm run sync && vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.0.0",
+    "vue": "^3.4.0"
+  }
+}
