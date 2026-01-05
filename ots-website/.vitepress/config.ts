@@ -18,8 +18,7 @@ export default defineConfig({
       { text: 'User Guide', link: '/user/' },
       { text: 'Developer', link: '/developer/' },
       { text: 'Downloads', link: '/downloads' },
-      { text: 'Releases', link: '/releases' },
-      { text: 'GitHub', link: 'https://github.com/docteurzoidberg/openfront-tactical-suitcase' }
+      { text: 'Releases', link: '/releases' }
     ],
 
     sidebar: {
