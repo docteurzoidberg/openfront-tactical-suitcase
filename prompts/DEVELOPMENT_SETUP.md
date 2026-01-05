@@ -98,6 +98,44 @@ brew install --cask visual-studio-code
 
 #### Browser Setup
 For userscript development:
+
+---
+
+## Quick Start by Component
+
+### ots-website (Documentation Site)
+
+**Purpose**: VitePress static documentation site deployed to GitHub Pages
+
+```bash
+cd ots-website
+npm install
+
+# Development server (with hot reload)
+npm run dev
+# Visit http://localhost:5173
+
+# Sync docs from ../doc/ folder
+npm run sync
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+```
+
+**Key Files:**
+- `.vitepress/config.ts` - Site configuration (nav, sidebar, theme)
+- `index.md` - Homepage
+- `downloads.md` - Downloads page
+- `releases.md` - Release history
+- `user/index.md`, `developer/index.md` - Section landing pages
+
+**Note:** Documentation content is synced from `../doc/` folder. Custom pages (index files, downloads, releases) are maintained separately.
+
+#### Browser Setup
+For userscript development:
 ```bash
 # Chrome/Edge: Install Tampermonkey
 # https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo

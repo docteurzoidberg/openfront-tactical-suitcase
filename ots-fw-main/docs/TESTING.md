@@ -8,7 +8,7 @@ Each hardware test is a standalone firmware that runs continuously. Flash a test
 
 **No menus, no frameworks - just simple test code.**
 
-## Available Tests
+## Available Tests Firmwares
 
 | Test | Command | What It Tests |
 |------|---------|---------------|

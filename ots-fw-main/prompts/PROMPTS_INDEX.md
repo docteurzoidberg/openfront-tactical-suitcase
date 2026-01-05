@@ -31,7 +31,6 @@ Core system functionality with dedicated implementation guides:
 
 - **System Status Module**: `SYSTEM_STATUS_MODULE_PROMPT.md` - LCD display screens and game state visualization
 - **I2C Components**: `I2C_COMPONENTS_PROMPT.md` - Creating reusable I2C device drivers
-- **WebSocket Protocol**: `WEBSOCKET_PROTOCOL_PROMPT.md` - WebSocket message handling and serialization
 - **Network Provisioning**: `NETWORK_PROVISIONING_PROMPT.md` - WiFi setup and captive portal
 - **OTA Updates**: `OTA_UPDATE_PROMPT.md` - Over-the-air firmware update implementation
 
@@ -52,17 +51,14 @@ Core system functionality with dedicated implementation guides:
 **Implementation Notes:**
 - `HARDWARE_DIAGNOSTIC_IMPLEMENTATION.md`
 - `HARDWARE_TEST_INTEGRATION.md`
-- `GAME_END_SCREEN.md`
-- `LCD_DISPLAY_MODES.md`
-- `REFACTORING_ADC_TASK.md`
 - `WIFI_PROVISIONING.md`
 - `WIFI_WEBAPP.md`
 - `PROTOCOL_ALIGNMENT_CHECK.md`
 - `OTA_VERIFICATION_REPORT.md`
-- `IMPROVEMENTS.md` (deprecated)
-- `IMPROV_SERIAL.md` (removed feature)
 - `CERTIFICATE_INSTALLATION_CHROME.md`
 - `TEST_WIFI_PROVISIONING_FLOW.md`
+- `SOUND_MODULE_IMPLEMENTATION.md`
+- `CAN_COMPONENT_IMPLEMENTATION.md`
 
 For a quick overview, start at `../README.md`.
 

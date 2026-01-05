@@ -196,21 +196,31 @@ git diff HEAD
 git push origin main --follow-tags
 ```
 
-**Manual release process:**
+**Automated Release with release.sh:**
+
+The project includes `release.sh` for unified version management across all components:
+
 ```bash
-# 1. Update weekly_announces.md
-vim weekly_announces.md
+# Full automated release (userscript, firmware, server)
+./release.sh -u -p -m "Release description"
 
-# 2. Run release script
-./release.sh -u -p -m "Weekly release: Nuke tracking and alerts"
+# Component-specific release
+./release.sh -u -m "Fix" userscript
 
-# Script automatically:
-# - Updates versions in all projects
-# - Builds userscript, firmware, server
-# - Commits changes
-# - Creates annotated tag
-# - Pushes to origin
+# List existing releases
+./release.sh -l
+
+# Dry run (preview without committing)
+./release.sh -u -m "Test" --dry-run
 ```
+
+**What release.sh does:**
+- Updates version numbers in all projects (package.json, config.h)
+- Builds artifacts (userscript, firmware binaries)
+- Creates git commit with version bump
+- Tags with date-based format: `YYYY-MM-DD.N`
+- Optionally pushes to remote
+- Updates `weekly_announces.md` changelog
 
 See [`prompts/RELEASE.md`](RELEASE.md) for full release documentation.
 

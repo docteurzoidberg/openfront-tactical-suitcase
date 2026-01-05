@@ -7,7 +7,10 @@
 - Mock mode for development without hardware
 - TWAI physical bus support with fallback
 - Statistics tracking and error handling
+- Shared between main controller and audio module
+- Hardware auto-detection at runtime
 - **Location:** `/ots-fw-shared/components/can_driver/`
+- **Documentation:** `/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md`
 
 ✅ **Discovery Protocol Complete** ✅ NEW
 - Boot-time module detection (no heartbeat overhead)
@@ -117,6 +120,60 @@ Main Controller                Audio Module
 **Build Status:**
 - ✅ ots-fw-main: 1,068,176 bytes (50.9%)
 - ✅ ots-fw-audiomodule: 1,161,563 bytes (27.7%)
+
+## Physical CAN Bus Hardware
+
+### Hardware Requirements
+
+- External CAN transceiver chip (e.g., SN65HVD230, MCP2551)
+- Connect ESP32 GPIO to CAN TX/RX
+- 120Ω termination resistors at bus ends
+
+### Pin Assignments
+
+**Main Controller (ESP32-S3):**
+- CAN TX: GPIO21
+- CAN RX: GPIO22
+
+**Audio Module (ESP32-A1S):**
+- CAN TX: GPIO17 (or other available)
+- CAN RX: GPIO16 (or other available)
+
+### TWAI Configuration
+
+The CAN driver uses ESP-IDF's TWAI (Two-Wire Automotive Interface) peripheral:
+
+```c
+twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(
+    GPIO_NUM_21,  // CAN TX pin
+    GPIO_NUM_22,  // CAN RX pin
+    TWAI_MODE_NORMAL
+);
+
+twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
+twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+
+twai_driver_install(&g_config, &t_config, &f_config);
+twai_start();
+```
+
+**API Mapping:**
+- `can_driver_init()` → Install TWAI driver, configure 500kbps
+- `can_driver_send()` → `twai_transmit()` with timeout
+- `can_driver_receive()` → `twai_receive()` non-blocking poll
+
+### Testing Strategy
+
+**Mock Mode Testing:**
+- Protocol development without hardware
+- Message format validation
+- Integration with sound module events
+
+**Physical CAN Testing:**
+- Loopback test (TX → RX on same device)
+- Two-device communication
+- Bus error handling
+- Performance validation (latency, throughput)
 
 ### Phase 2: Multi-Module Registry & Routing
 
