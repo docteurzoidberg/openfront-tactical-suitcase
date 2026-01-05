@@ -582,9 +582,23 @@ Complete user documentation for all serial console commands. This file MUST be u
 
 Part of the OpenFront Tactical Suitcase project.
 
+## CAN Protocol Documentation (CRITICAL)
+
+**When modifying the CAN protocol** (adding messages, changing formats, etc.):
+1. ⚠️ **UPDATE `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md` FIRST**
+2. Update the shared component: `/ots-fw-shared/components/can_audiomodule/`
+3. Update handlers in `src/can_audio_handler.c` if needed
+4. Test changes in both audio module AND main controller firmware
+
+**Protocol Documentation:**
+- `/ots-fw-shared/prompts/CAN_SOUND_PROTOCOL.md` - Complete audio protocol specification
+- `/ots-fw-shared/components/can_audiomodule/COMPONENT_PROMPT.md` - Shared component usage
+- `/ots-fw-shared/prompts/CAN_PROTOCOL_INTEGRATION.md` - Integration with multi-module architecture
+- `/ots-fw-shared/components/can_driver/CAN_PROTOCOL_ARCHITECTURE.md` - Generic multi-module protocol (Phase 2+)
+
 ## Related Projects
 
-- **Main Controller Firmware:** `../of-fw-main`
+- **Main Controller Firmware:** `../ots-fw-main`
 - **OpenFront Tactical Suitcase:** Parent project repository
 
 ---

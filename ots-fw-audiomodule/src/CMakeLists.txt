@@ -9,4 +9,7 @@ list(FILTER app_sources EXCLUDE REGEX ".*serial_commands\\.c$")
 # Always include audio_console (unified interface)
 message(STATUS "Audio console: ENABLED (unified command interface)")
 
-idf_component_register(SRCS ${app_sources})
+idf_component_register(
+    SRCS ${app_sources}
+    REQUIRES can_driver can_audiomodule can_discovery
+)

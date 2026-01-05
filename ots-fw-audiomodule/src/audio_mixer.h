@@ -165,4 +165,46 @@ esp_err_t audio_mixer_pause_source(audio_source_handle_t handle);
  * @return ESP_OK on success, error otherwise
  */
 esp_err_t audio_mixer_resume_source(audio_source_handle_t handle);
+
+/**
+ * @brief Set queue ID for a source (CAN protocol integration)
+ * 
+ * @param handle Source handle
+ * @param queue_id CAN queue ID (1-255, 0=invalid)
+ * @param sound_index Original sound index from play request
+ */
+void audio_mixer_set_queue_id(audio_source_handle_t handle, uint8_t queue_id, uint16_t sound_index);
+
+/**
+ * @brief Get queue ID for a source
+ * 
+ * @param handle Source handle
+ * @return Queue ID (0 if not set or invalid handle)
+ */
+uint8_t audio_mixer_get_queue_id(audio_source_handle_t handle);
+
+/**
+ * @brief Get sound index for a source
+ * 
+ * @param handle Source handle
+ * @return Sound index (0xFFFF if not set or invalid handle)
+ */
+uint16_t audio_mixer_get_sound_index(audio_source_handle_t handle);
+
+/**
+ * @brief Stop source by queue ID
+ * 
+ * @param queue_id CAN queue ID to stop
+ * @return ESP_OK if stopped, ESP_ERR_NOT_FOUND if no matching source
+ */
+esp_err_t audio_mixer_stop_by_queue_id(uint8_t queue_id);
+
+/**
+ * @brief Get source handle by queue ID
+ * 
+ * @param queue_id CAN queue ID
+ * @return Source handle or INVALID_SOURCE_HANDLE if not found
+ */
+audio_source_handle_t audio_mixer_get_handle_by_queue_id(uint8_t queue_id);
+
 #endif // AUDIO_MIXER_H

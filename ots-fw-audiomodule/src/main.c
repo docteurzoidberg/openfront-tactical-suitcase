@@ -12,7 +12,7 @@
 #include "nvs_flash.h"
 
 #include "can_driver.h"
-#include "can_handler.h"
+#include "can_audio_handler.h"
 #include "audio_mixer.h"
 #include "audio_player.h"
 #include "audio_console.h"
@@ -120,9 +120,10 @@ void app_main(void)
     }
 
     // Initialize and start CAN handler
-    ESP_ERROR_CHECK(can_handler_init(&g_sd_mounted));
-    ESP_ERROR_CHECK(can_handler_start_task());
+    ESP_ERROR_CHECK(can_audio_handler_init(&g_sd_mounted));
+    ESP_ERROR_CHECK(can_audio_handler_start_task());
     ESP_LOGI(TAG, "CAN handler started");
+    ESP_LOGI(TAG, "CAN discovery: Audio Module v1.0 on block 0x420-0x42F");
     
     // Initialize interactive console (unified audio control)
     ESP_LOGI(TAG, "=== Audio Console Starting ===");

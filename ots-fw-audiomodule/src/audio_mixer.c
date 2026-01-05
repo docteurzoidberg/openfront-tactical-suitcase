@@ -1,7 +1,9 @@
 #include "audio_mixer.h"
+#include "audio_volume.h"
 #include "audio_decoder.h"
 #include "wav_utils.h"
 #include "hardware/i2s.h"
+#include "can_audio_handler.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
@@ -20,6 +22,10 @@ typedef struct {
     char filepath[128];
     uint8_t volume;              // 0-100
     bool loop;
+    
+    // CAN protocol integration
+    uint8_t queue_id;            // CAN queue ID (1-255, 0=not set)
+    uint16_t sound_index;        // Original sound index from play request
     
     // Stream buffer for PCM data (allocated in PSRAM)
     StreamBufferHandle_t buffer;
@@ -95,6 +101,8 @@ esp_err_t audio_mixer_init(void) {
         g_mixer.sources[i].state = SOURCE_STATE_IDLE;
         g_mixer.sources[i].buffer = NULL;
         g_mixer.sources[i].decoder_task = NULL;
+        g_mixer.sources[i].queue_id = 0;        // 0 = not set
+        g_mixer.sources[i].sound_index = 0xFFFF; // Invalid
     }
     
     // Create mixer task
@@ -536,6 +544,13 @@ esp_err_t audio_mixer_stop_source(audio_source_handle_t handle) {
     
     audio_source_t *src = &g_mixer.sources[handle];
     if (src->active && src->state == SOURCE_STATE_PLAYING) {
+        // Send SOUND_FINISHED notification if it has a queue_id
+        if (src->queue_id != 0) {
+            ESP_LOGI(TAG, "Source %d stopped by user: queue_id=%d sound_index=%d", 
+                     handle, src->queue_id, src->sound_index);
+            can_audio_handler_sound_finished(src->queue_id, src->sound_index, 1);  // 1 = stopped by user
+        }
+        
         src->state = SOURCE_STATE_STOPPING;
         src->stopping = true;
         ESP_LOGI(TAG, "Stopping source %d", handle);
@@ -657,6 +672,13 @@ static void mixer_task(void *arg) {
             
             // Mark stopped sources as inactive (but don't cleanup buffers here!)
             if (src->active && src->state == SOURCE_STATE_STOPPED) {
+                // Send SOUND_FINISHED notification for non-looping sounds with queue_id
+                if (!src->loop && src->queue_id != 0) {
+                    ESP_LOGI(TAG, "Source %d finished: queue_id=%d sound_index=%d", 
+                             i, src->queue_id, src->sound_index);
+                    can_audio_handler_sound_finished(src->queue_id, src->sound_index, 0);  // 0 = completed normally
+                }
+                
                 src->active = false;
                 // Buffers will be cleaned up when this slot is reused
                 continue;
@@ -686,8 +708,11 @@ static void mixer_task(void *arg) {
             // Mix into output buffer with volume control
             int samples = bytes_available / 2;  // 16-bit samples
             for (int j = 0; j < samples; j++) {
-                // Apply volume (0-100 to 0-1.0)
-                int32_t sample = (source_samples[j] * src->volume) / 100;
+                // Apply source volume using audio_volume module
+                int32_t sample = source_samples[j];
+                if (src->volume < 100) {
+                    sample = (sample * src->volume) / 100;
+                }
                 
                 // Mix (saturating add to prevent clipping)
                 int32_t mixed = i2s_buffer[j] + sample;
@@ -707,13 +732,13 @@ static void mixer_task(void *arg) {
         
         xSemaphoreGive(g_mixer.mutex);
         
-        // Apply master volume scaling
+        // Apply master volume scaling using audio_volume module
         uint8_t master_vol = audio_mixer_get_master_volume();
         if (master_vol < 100 && max_samples > 0) {
             // Only scale the samples we actually mixed (not beyond buffer!)
-            for (size_t j = 0; j < max_samples && j < (512 * 2); j++) {
-                i2s_buffer[j] = (i2s_buffer[j] * master_vol) / 100;
-            }
+            audio_volume_apply_fast(i2s_buffer, 
+                                   (max_samples < (512 * 2)) ? max_samples : (512 * 2),
+                                   master_vol);
         }
         
         // Write to I2S only if hardware is ready
@@ -727,4 +752,116 @@ static void mixer_task(void *arg) {
             vTaskDelay(pdMS_TO_TICKS(10));
         }
     }
+}
+
+/**
+ * @brief Set queue ID for a source (CAN protocol integration)
+ */
+void audio_mixer_set_queue_id(audio_source_handle_t handle, uint8_t queue_id, uint16_t sound_index) {
+    if (handle < 0 || handle >= MAX_AUDIO_SOURCES) {
+        return;
+    }
+    
+    xSemaphoreTake(g_mixer.mutex, portMAX_DELAY);
+    
+    if (g_mixer.sources[handle].active) {
+        g_mixer.sources[handle].queue_id = queue_id;
+        g_mixer.sources[handle].sound_index = sound_index;
+        ESP_LOGI(TAG, "Source %d: queue_id=%d, sound_index=%d", handle, queue_id, sound_index);
+    }
+    
+    xSemaphoreGive(g_mixer.mutex);
+}
+
+/**
+ * @brief Get queue ID for a source
+ */
+uint8_t audio_mixer_get_queue_id(audio_source_handle_t handle) {
+    if (handle < 0 || handle >= MAX_AUDIO_SOURCES) {
+        return 0;
+    }
+    
+    uint8_t queue_id = 0;
+    
+    xSemaphoreTake(g_mixer.mutex, portMAX_DELAY);
+    if (g_mixer.sources[handle].active) {
+        queue_id = g_mixer.sources[handle].queue_id;
+    }
+    xSemaphoreGive(g_mixer.mutex);
+    
+    return queue_id;
+}
+
+/**
+ * @brief Get sound index for a source
+ */
+uint16_t audio_mixer_get_sound_index(audio_source_handle_t handle) {
+    if (handle < 0 || handle >= MAX_AUDIO_SOURCES) {
+        return 0xFFFF;
+    }
+    
+    uint16_t sound_index = 0xFFFF;
+    
+    xSemaphoreTake(g_mixer.mutex, portMAX_DELAY);
+    if (g_mixer.sources[handle].active) {
+        sound_index = g_mixer.sources[handle].sound_index;
+    }
+    xSemaphoreGive(g_mixer.mutex);
+    
+    return sound_index;
+}
+
+/**
+ * @brief Stop source by queue ID
+ */
+esp_err_t audio_mixer_stop_by_queue_id(uint8_t queue_id) {
+    if (queue_id == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    esp_err_t result = ESP_ERR_NOT_FOUND;
+    
+    xSemaphoreTake(g_mixer.mutex, portMAX_DELAY);
+    
+    for (int i = 0; i < MAX_AUDIO_SOURCES; i++) {
+        if (g_mixer.sources[i].active && g_mixer.sources[i].queue_id == queue_id) {
+            ESP_LOGI(TAG, "Stopping source %d by queue_id %d", i, queue_id);
+            g_mixer.sources[i].stopping = true;
+            g_mixer.sources[i].state = SOURCE_STATE_STOPPING;
+            result = ESP_OK;
+            break;
+        }
+    }
+    
+    xSemaphoreGive(g_mixer.mutex);
+    
+    if (result != ESP_OK) {
+        ESP_LOGW(TAG, "No active source found with queue_id %d", queue_id);
+    }
+    
+    return result;
+}
+
+/**
+ * @brief Get source handle by queue ID
+ */
+audio_source_handle_t audio_mixer_get_handle_by_queue_id(uint8_t queue_id) {
+    if (queue_id == 0) {
+        return INVALID_SOURCE_HANDLE;
+    }
+    
+    audio_source_handle_t handle = INVALID_SOURCE_HANDLE;
+    
+    xSemaphoreTake(g_mixer.mutex, portMAX_DELAY);
+    
+    for (int i = 0; i < MAX_AUDIO_SOURCES; i++) {
+        if (g_mixer.sources[i].active && g_mixer.sources[i].queue_id == queue_id) {
+            handle = i;
+            break;
+        }
+    }
+    
+    xSemaphoreGive(g_mixer.mutex);
+    
+    return handle;
 }

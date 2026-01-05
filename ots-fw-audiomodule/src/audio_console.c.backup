@@ -14,8 +14,6 @@
 
 #include "esp_log.h"
 #include "esp_console.h"
-#include "esp_heap_caps.h"
-#include "esp_psram.h"
 #include "linenoise/linenoise.h"
 #include "argtable3/argtable3.h"
 #include <string.h>
@@ -109,6 +107,57 @@ static int cmd_mix(int argc, char **argv)
 }
 
 // Deprecated: old tone playback helper (kept for compatibility)
+static int play_embedded_tone(const uint8_t *tone_data, const char *description)
+{
+    ESP_LOGI(TAG, "Playing %s...", description);
+    
+    wav_info_t wav;
+    if (wav_parse_header_from_memory(tone_data, &wav) == ESP_OK) {
+        audio_source_handle_t handle;
+        esp_err_t ret = audio_mixer_create_source_from_memory(
+            tone_data + wav.data_offset,
+            wav.data_size,
+            DEFAULT_TONE_VOLUME,
+            false, // no loop
+            false, // no interrupt
+            &handle
+        );
+        if (ret == ESP_OK) {
+            ESP_LOGI(TAG, "✓ %s started", description);
+        } else {
+            ESP_LOGE(TAG, "✗ Failed: %s", esp_err_to_name(ret));
+        }
+    }
+    return 0;
+}
+
+// Test tones from embedded memory
+static int cmd_tone1(int argc, char **argv) {
+    return play_embedded_tone(tone_1s_440hz_wav, "tone 1 (1s, 440Hz)");
+}
+
+static int cmd_tone2(int argc, char **argv) {
+    return play_embedded_tone(tone_2s_880hz_wav, "tone 2 (2s, 880Hz)");
+}
+
+static int cmd_tone3(int argc, char **argv) {
+    return play_embedded_tone(tone_5s_220hz_wav, "tone 3 (5s, 220Hz)");
+}
+
+static int cmd_mix(int argc, char **argv)
+{
+    ESP_LOGI(TAG, "Mixing all tones simultaneously...");
+    
+    cmd_tone1(0, NULL);
+    vTaskDelay(pdMS_TO_TICKS(TONE_START_DELAY_MS));
+    cmd_tone2(0, NULL);
+    vTaskDelay(pdMS_TO_TICKS(TONE_START_DELAY_MS));
+    cmd_tone3(0, NULL);
+    
+    ESP_LOGI(TAG, "✓ All tones started");
+    return 0;
+}
+
 static int cmd_status(int argc, char **argv)
 {
     ESP_LOGI(TAG, "═══ Mixer Status ═══");
@@ -119,8 +168,9 @@ static int cmd_status(int argc, char **argv)
 
 static int cmd_test_tone(int argc, char **argv)
 {
-    ESP_LOGI(TAG, "Playing test tone (tone 1)...");
-    return tone_player_play(TONE_ID_1, 100);
+    ESP_LOGI(TAG, "Playing built-in test tone...");
+    audio_test_tone_generate();
+    return 0;
 }
 
 // Show currently playing sources
@@ -228,14 +278,11 @@ static int cmd_stop(int argc, char **argv)
 static int cmd_info(int argc, char **argv)
 {
     ESP_LOGI(TAG, "═══ Embedded Test Tones ═══");
-    for (int i = 0; i < TONE_ID_MAX; i++) {
-        size_t size;
-        const char *desc;
-        if (tone_player_get_info((tone_id_t)i, &size, &desc) == ESP_OK) {
-            ESP_LOGI(TAG, "  • %s: %zu bytes", desc, size);
-        }
-    }
-    ESP_LOGI(TAG, "Total: %zu bytes", tone_player_get_total_size());
+    ESP_LOGI(TAG, "Tone 1: %d bytes (1s @ 440Hz)", tone_1s_440hz_wav_len);
+    ESP_LOGI(TAG, "Tone 2: %d bytes (2s @ 880Hz)", tone_2s_880hz_wav_len);
+    ESP_LOGI(TAG, "Tone 3: %d bytes (5s @ 220Hz)", tone_5s_220hz_wav_len);
+    ESP_LOGI(TAG, "Total: %d bytes", 
+             tone_1s_440hz_wav_len + tone_2s_880hz_wav_len + tone_5s_220hz_wav_len);
     return 0;
 }
 
@@ -465,13 +512,9 @@ esp_err_t audio_console_init(void)
     ESP_LOGI(TAG, "  hello, ping  - Play hello/ping.wav");
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "Embedded Test Tones:");
-    for (int i = 0; i < TONE_ID_MAX; i++) {
-        size_t size;
-        const char *desc;
-        if (tone_player_get_info((tone_id_t)i, &size, &desc) == ESP_OK) {
-            ESP_LOGI(TAG, "  • %s: %zu bytes", desc, size);
-        }
-    }
+    ESP_LOGI(TAG, "  • Tone 1: %d bytes (1s @ 440Hz)", tone_1s_440hz_wav_len);
+    ESP_LOGI(TAG, "  • Tone 2: %d bytes (2s @ 880Hz)", tone_2s_880hz_wav_len);
+    ESP_LOGI(TAG, "  • Tone 3: %d bytes (5s @ 220Hz)", tone_5s_220hz_wav_len);
     
     // Register commands
     register_commands();
