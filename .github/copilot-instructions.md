@@ -11,6 +11,7 @@ OpenFront Tactical Suitcase (OTS) is a multi-component system bridging OpenFront
 - **ots-fw-shared**: Shared ESP-IDF components (CAN driver, discovery, audio protocol)
 - **ots-shared**: Shared TypeScript protocol types
 - **ots-hardware**: Hardware module specifications
+- **ots-website**: VitePress documentation site (auto-deployed to GitHub Pages)
 
 ## Architecture & Protocol
 
@@ -216,6 +217,34 @@ Referenced in CMakeLists.txt via `EXTRA_COMPONENT_DIRS`:
 list(APPEND EXTRA_COMPONENT_DIRS "../ots-fw-shared/components")
 ```
 
+### ots-website (VitePress Documentation)
+
+**Build:**
+```bash
+cd ots-website
+npm install
+npm run dev     # Port 5173
+npm run build   # Production build
+```
+
+**Architecture:**
+- **VitePress** static site generator with Vue 3
+- **Source**: Syncs markdown files from `../doc/` folder
+- **Custom pages**: Index, downloads, releases (in `ots-website/`)
+- **Deployment**: Auto-deployed to GitHub Pages via GitHub Actions
+
+**Content Management:**
+- Documentation source: `/doc/` (user/, developer/)
+- VitePress indexes: `/ots-website/user/index.md`, `/ots-website/developer/index.md`
+- Custom pages: `/ots-website/downloads.md`, `/ots-website/releases.md`
+- Sync script excludes custom index.md files from overwrite
+
+**Deployment:**
+- Workflow: `.github/workflows/deploy-docs.yml`
+- Trigger: Push to `main` branch
+- URL: `https://docteurzoidberg.github.io/openfront-tactical-suitcase/`
+- Base path: `/openfront-tactical-suitcase/` (configured in VitePress)
+
 ## Critical Workflows
 
 ### Adding New Event Types
@@ -291,6 +320,8 @@ ots/
     RELEASE.md                     # Release process and version management guide
   .github/
     copilot-instructions.md        # This file - workspace-level guidance
+    workflows/
+      deploy-docs.yml              # GitHub Pages deployment for ots-website
   
   ots-fw-shared/                   # Shared firmware components
     README.md                      # Shared components overview
@@ -299,6 +330,62 @@ ots/
         COMPONENT_PROMPT.md        # CAN driver documentation
         CAN_PROTOCOL_ARCHITECTURE.md  # Multi-module CAN protocol design
   
+  ots-hardware/                    # Hardware specs & module designs
+    copilot-project-context.md     # Hardware-specific context
+    hardware-spec.md               # Controller & bus specification
+    modules/                       # Individual module specifications
+  
+  ots-shared/                      # Shared TypeScript types
+    src/
+      game.ts                      # TypeScript protocol implementation
+      index.ts
+  
+  ots-server/                      # Nuxt 4 dashboard + WebSocket server
+    copilot-project-context.md     # Server-specific context
+    app/
+      pages/index.vue              # Main dashboard
+      components/hardware/         # Hardware module UI components
+      composables/useGameSocket.ts # Dashboard WebSocket client
+    server/routes/
+      ws-script.ts                 # Userscript WebSocket handler
+      ws-ui.ts                     # Dashboard WebSocket handler
+  
+  ots-userscript/                  # Tampermonkey userscript
+    copilot-project-context.md     # Userscript-specific context
+    src/main.user.ts               # Entry point
+    build/userscript.ots.user.js   # Built output
+  
+  ots-website/                     # VitePress documentation site
+    .vitepress/
+      config.ts                    # VitePress configuration
+    index.md                       # Homepage
+    downloads.md                   # Downloads page (CAD, PCB, firmware)
+    releases.md                    # Release history page
+    user/
+      index.md                     # User guide index (VitePress)
+      [synced from ../doc/user/]  # Actual docs
+    developer/
+      index.md                     # Developer guide index (VitePress)
+      [synced from ../doc/developer/]  # Actual docs
+  
+  doc/                             # Documentation source
+    README.md                      # Documentation overview
+    STRUCTURE.md                   # Repository structure guide
+    user/                          # User guides (synced to ots-website)
+    developer/                     # Developer guides (synced to ots-website)
+  
+  ots-fw-main/                     # ESP32-S3 firmware
+    copilot-project-context.md     # Firmware-specific context
+    platformio.ini
+    include/
+      protocol.h                   # C protocol implementation
+      *_module.h                   # Hardware module headers
+    src/
+      main.c
+      *_module.c                   # Hardware module implementations
+      nuke_state_manager.c         # Nuke state tracking
+    CMakeLists.txt         # Component registration
+```
   ots-hardware/                    # Hardware specs & module designs
     copilot-project-context.md     # Hardware-specific context
     hardware-spec.md               # Controller & bus specification
