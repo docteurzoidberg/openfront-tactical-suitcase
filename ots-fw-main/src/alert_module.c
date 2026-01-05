@@ -72,7 +72,7 @@ static bool alert_module_handle_event(const internal_event_t *event) {
     
     switch (event->type) {
         // Incoming attack alerts - track nuke and turn on LED
-        case GAME_EVENT_ALERT_NUKE: {
+        case GAME_EVENT_ALERT_ATOM: {
             uint32_t unit_id = ots_parse_unit_id(event->data);
             ESP_LOGI(TAG, "Atom alert! (unit=%lu)", (unsigned long)unit_id);
             

@@ -2,6 +2,15 @@
 
 Complete folder and file structure for the `/doc` directory.
 
+## Implementation Status
+
+**Legend:**
+- ✅ Implemented
+- 🚧 In Progress
+- ⏳ Planned
+
+**Last Updated:** January 5, 2026
+
 ```
 doc/
 ├── README.md                              # Main documentation index

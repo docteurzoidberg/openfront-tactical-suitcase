@@ -1,6 +1,6 @@
 {
   "name": "ots-userscript",
-  "version": "2026-01-03.1",
+  "version": "2026-01-05.1",
   "private": true,
   "type": "module",
   "scripts": {

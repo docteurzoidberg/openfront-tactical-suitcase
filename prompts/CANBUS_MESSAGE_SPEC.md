@@ -29,11 +29,21 @@ This document defines the CAN bus message protocol for the OpenFront Tactical Su
 - 500 kbps @ 80MHz APB clock
 
 **External Transceiver** 
-- TJA1050 (5V, high-speed)
+- TJA1050 (5V, high-speed) or SN65HVD230 (3.3V, recommended)
+- MCP2551 (5V, alternative)
 
-**GPIO Pins** (configurable):
-- Default TX: GPIO 5
-- Default RX: GPIO 4
+**GPIO Pins** (board-specific):
+
+*Main Controller (ESP32-S3):*
+- TX: GPIO 5 (configurable)
+- RX: GPIO 4 (configurable)
+
+*Audio Module (ESP32-A1S AudioKit):*
+- TX: GPIO 18 (expansion header, bottom row position 5)
+- RX: GPIO 19 (expansion header, bottom row position 3)
+- Alternative: See `ots-fw-audiomodule/ESP32_A1S_AUDIOKIT_BOARD.md` for other pin options
+
+**Note**: Pin assignments are configurable in each firmware's `board_config.h` or equivalent configuration file.
 
 ### Frame Structure
 

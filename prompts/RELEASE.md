@@ -31,17 +31,22 @@ Suggest command based on what they've been working on:
 
 **If firmware changes:**
 ```bash
-./release.sh -u -m "Fix: LED timing improvements" firmware
+./release.sh -u -m "Fix: LED timing improvements" ots-fw-main
 ```
 
 **If userscript changes:**
 ```bash
-./release.sh -u -m "Feature: New game event detection" userscript
+./release.sh -u -m "Feature: New game event detection" ots-userscript
+```
+
+**If audio module changes:**
+```bash
+./release.sh -u -m "Feature: CAN bus sound protocol" ots-fw-audiomodule
 ```
 
 **If multiple components:**
 ```bash
-./release.sh -u -m "Feature: Protocol update across stack" userscript firmware server
+./release.sh -u -m "Feature: Protocol update across stack" ots-userscript ots-fw-main ots-simulator
 ```
 
 **Always explain:** The script will auto-increment today's version number (e.g., 2026-01-05.1, 2026-01-05.2, etc.)
@@ -52,19 +57,40 @@ Suggest command based on what they've been working on:
 ./release.sh -l
 ```
 
+## Version Format
+
+**Development Versions:** `YYYY-MM-DD.N-dev`
+- Example: `2026-01-05.1-dev`
+- Used during active development
+- Automatically set after each release
+
+**Release Versions:** `YYYY-MM-DD.N`
+- Example: `2026-01-05.1`
+- Date-based with auto-incrementing revision number
+- Created by release script (strips `-dev` suffix)
+- Each release creates two commits:
+  1. Release commit (tagged)
+  2. Dev version bump commit (not tagged)
+
 ## Version Management
 
 ### Where Versions Are Stored
 
-**Userscript:**
+**Userscript (ots-userscript):**
 - `ots-userscript/package.json` → `"version"` field
 - `ots-userscript/src/main.user.ts` → `VERSION` constant
 
-**Firmware:**
+**Main Firmware (ots-fw-main):**
 - `ots-fw-main/include/config.h` → `OTS_FIRMWARE_VERSION` macro
 
-**Server:**
+**Audio Module (ots-fw-audiomodule):**
+- `ots-fw-audiomodule/src/main.c` → `AUDIO_MODULE_VERSION` macro
+
+**Server/Dashboard (ots-simulator):**
 - `ots-simulator/package.json` → `"version"` field
+
+**Documentation Site (ots-website):**
+- `ots-website/package.json` → `"version"` field
 
 **The release script updates all automatically** with `-u` flag.
 

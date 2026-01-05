@@ -418,7 +418,7 @@ static uint16_t map_event_to_sound_index(game_event_type_t event_type) {
     switch (event_type) {
         case GAME_EVENT_GAME_START:
             return SOUND_INDEX_GAME_START;
-        case GAME_EVENT_ALERT_NUKE:
+        case GAME_EVENT_ALERT_ATOM:
             return SOUND_INDEX_ALERT_ATOM;
         case GAME_EVENT_ALERT_HYDRO:
             return SOUND_INDEX_ALERT_HYDRO;

@@ -92,6 +92,26 @@ update_version() {
             fi
             ;;
             
+        audiomodule)
+            echo -e "${BLUE}Updating audio module version to ${version}${NC}"
+            
+            # Update main.c
+            if [ -f "ots-fw-audiomodule/src/main.c" ]; then
+                sed -i "s/#define AUDIO_MODULE_VERSION.*\".*\".*/#define AUDIO_MODULE_VERSION \"${version}\"/" ots-fw-audiomodule/src/main.c
+                echo -e "  ${GREEN}✓${NC} ots-fw-audiomodule/src/main.c"
+            fi
+            ;;
+            
+        website)
+            echo -e "${BLUE}Updating website version to ${version}${NC}"
+            
+            # Update package.json
+            if [ -f "ots-website/package.json" ]; then
+                sed -i "s/\"version\": \".*\"/\"version\": \"${version}\"/" ots-website/package.json
+                echo -e "  ${GREEN}✓${NC} ots-website/package.json"
+            fi
+            ;;
+            
         server)
             echo -e "${BLUE}Updating server version to ${version}${NC}"
             
@@ -141,45 +161,67 @@ build_project() {
                 return 1
             fi
             ;;
+            
+        audiomodule)
+            echo -e "${BLUE}Building audio module...${NC}"
+            if (cd ots-fw-audiomodule && pio run -e esp32-a1s-espidf > /dev/null 2>&1); then
+                echo -e "  ${GREEN}✓${NC} ots-fw-audiomodule/.pio/build/esp32-a1s-espidf/firmware.bin"
+                return 0
+            else
+                echo -e "  ${RED}✗${NC} Audio module build failed!"
+                return 1
+            fi
+            ;;
+            
+        website)
+            echo -e "${BLUE}Building website...${NC}"
+            if (cd ots-website && npm run build > /dev/null 2>&1); then
+                echo -e "  ${GREEN}✓${NC} ots-website/.vitepress/dist/"
+                return 0
+            else
+                echo -e "  ${RED}✗${NC} Website build failed!"
+                return 1
+            fi
+            ;;
     esac
 }
 
 # Function to show usage
 usage() {
-    cat << EOF
-${GREEN}OTS Release Tagging Script${NC}
-
-Usage: $0 [OPTIONS] PROJECT [PROJECT...]
-
-${YELLOW}ProjectUpdate ots-userscript version
-  firmware      Update ots-fw-main version
-  server        Update ots-simulator version
-  all           Update all projects (default if none specified)
-
-${YELLOW}Options:${NC}
-  -m MESSAGE    Release message/description
-  -u            Update version numbers in all files
-  -p            Push tags after creation
-  -l            List existing tags for today
-  -h            Show this help
-
-${YELLOW}Examples:${NC}
-  $0 -u -m "Bug fixes"
-  $0 -u -p -m "Major release"
-  $0 -l
-
-${YELLOW}Tag Format:${NC}
-  YYYY-MM-DD.N   (e.g., 2025-12-20.1, 2025-12-20.2)
-
-${YELLOW}Notes:${NC}
-  - One unified tag per release for all projects
-  - Revision number auto-increments for same-day releases
-  - Tags are annotated (include commit info)
-  - Use -p to push immediately, or push manually later
-  - Specify projects to update only specific versions
-  - Use -p to push immediately, or push manually later
-
-EOF
+    echo -e "${GREEN}OTS Release Tagging Script${NC}"
+    echo ""
+    echo "Usage: $0 [OPTIONS] PROJECT [PROJECT...]"
+    echo ""
+    echo -e "${YELLOW}Projects:${NC}"
+    echo "  ots-userscript      Update userscript version"
+    echo "  ots-fw-main         Update main firmware version"
+    echo "  ots-fw-audiomodule  Update audio module firmware version"
+    echo "  ots-simulator       Update dashboard/server version"
+    echo "  ots-website         Update documentation site version"
+    echo "  all                 Update all projects (default if none specified)"
+    echo ""
+    echo -e "${YELLOW}Options:${NC}"
+    echo "  -m MESSAGE    Release message/description"
+    echo "  -u            Update version numbers in all files"
+    echo "  -p            Push tags after creation"
+    echo "  -l            List existing tags for today"
+    echo "  -h            Show this help"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo "  $0 -u -m \"Bug fixes\""
+    echo "  $0 -u -p -m \"Major release\""
+    echo "  $0 -l"
+    echo ""
+    echo -e "${YELLOW}Tag Format:${NC}"
+    echo "  YYYY-MM-DD.N   (e.g., 2025-12-20.1, 2025-12-20.2)"
+    echo ""
+    echo -e "${YELLOW}Notes:${NC}"
+    echo "  - One unified tag per release for all projects"
+    echo "  - Revision number auto-increments for same-day releases"
+    echo "  - Tags are annotated (include commit info)"
+    echo "  - Use -p to push immediately, or push manually later"
+    echo "  - Specify projects to update only specific versions"
+    echo ""
     exit 0
 }
 
@@ -262,26 +304,34 @@ PROJECT_NAMES=""
 
 for project in "$@"; do
     case $project in
-        userscript|us)
+        ots-userscript|userscript|us)
             PROJECTS_TO_UPDATE+=("userscript")
-            PROJECT_NAMES="${PROJECT_NAMES}userscript, "
+            PROJECT_NAMES="${PROJECT_NAMES}ots-userscript, "
             ;;
-        firmware|fw)
+        ots-fw-main|firmware|fw)
             PROJECTS_TO_UPDATE+=("firmware")
-            PROJECT_NAMES="${PROJECT_NAMES}firmware, "
+            PROJECT_NAMES="${PROJECT_NAMES}ots-fw-main, "
             ;;
-        server|sv)
+        ots-simulator|server|sv)
             PROJECTS_TO_UPDATE+=("server")
-            PROJECT_NAMES="${PROJECT_NAMES}server, "
+            PROJECT_NAMES="${PROJECT_NAMES}ots-simulator, "
+            ;;
+        ots-fw-audiomodule|audiomodule|am)
+            PROJECTS_TO_UPDATE+=("audiomodule")
+            PROJECT_NAMES="${PROJECT_NAMES}ots-fw-audiomodule, "
+            ;;
+        ots-website|website|ws)
+            PROJECTS_TO_UPDATE+=("website")
+            PROJECT_NAMES="${PROJECT_NAMES}ots-website, "
             ;;
         all)
-            PROJECTS_TO_UPDATE=("userscript" "firmware" "server")
-            PROJECT_NAMES="userscript, firmware, server"
+            PROJECTS_TO_UPDATE=("userscript" "firmware" "audiomodule" "server" "website")
+            PROJECT_NAMES="ots-userscript, ots-fw-main, ots-fw-audiomodule, ots-simulator, ots-website"
             break
             ;;
         *)
             echo -e "${RED}Unknown project: $project${NC}"
-            echo -e "Valid projects: userscript, firmware, server, all"
+            echo -e "Valid projects: ots-userscript, ots-fw-main, ots-fw-audiomodule, ots-simulator, ots-website, all"
             exit 1
             ;;
     esac
@@ -290,9 +340,13 @@ done
 # Remove trailing comma and space
 PROJECT_NAMES="${PROJECT_NAMES%, }"
 
-# Get the revision number
+# Get the revision number and calculate release version
 REVISION=$(get_next_revision)
-VERSION="${DATE}.${REVISION}"
+RELEASE_VERSION="${DATE}.${REVISION}"
+DEV_VERSION="${DATE}.$((REVISION + 1))-dev"
+
+# Strip -dev suffix if present in source files (shouldn't be after first run)
+VERSION="${RELEASE_VERSION}"
 
 echo -e "${BLUE}Release version: ${GREEN}${VERSION}${NC}"
 echo -e "${BLUE}Projects: ${PROJECT_NAMES}${NC}\n"
@@ -356,6 +410,22 @@ DESCRIPTION="${MESSAGE:-OTS release}"
 create_tag "$DESCRIPTION" "$PROJECT_NAMES"
 
 CREATED_TAG="${VERSION}"
+
+# Bump to next dev version after successful release
+if [ "$UPDATE_VERSION" = true ]; then
+    echo -e "\n${YELLOW}Bumping to development version...${NC}"
+    
+    for project in "${PROJECTS_TO_UPDATE[@]}"; do
+        update_version "$project" "$DEV_VERSION"
+    done
+    
+    # Commit dev version bump
+    git add -A
+    if git commit -m "chore: bump to dev version ${DEV_VERSION}" > /dev/null 2>&1; then
+        echo -e "  ${GREEN}✓${NC} Bumped to ${DEV_VERSION}"
+    fi
+    echo ""
+fi
 
 # Push tag if requested
 if [ "$PUSH_TAGS" = true ] && [ -n "$CREATED_TAG" ]; then

@@ -29,6 +29,9 @@
 
 static const char *TAG = "MAIN";
 
+// Version (updated by release script)
+#define AUDIO_MODULE_VERSION "2026-01-05.1"
+
 // Global state
 static bool g_sd_mounted = false;
 
@@ -40,6 +43,7 @@ static bool g_sd_mounted = false;
 void app_main(void)
 {
     ESP_LOGI(TAG, "=== ESP32-A1S Audio Module Starting ===");
+    ESP_LOGI(TAG, "Version: %s", AUDIO_MODULE_VERSION);
 
     // Mount SD card
     esp_err_t ret = sdcard_init();

@@ -1,12 +1,11 @@
 /**
  * @file audio_console.c
- * @brief Interactive console for audio control (refactored)
+ * @brief Interactive console for audio control
  * 
- * Unified console interface with modular UI and tone playback
+ * Unified console interface with command handling and UI formatting
  */
 
 #include "audio_console.h"
-#include "audio_console_ui.h"
 #include "audio_tone_player.h"
 #include "audio_mixer.h"
 #include "audio_player.h"
@@ -16,6 +15,7 @@
 #include "esp_console.h"
 #include "esp_heap_caps.h"
 #include "esp_psram.h"
+#include "esp_system.h"
 #include "linenoise/linenoise.h"
 #include "argtable3/argtable3.h"
 #include <string.h>
@@ -23,6 +23,128 @@
 #include <dirent.h>
 
 static const char *TAG = "CONSOLE";
+
+/*------------------------------------------------------------------------
+ *  UI Formatting Helpers
+ *-----------------------------------------------------------------------*/
+
+static void print_banner(void)
+{
+    ESP_LOGI(TAG, "╔════════════════════════════════════════╗");
+    ESP_LOGI(TAG, "║    AUDIO CONSOLE - Interactive Menu    ║");
+    ESP_LOGI(TAG, "╚════════════════════════════════════════╝");
+    ESP_LOGI(TAG, "");
+    ESP_LOGI(TAG, "SD Card Commands:");
+    ESP_LOGI(TAG, "  play <file>  - Play WAV from SD card");
+    ESP_LOGI(TAG, "  1, 2         - Quick play track1/2.wav");
+    ESP_LOGI(TAG, "  hello, ping  - Play hello/ping.wav");
+    ESP_LOGI(TAG, "");
+    
+    // Get tone info dynamically
+    size_t size;
+    const char *desc;
+    ESP_LOGI(TAG, "Embedded Test Tones:");
+    for (tone_id_t id = TONE_ID_1; id < TONE_ID_MAX; id++) {
+        if (tone_player_get_info(id, &size, &desc) == ESP_OK) {
+            ESP_LOGI(TAG, "  • Tone %d: %zu bytes (%s)", id + 1, size, desc);
+        }
+    }
+    ESP_LOGI(TAG, "");
+    ESP_LOGI(TAG, "Type 'help' to see all available commands");
+}
+
+static void print_mixer_status(void)
+{
+    int active = audio_mixer_get_active_count();
+    uint8_t volume = audio_mixer_get_master_volume();
+    
+    ESP_LOGI(TAG, "═══ Mixer Status ═══");
+    ESP_LOGI(TAG, "Active sources: %d / %d", active, MAX_AUDIO_SOURCES);
+    ESP_LOGI(TAG, "Master volume:  %d%%", volume);
+}
+
+static void print_playing_sources(void)
+{
+    ESP_LOGI(TAG, "═══ Currently Playing ═══");
+    
+    int found = 0;
+    for (int i = 0; i < MAX_AUDIO_SOURCES; i++) {
+        char filepath[128];
+        uint8_t volume;
+        int state;
+        
+        if (audio_mixer_get_source_info(i, filepath, sizeof(filepath), &volume, &state) == ESP_OK) {
+            const char *state_str = (state == 1) ? "PLAYING" : 
+                                   (state == 2) ? "PAUSED" : "UNKNOWN";
+            ESP_LOGI(TAG, "  [%d] %s (vol: %d%%, state: %s)", i, filepath, volume, state_str);
+            found++;
+        }
+    }
+    
+    if (found == 0) {
+        printf("  No active sources\n");
+    }
+}
+
+static void print_sysinfo(void)
+{
+    ESP_LOGI(TAG, "═══ System Information ═══");
+    
+    // Memory info
+    printf("Memory:\n");
+    printf("  Heap free: %lu bytes\n", (unsigned long)esp_get_free_heap_size());
+    printf("  Heap min:  %lu bytes\n", (unsigned long)esp_get_minimum_free_heap_size());
+    
+    // PSRAM info
+    size_t psram_total = esp_psram_get_size();
+    size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    if (psram_total > 0) {
+        printf("  PSRAM total: %zu bytes\n", psram_total);
+        printf("  PSRAM free:  %zu bytes\n", psram_free);
+    }
+    
+    printf("\n");
+    
+    // SD card status
+    printf("SD Card:\n");
+    if (sdcard_is_mounted()) {
+        printf("  Status: Mounted\n");
+    } else {
+        printf("  Status: Not mounted\n");
+    }
+    
+    printf("\n");
+    
+    // Audio mixer status
+    printf("Audio Mixer:\n");
+    printf("  Active sources: %d / %d\n", audio_mixer_get_active_count(), MAX_AUDIO_SOURCES);
+    printf("  Master volume:  %d%%\n", audio_mixer_get_master_volume());
+    
+    // PSRAM utilization
+    if (psram_total > 0) {
+        size_t psram_used = psram_total - psram_free;
+        float utilization = (float)psram_used / psram_total * 100.0f;
+        
+        printf("\nPSRAM Utilization:\n");
+        printf("  Usage: %.1f%% (%zu / %zu bytes)\n", utilization, psram_used, psram_total);
+        printf("  Audio buffers: Mixer + %d source streams\n", audio_mixer_get_active_count());
+    }
+}
+
+static void print_tone_info(void)
+{
+    ESP_LOGI(TAG, "═══ Embedded Test Tones ═══");
+    
+    for (tone_id_t id = TONE_ID_1; id < TONE_ID_MAX; id++) {
+        size_t size;
+        const char *desc;
+        if (tone_player_get_info(id, &size, &desc) == ESP_OK) {
+            ESP_LOGI(TAG, "Tone %d: %zu bytes (%s)", id + 1, size, desc);
+        }
+    }
+    
+    ESP_LOGI(TAG, "Total: %zu bytes", tone_player_get_total_size());
+}
 
 /*------------------------------------------------------------------------
  *  Console Command Handlers
@@ -111,9 +233,7 @@ static int cmd_mix(int argc, char **argv)
 // Deprecated: old tone playback helper (kept for compatibility)
 static int cmd_status(int argc, char **argv)
 {
-    ESP_LOGI(TAG, "═══ Mixer Status ═══");
-    ESP_LOGI(TAG, "Active sources: %d / %d", 
-             audio_mixer_get_active_count(), MAX_AUDIO_SOURCES);
+    print_mixer_status();
     return 0;
 }
 
@@ -133,27 +253,7 @@ static int cmd_playing(int argc, char **argv)
         return 0;
     }
     
-    ESP_LOGI(TAG, "═══ Active Audio Sources (%d/%d) ═══", active_count, MAX_AUDIO_SOURCES);
-    
-    char filepath[128];
-    uint8_t volume;
-    int state;
-    
-    for (int i = 0; i < MAX_AUDIO_SOURCES; i++) {
-        esp_err_t ret = audio_mixer_get_source_info(i, filepath, sizeof(filepath), &volume, &state);
-        if (ret == ESP_OK) {
-            const char *state_str;
-            switch (state) {
-                case SOURCE_STATE_PLAYING: state_str = "PLAYING"; break;
-                case SOURCE_STATE_PAUSED: state_str = "PAUSED"; break;
-                case SOURCE_STATE_STOPPING: state_str = "STOPPING"; break;
-                default: state_str = "UNKNOWN"; break;
-            }
-            
-            printf("  Source %d: %s [%s] vol=%d%%\n", i, filepath, state_str, volume);
-        }
-    }
-    
+    print_playing_sources();
     return 0;
 }
 
@@ -227,15 +327,7 @@ static int cmd_stop(int argc, char **argv)
 
 static int cmd_info(int argc, char **argv)
 {
-    ESP_LOGI(TAG, "═══ Embedded Test Tones ═══");
-    for (int i = 0; i < TONE_ID_MAX; i++) {
-        size_t size;
-        const char *desc;
-        if (tone_player_get_info((tone_id_t)i, &size, &desc) == ESP_OK) {
-            ESP_LOGI(TAG, "  • %s: %zu bytes", desc, size);
-        }
-    }
-    ESP_LOGI(TAG, "Total: %zu bytes", tone_player_get_total_size());
+    print_tone_info();
     return 0;
 }
 
@@ -281,40 +373,7 @@ static int cmd_ls(int argc, char **argv)
 // System status information
 static int cmd_sysinfo(int argc, char **argv)
 {
-    ESP_LOGI(TAG, "═══ System Information ═══");
-    
-    // Memory info
-    printf("Memory:\n");
-    printf("  Heap free: %lu bytes\n", (unsigned long)esp_get_free_heap_size());
-    printf("  Heap min:  %lu bytes\n", (unsigned long)esp_get_minimum_free_heap_size());
-    
-    // PSRAM info
-    if (esp_psram_get_size() > 0) {
-        printf("  PSRAM total: %lu bytes\n", (unsigned long)esp_psram_get_size());
-        printf("  PSRAM free:  %lu bytes\n", (unsigned long)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
-    }
-    
-    // SD card status
-    printf("\nSD Card:\n");
-    printf("  Status: %s\n", sdcard_is_mounted() ? "Mounted" : "Not mounted");
-    
-    // Audio mixer status
-    printf("\nAudio Mixer:\n");
-    printf("  Active sources: %d / %d\n", audio_mixer_get_active_count(), MAX_AUDIO_SOURCES);
-    printf("  Master volume:  %d%%\n", audio_mixer_get_master_volume());
-    
-    // PSRAM usage details
-    if (esp_psram_get_size() > 0) {
-        size_t psram_used = esp_psram_get_size() - heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-        float psram_usage = (float)psram_used / (float)esp_psram_get_size() * 100.0f;
-        printf("\nPSRAM Utilization:\n");
-        printf("  Usage: %.1f%% (%lu / %lu bytes)\n", 
-               psram_usage,
-               (unsigned long)psram_used,
-               (unsigned long)esp_psram_get_size());
-        printf("  Audio buffers: Mixer + %d source streams\n", audio_mixer_get_active_count());
-    }
-    
+    print_sysinfo();
     return 0;
 }
 
@@ -455,29 +514,11 @@ static void register_commands(void)
 
 esp_err_t audio_console_init(void)
 {
-    ESP_LOGI(TAG, "╔════════════════════════════════════════╗");
-    ESP_LOGI(TAG, "║    AUDIO CONSOLE - Interactive Menu    ║");
-    ESP_LOGI(TAG, "╚════════════════════════════════════════╝");
-    ESP_LOGI(TAG, "");
-    ESP_LOGI(TAG, "SD Card Commands:");
-    ESP_LOGI(TAG, "  play <file>  - Play WAV from SD card");
-    ESP_LOGI(TAG, "  1, 2         - Quick play track1/2.wav");
-    ESP_LOGI(TAG, "  hello, ping  - Play hello/ping.wav");
-    ESP_LOGI(TAG, "");
-    ESP_LOGI(TAG, "Embedded Test Tones:");
-    for (int i = 0; i < TONE_ID_MAX; i++) {
-        size_t size;
-        const char *desc;
-        if (tone_player_get_info((tone_id_t)i, &size, &desc) == ESP_OK) {
-            ESP_LOGI(TAG, "  • %s: %zu bytes", desc, size);
-        }
-    }
+    print_banner();
     
     // Register commands
     register_commands();
     
-    ESP_LOGI(TAG, "");
-    ESP_LOGI(TAG, "Type 'help' to see all available commands");
     return ESP_OK;
 }
 
