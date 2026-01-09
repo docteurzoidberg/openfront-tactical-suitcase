@@ -167,6 +167,9 @@ esp_err_t es8388_init(uint32_t sample_rate) {
     ret |= es8388_write_reg(ES8388_CONTROL2, 0x50);     // VREF setup
     ret |= es8388_write_reg(ES8388_CHIPPOWER, 0x00);    // Power up all blocks
     
+    // CRITICAL: Power down ADC completely to prevent feedback/static
+    ret |= es8388_write_reg(ES8388_ADCPOWER, 0xFF);     // Power down all ADC blocks
+    
     // Disable internal DLL for better sample rate handling (from ESP-ADF)
     ret |= es8388_write_reg(0x35, 0xA0);
     ret |= es8388_write_reg(0x37, 0xD0);
@@ -183,17 +186,34 @@ esp_err_t es8388_init(uint32_t sample_rate) {
     ret |= es8388_write_reg(ES8388_DACCONTROL1, 0x18);
     ret |= es8388_write_reg(ES8388_DACCONTROL2, 0x02);      // Single speed, 256x
     
-    // DAC digital volume (0dB max)
+    // DAC digital volume (0dB = max volume)
     ret |= es8388_write_reg(ES8388_DACCONTROL4, 0x00);
     ret |= es8388_write_reg(ES8388_DACCONTROL5, 0x00);
     
     // Keep DAC muted during initialization (will unmute in es8388_start)
     ret |= es8388_write_reg(ES8388_DACCONTROL3, 0x04);  // Muted
     
-    // DAC to output mixer enable
-    ret |= es8388_write_reg(ES8388_DACCONTROL16, 0x00);     // LLIN1-LOUT1, RLIN1-ROUT1
+    // DAC to output mixer enable - CRITICAL FOR STEREO
+    // DACCONTROL16: Select input for output mixer
+    // Bits [1:0] = 00: Select left DAC output to left mixer
+    // Bits [3:2] = 00: Select right DAC output to right mixer
+    ret |= es8388_write_reg(ES8388_DACCONTROL16, 0x00);     // Both DACs to respective mixers
+    
+    // DACCONTROL17: Left DAC to Left Mixer
+    // Bit 7 = 1: Enable left DAC to left mixer
+    // Bits [6:3] = 0010: 0dB gain (0x90 = 10010000)
     ret |= es8388_write_reg(ES8388_DACCONTROL17, 0x90);     // Left DAC to left mixer, 0dB
+    
+    // DACCONTROL20: Right DAC to Right Mixer
+    // Bit 7 = 1: Enable right DAC to right mixer
+    // Bits [6:3] = 0010: 0dB gain (0x90 = 10010000)
     ret |= es8388_write_reg(ES8388_DACCONTROL20, 0x90);     // Right DAC to right mixer, 0dB
+    
+    // Disable input bypass to prevent ADC bleed (anti-static)
+    ret |= es8388_write_reg(ES8388_DACCONTROL18, 0x00);     // No bypass
+    ret |= es8388_write_reg(ES8388_DACCONTROL19, 0x00);     // No bypass
+    ret |= es8388_write_reg(ES8388_DACCONTROL21, 0x00);     // No bypass
+    ret |= es8388_write_reg(ES8388_DACCONTROL22, 0x00);     // No bypass
     
     // Output stage volumes to 0dB (0x1E = 0dB, 0x00 = -30dB, 0x21 = +3dB)
     ret |= es8388_write_reg(ES8388_DACCONTROL24, 0x1E);     // LOUT1 volume 0dB

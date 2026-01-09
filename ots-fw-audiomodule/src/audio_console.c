@@ -6,7 +6,6 @@
  */
 
 #include "audio_console.h"
-#include "audio_tone_player.h"
 #include "audio_mixer.h"
 #include "audio_player.h"
 #include "hardware/sdcard.h"
@@ -40,13 +39,15 @@ static void print_banner(void)
     ESP_LOGI(TAG, "  hello, ping  - Play hello/ping.wav");
     ESP_LOGI(TAG, "");
     
-    // Get tone info dynamically
-    size_t size;
-    const char *desc;
-    ESP_LOGI(TAG, "Embedded Test Tones:");
-    for (tone_id_t id = TONE_ID_1; id < TONE_ID_MAX; id++) {
-        if (tone_player_get_info(id, &size, &desc) == ESP_OK) {
-            ESP_LOGI(TAG, "  • Tone %d: %zu bytes (%s)", id + 1, size, desc);
+    // Show embedded sounds info
+    ESP_LOGI(TAG, "Embedded Sounds:");
+    size_t count = audio_player_get_embedded_count();
+    for (size_t i = 0; i < count; i++) {
+        uint16_t id;
+        const char *name;
+        size_t size;
+        if (audio_player_get_embedded_info(i, &id, &name, &size) == ESP_OK) {
+            ESP_LOGI(TAG, "  • ID %5d: %s (%zu bytes)", id, name, size);
         }
     }
     ESP_LOGI(TAG, "");
@@ -131,19 +132,21 @@ static void print_sysinfo(void)
     }
 }
 
-static void print_tone_info(void)
+static void print_embedded_info(void)
 {
-    ESP_LOGI(TAG, "═══ Embedded Test Tones ═══");
+    ESP_LOGI(TAG, "═══ Embedded Sounds ═══");
     
-    for (tone_id_t id = TONE_ID_1; id < TONE_ID_MAX; id++) {
+    size_t count = audio_player_get_embedded_count();
+    for (size_t i = 0; i < count; i++) {
+        uint16_t id;
+        const char *name;
         size_t size;
-        const char *desc;
-        if (tone_player_get_info(id, &size, &desc) == ESP_OK) {
-            ESP_LOGI(TAG, "Tone %d: %zu bytes (%s)", id + 1, size, desc);
+        if (audio_player_get_embedded_info(i, &id, &name, &size) == ESP_OK) {
+            ESP_LOGI(TAG, "ID %5d: %s (%zu bytes)", id, name, size);
         }
     }
     
-    ESP_LOGI(TAG, "Total: %zu bytes", tone_player_get_total_size());
+    ESP_LOGI(TAG, "Total: %zu bytes", audio_player_get_total_embedded_size());
 }
 
 /*------------------------------------------------------------------------
@@ -212,22 +215,30 @@ static int cmd_ping(int argc, char **argv) {
     return play_wav_file("ping.wav", "ping sound");
 }
 
-// Tone playback commands - now using tone_player module
+// Tone playback commands - using unified audio_player
 static int cmd_tone1(int argc, char **argv) {
-    return (tone_player_play(TONE_ID_1, 100) == ESP_OK) ? 0 : 1;
+    audio_source_handle_t handle;
+    return (audio_player_play_sound(10000, 100, false, false, &handle) == ESP_OK) ? 0 : 1;
 }
 
 static int cmd_tone2(int argc, char **argv) {
-    return (tone_player_play(TONE_ID_2, 100) == ESP_OK) ? 0 : 1;
+    audio_source_handle_t handle;
+    return (audio_player_play_sound(10001, 100, false, false, &handle) == ESP_OK) ? 0 : 1;
 }
 
 static int cmd_tone3(int argc, char **argv) {
-    return (tone_player_play(TONE_ID_3, 100) == ESP_OK) ? 0 : 1;
+    audio_source_handle_t handle;
+    return (audio_player_play_sound(10002, 100, false, false, &handle) == ESP_OK) ? 0 : 1;
 }
 
 static int cmd_mix(int argc, char **argv)
 {
-    return (tone_player_mix_all() == ESP_OK) ? 0 : 1;
+    ESP_LOGI(TAG, "Mixing all test tones simultaneously...");
+    audio_source_handle_t handle;
+    audio_player_play_sound(10000, 100, false, false, &handle);
+    audio_player_play_sound(10001, 100, false, false, &handle);
+    audio_player_play_sound(10002, 100, false, false, &handle);
+    return 0;
 }
 
 // Deprecated: old tone playback helper (kept for compatibility)
@@ -239,8 +250,9 @@ static int cmd_status(int argc, char **argv)
 
 static int cmd_test_tone(int argc, char **argv)
 {
-    ESP_LOGI(TAG, "Playing test tone (tone 1)...");
-    return tone_player_play(TONE_ID_1, 100);
+    ESP_LOGI(TAG, "Playing test tone (10000)...");
+    audio_source_handle_t handle;
+    return (audio_player_play_sound(10000, 100, false, false, &handle) == ESP_OK) ? 0 : 1;
 }
 
 // Show currently playing sources
@@ -327,7 +339,7 @@ static int cmd_stop(int argc, char **argv)
 
 static int cmd_info(int argc, char **argv)
 {
-    print_tone_info();
+    print_embedded_info();
     return 0;
 }
 
@@ -484,7 +496,7 @@ static void register_commands(void)
         },
         {
             .command = "info",
-            .help = "Show embedded tone information",
+            .help = "Show embedded sound information",
             .hint = NULL,
             .func = &cmd_info,
         },

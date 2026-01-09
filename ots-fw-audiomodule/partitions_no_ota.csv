@@ -1,0 +1,6 @@
+# Name,   Type, SubType, Offset,  Size, Flags
+# Optimized partition layout for audio module (no OTA, no WiFi/BT)
+# Maximum app space: 3.94MB for embedded audio samples
+nvs,      data, nvs,     0x9000,  0x6000,
+phy_init, data, phy,     0xf000,  0x1000,
+factory,  app,  factory, 0x10000, 0x3F0000,

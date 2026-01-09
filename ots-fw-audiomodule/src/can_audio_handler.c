@@ -71,18 +71,35 @@ static void can_rx_task(void *arg)
                         
                         g_last_sound_index = sound_index;
                         audio_source_handle_t handle;
-                        esp_err_t ret = audio_player_play_sound_by_index(sound_index, volume, loop, interrupt, &handle);
+                        esp_err_t ret = audio_player_play_sound(sound_index, volume, loop, interrupt, &handle);
                         
                         uint8_t queue_id = 0;
+                        uint8_t error_code = CAN_AUDIO_ERR_OK;
+                        
                         if (ret == ESP_OK) {
                             // Allocate queue ID and associate with source
                             queue_id = can_audio_allocate_queue_id(&g_next_queue_id);
                             audio_mixer_set_queue_id(handle, queue_id, sound_index);
                             ESP_LOGI(TAG, "Assigned queue_id=%d to source handle=%d", queue_id, handle);
-                            g_last_error = 0;
+                            error_code = CAN_AUDIO_ERR_OK;
                         } else {
-                            g_last_error = CAN_AUDIO_ERR_FILE_NOT_FOUND;
+                            // Map ESP error codes to CAN audio error codes
+                            if (ret == ESP_ERR_NOT_FOUND) {
+                                error_code = CAN_AUDIO_ERR_FILE_NOT_FOUND;
+                                ESP_LOGE(TAG, "Sound %d: File not found or SD card not mounted", sound_index);
+                            } else if (ret == ESP_ERR_INVALID_ARG) {
+                                error_code = CAN_AUDIO_ERR_SD_ERROR;  // Invalid WAV file
+                                ESP_LOGE(TAG, "Sound %d: Invalid WAV file format", sound_index);
+                            } else if (ret == ESP_FAIL) {
+                                error_code = CAN_AUDIO_ERR_MIXER_FULL;  // Could be mixer full
+                                ESP_LOGE(TAG, "Sound %d: Mixer error (possibly full)", sound_index);
+                            } else {
+                                error_code = CAN_AUDIO_ERR_SD_ERROR;  // Generic error
+                                ESP_LOGE(TAG, "Sound %d: Playback error: %s", sound_index, esp_err_to_name(ret));
+                            }
                         }
+                        
+                        g_last_error = error_code;
                         
                         // Send ACK with queue_id (new 5-parameter signature)
                         can_frame_t ack_frame;
@@ -90,13 +107,13 @@ static void can_rx_task(void *arg)
                             ret == ESP_OK ? 1 : 0,  // ok
                             sound_index,            // sound_index
                             queue_id,               // queue_id (0 if error)
-                            ret == ESP_OK ? CAN_AUDIO_ERR_OK : CAN_AUDIO_ERR_FILE_NOT_FOUND,  // error_code
+                            error_code,             // error_code
                             request_id,             // request_id
                             &ack_frame
                         );
                         can_driver_send(&ack_frame);
-                        ESP_LOGI(TAG, "Sent ACK: ok=%d queue_id=%d handle=%d active=%d", 
-                                ret == ESP_OK, queue_id, handle, audio_mixer_get_active_count());
+                        ESP_LOGI(TAG, "Sent ACK: ok=%d queue_id=%d error=0x%02X active=%d", 
+                                ret == ESP_OK, queue_id, error_code, audio_mixer_get_active_count());
                     } else {
                         // Mixer full - send error ACK
                         can_frame_t ack_frame;

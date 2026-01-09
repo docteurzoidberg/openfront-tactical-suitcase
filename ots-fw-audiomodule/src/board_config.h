@@ -19,12 +19,12 @@ extern "C" {
  *  CAN Bus Configuration
  *-----------------------------------------------------------------------*/
 // CAN bus uses expansion header (2x07 pin header)
-// GPIO18: CAN TX (bottom row, 5th position)
-// GPIO19: CAN RX (bottom row, 3rd position)
-// Note: Avoids conflicts with audio I2S, I2C, PA control, and headphone detect
-#define CAN_TX_GPIO    GPIO_NUM_18
-#define CAN_RX_GPIO    GPIO_NUM_19
-#define CAN_BITRATE    500000  // 500 kbps
+// GPIO5: CAN TX (matches cantest ESP32-A1S configuration)
+// GPIO18: CAN RX (matches cantest ESP32-A1S configuration)
+// Note: GPIO5 shared with headphone detect, GPIO18 generally available
+#define CAN_TX_GPIO    GPIO_NUM_5
+#define CAN_RX_GPIO    GPIO_NUM_18
+#define CAN_BITRATE    125000  // 125 kbps (matches cantest configuration)
 
 /*------------------------------------------------------------------------
  *  I2C Configuration

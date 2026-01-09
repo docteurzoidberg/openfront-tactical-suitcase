@@ -197,3 +197,65 @@ esp_err_t wav_parse_header_from_memory(const uint8_t *data, wav_info_t *info)
     
     return ESP_OK;
 }
+
+void wav_convert_8bit_to_16bit(const uint8_t *in_8bit, int16_t *out_16bit, size_t num_samples)
+{
+    for (size_t i = 0; i < num_samples; i++) {
+        // Convert unsigned 8-bit (0-255) to signed 16-bit (-32768 to 32767)
+        // Formula: (sample - 128) << 8
+        // Subtract 128 to center around 0, then shift to 16-bit range
+        out_16bit[i] = ((int16_t)(in_8bit[i] - 128)) << 8;
+    }
+}
+
+size_t wav_resample_linear(const int16_t *in_data, size_t in_samples, uint32_t in_rate,
+                          int16_t *out_data, size_t out_samples, uint32_t out_rate,
+                          uint16_t num_channels)
+{
+    if (!in_data || !out_data || in_samples == 0 || in_rate == 0 || out_rate == 0) {
+        return 0;
+    }
+    
+    // Calculate the ratio between input and output sample rates
+    // For upsampling 22050→44100: ratio = 0.5 (each output sample maps to 0.5 input)
+    double ratio = (double)in_rate / (double)out_rate;
+    
+    size_t out_idx = 0;
+    
+    for (size_t i = 0; i < out_samples; i++) {
+        // Calculate the corresponding position in the input buffer
+        double in_pos = (double)i * ratio;
+        size_t in_idx1 = (size_t)in_pos;
+        
+        // Stop if we've exhausted input samples
+        if (in_idx1 >= in_samples) {
+            break;
+        }
+        
+        size_t in_idx2 = in_idx1 + 1;
+        if (in_idx2 >= in_samples) {
+            in_idx2 = in_samples - 1;  // Clamp to last sample
+        }
+        
+        // Calculate interpolation fraction
+        double frac = in_pos - (double)in_idx1;
+        
+        // Interpolate each channel
+        for (uint16_t ch = 0; ch < num_channels; ch++) {
+            size_t idx1 = in_idx1 * num_channels + ch;
+            size_t idx2 = in_idx2 * num_channels + ch;
+            
+            int16_t sample1 = in_data[idx1];
+            int16_t sample2 = in_data[idx2];
+            
+            // Linear interpolation: out = sample1 + (sample2 - sample1) * frac
+            int32_t interpolated = sample1 + (int32_t)((double)(sample2 - sample1) * frac);
+            
+            out_data[out_idx * num_channels + ch] = (int16_t)interpolated;
+        }
+        
+        out_idx++;
+    }
+    
+    return out_idx;
+}

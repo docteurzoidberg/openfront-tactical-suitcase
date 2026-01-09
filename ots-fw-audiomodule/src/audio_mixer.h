@@ -4,6 +4,7 @@
 #include "esp_err.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include "wav_utils.h"  // For wav_info_t
 
 // Maximum number of simultaneous audio sources
 #define MAX_AUDIO_SOURCES 4
@@ -30,6 +31,7 @@ typedef enum {
     SOURCE_STATE_PLAYING,
     SOURCE_STATE_PAUSED,
     SOURCE_STATE_STOPPING,
+    SOURCE_STATE_DRAINING,  // Buffer empty, waiting for I2S to finish
     SOURCE_STATE_STOPPED
 } audio_source_state_t;
 
@@ -73,6 +75,7 @@ esp_err_t audio_mixer_create_source(const char *filepath, uint8_t volume,
  * 
  * @param pcm_data Pointer to PCM audio data
  * @param pcm_size Size of PCM data in bytes
+ * @param wav_info WAV format info (for 8-bit to 16-bit conversion)
  * @param volume Volume 0-100 (100 = full volume)
  * @param loop true to loop playback, false for one-shot
  * @param interrupt true to stop all other sources
@@ -80,6 +83,7 @@ esp_err_t audio_mixer_create_source(const char *filepath, uint8_t volume,
  * @return ESP_OK on success, error otherwise
  */
 esp_err_t audio_mixer_create_source_from_memory(const uint8_t *pcm_data, size_t pcm_size,
+                                                 const wav_info_t *wav_info,
                                                  uint8_t volume, bool loop, bool interrupt,
                                                  audio_source_handle_t *handle);
 
