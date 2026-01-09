@@ -1,0 +1,8 @@
+# CAN Test Helper Scripts - Python Dependencies
+# Minimal requirements for core functionality
+
+pyserial>=3.5  # Serial communication with ESP32 devices
+
+# Optional dependencies (install as needed):
+# rich>=13.0        # Colorful console output (for future enhancements)
+# tabulate>=0.9     # Table formatting (for analysis tools)

@@ -93,12 +93,18 @@ void can_simulator_process_frame(const can_frame_t *frame) {
             printf("← RX: ");
             can_decoder_print_frame(frame, false, true);
             
-            // Auto-respond with MODULE_ANNOUNCE
-            can_discovery_handle_query(frame, MODULE_TYPE_AUDIO, 1, 0, 
-                                      MODULE_CAP_STATUS, 0x42, 0);
+            printf("[DEBUG] Calling can_discovery_handle_query()...\n");
             
-            printf("→ TX: MODULE_ANNOUNCE (AUDIO v1.0, block 0x42)\n");
-            g_test_state.tx_count++;
+            // Auto-respond with MODULE_ANNOUNCE
+            esp_err_t ret = can_discovery_handle_query(frame, MODULE_TYPE_AUDIO, 1, 0, 
+                                                        MODULE_CAP_STATUS, 0x42, 0);
+            
+            if (ret == ESP_OK) {
+                printf("→ TX: MODULE_ANNOUNCE (AUDIO v1.0, block 0x42) - SUCCESS\n");
+                g_test_state.tx_count++;
+            } else {
+                printf("✗ TX: MODULE_ANNOUNCE FAILED: %s\n", esp_err_to_name(ret));
+            }
             return;
         }
         

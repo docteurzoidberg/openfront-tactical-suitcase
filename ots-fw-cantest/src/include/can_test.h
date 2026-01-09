@@ -24,6 +24,7 @@ typedef enum {
 typedef struct {
     test_mode_t mode;
     bool running;
+    bool can_hardware_present;  // True if CAN transceiver detected
     uint32_t rx_count;
     uint32_t tx_count;
     uint32_t error_count;

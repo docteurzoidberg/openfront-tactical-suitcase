@@ -16,6 +16,7 @@
 #define CAN_ID_SOUND_ACK       0x423
 #define CAN_ID_STOP_ACK        0x424
 #define CAN_ID_SOUND_FINISHED  0x425
+#define CAN_ID_SOUND_STATUS    0x426
 
 void can_decoder_init(void) {
     // Nothing to initialize yet
@@ -31,6 +32,7 @@ const char* can_decoder_get_message_name(uint16_t can_id) {
         case CAN_ID_SOUND_ACK:       return "SOUND_ACK";
         case CAN_ID_STOP_ACK:        return "STOP_ACK";
         case CAN_ID_SOUND_FINISHED:  return "SOUND_FINISHED";
+        case CAN_ID_SOUND_STATUS:    return "SOUND_STATUS";
         default:                     return "UNKNOWN";
     }
 }
@@ -103,6 +105,32 @@ static void decode_sound_finished(const can_frame_t *frame) {
     printf("      Queue ID: %d, Sound: %d, Reason: %s", queue_id, sound_idx, reason_str);
 }
 
+static void decode_sound_status(const can_frame_t *frame) {
+    if (frame->dlc < 7) return;
+    
+    uint8_t state_bits = frame->data[0];
+    uint16_t current_sound = frame->data[1] | (frame->data[2] << 8);
+    uint8_t error_code = frame->data[3];
+    uint8_t volume = frame->data[4];
+    uint16_t uptime = frame->data[5] | (frame->data[6] << 8);
+    
+    printf("      Status: ");
+    if (state_bits & 0x01) printf("READY ");
+    if (state_bits & 0x02) printf("SD_MOUNTED ");
+    if (state_bits & 0x04) printf("PLAYING ");
+    if (state_bits & 0x08) printf("MUTED ");
+    if (state_bits & 0x10) printf("ERROR ");
+    
+    printf("\n      Sound: %s, Vol: %s, Uptime: %us",
+           current_sound == 0xFFFF ? "none" : "", 
+           volume == 0xFF ? "POT" : "",
+           uptime);
+    
+    if (error_code != 0) {
+        printf(", Error: 0x%02X", error_code);
+    }
+}
+
 void can_decoder_print_frame(const can_frame_t *frame, bool show_raw, bool show_parsed) {
     // Print CAN ID and message name
     printf("0x%03X [%d] %-17s", frame->id, frame->dlc, 
@@ -138,6 +166,9 @@ void can_decoder_print_frame(const can_frame_t *frame, bool show_raw, bool show_
                 break;
             case CAN_ID_SOUND_FINISHED:
                 decode_sound_finished(frame);
+                break;
+            case CAN_ID_SOUND_STATUS:
+                decode_sound_status(frame);
                 break;
             case CAN_ID_MODULE_QUERY:
                 printf("      (Broadcast discovery query)");

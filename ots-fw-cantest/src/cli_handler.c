@@ -90,6 +90,10 @@ static void print_stats(void) {
     printf("║  Show Raw Hex:    %-44s║\n", g_test_state.show_raw_hex ? "YES" : "NO");
     printf("║  Show Parsed:     %-44s║\n", g_test_state.show_parsed ? "YES" : "NO");
     printf("╚════════════════════════════════════════════════════════════════╝\n");
+    
+    // Show detailed TWAI peripheral status
+    printf("\n");
+    can_driver_log_twai_status();
     printf("\n");
 }
 
@@ -149,9 +153,8 @@ static void handle_command(const char *cmd) {
         // Controller mode commands
         case 'd':
             if (g_test_state.mode == MODE_CONTROLLER) {
-                can_discovery_query_all();
-                printf("→ TX: MODULE_QUERY (0x411)\n");
-                g_test_state.tx_count++;
+                uint8_t data[8] = {0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+                can_simulator_send_custom(0x411, data, 8);  // MODULE_QUERY
             } else {
                 printf("Error: Not in controller mode. Use 'c' first.\n");
             }
@@ -160,12 +163,19 @@ static void handle_command(const char *cmd) {
         case 'p': {
             if (g_test_state.mode == MODE_CONTROLLER) {
                 int sound_idx = atoi(args);
-                if (sound_idx < 0 || sound_idx > 255) {
-                    printf("Error: Sound index must be 0-255\n");
+                if (sound_idx < 0 || sound_idx > 65535) {
+                    printf("Error: Sound index must be 0-65535\n");
                     break;
                 }
                 
-                uint8_t data[8] = {sound_idx, 0x00, 100, 0, 0, 0, 0, 0};  // No loop, 100% vol
+                // 16-bit sound index (little-endian in bytes 0-1)
+                uint8_t data[8] = {
+                    sound_idx & 0xFF,         // Byte 0: Low byte
+                    (sound_idx >> 8) & 0xFF,  // Byte 1: High byte
+                    0x00,                     // Byte 2: Flags (no loop)
+                    100,                      // Byte 3: Volume (100%)
+                    0, 0, 0, 0                // Bytes 4-7: Reserved
+                };
                 can_simulator_send_custom(0x420, data, 8);
             } else {
                 printf("Error: Not in controller mode. Use 'c' first.\n");

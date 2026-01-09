@@ -16,13 +16,14 @@ This test firmware runs on an ESP32-S3 DevKit board and provides:
 - **Controller Simulator**: Emulate main controller (send commands to modules)
 - **Protocol Validation**: Real-time message parsing and validation
 - **Traffic Injection**: Manually inject custom CAN messages
+- **Shared Component Validation**: Validate shared CAN components (`ots-fw-shared`) used by `ots-fw-main` and `ots-fw-audiomodule`
 
 ## Hardware Setup
 
 ### Requirements
 
 - ESP32-S3 DevKit board (same as ots-fw-main)
-- CAN transceiver (e.g., SN65HVD230, MCP2551)
+- CAN transceiver (TJA1050)
 - 120Ω termination resistors (if at bus ends)
 
 ### Wiring
@@ -47,14 +48,6 @@ GND    ----------- GND
 cd ots-fw-cantest
 pio run -e esp32-s3-devkit -t upload
 pio device monitor
-```
-
-### Using ESP-IDF
-
-```bash
-cd ots-fw-cantest
-idf.py build
-idf.py flash monitor
 ```
 
 ## Usage
