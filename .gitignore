@@ -9,5 +9,12 @@
 # Common build outputs
 **/build/
 
+# Logs / local artifacts
+logs/
+**/logs/
+
+# Python virtualenvs
+**/.venv/
+
 # OS / editor
 .DS_Store
