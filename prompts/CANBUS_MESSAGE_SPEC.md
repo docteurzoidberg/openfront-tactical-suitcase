@@ -462,23 +462,44 @@ Data: [03 01 00 00 00 00 00 00]
 
 ### Sound Index Mapping
 
-Standard sound indices (0-7 reserved for game sounds):
+#### SD Card Sounds (0-9999)
+
+Standard sound indices stored on SD card:
 
 | Index | Filename | Description | Default Vol | Loopable |
 |-------|----------|-------------|-------------|----------|
-| 0 | `game_start.wav` | Game start sound | 100% | No |
-| 1 | `game_victory.wav` | Victory sound | 100% | No |
-| 2 | `game_defeat.wav` | Defeat sound | 100% | No |
-| 3 | `game_player_death.wav` | Player death | 100% | No |
-| 4 | `alert_nuke.wav` | Nuclear alert | 80% | Yes |
-| 5 | `alert_land.wav` | Land invasion | 80% | Yes |
-| 6 | `alert_naval.wav` | Naval invasion | 80% | Yes |
-| 7 | `nuke_launch.wav` | Nuke launch | 100% | No |
+| 0 | `/sdcard/sounds/0000.wav` | Game start sound | 100% | No |
+| 1 | `/sdcard/sounds/0001.wav` | Victory sound | 100% | No |
+| 2 | `/sdcard/sounds/0002.wav` | Defeat sound | 100% | No |
+| 3 | `/sdcard/sounds/0003.wav` | Player death | 100% | No |
+| 4 | `/sdcard/sounds/0004.wav` | Nuclear alert | 80% | Yes |
+| 5 | `/sdcard/sounds/0005.wav` | Land invasion | 80% | Yes |
+| 6 | `/sdcard/sounds/0006.wav` | Naval invasion | 80% | Yes |
+| 7 | `/sdcard/sounds/0007.wav` | Nuke launch | 100% | No |
+| 8-9999 | `/sdcard/sounds/XXXX.wav` | Custom sounds | Variable | Variable |
+
+#### Embedded Tones (10000-10002)
+
+Test tones compiled into firmware (no SD card required):
+
+| Index | Description | Duration | Frequency | Loopable |
+|-------|-------------|----------|-----------|----------|
+| 10000 | Test tone 1 | 1 second | 440 Hz (A4) | No |
+| 10001 | Test tone 2 | 2 seconds | 880 Hz (A5) | No |
+| 10002 | Test tone 3 | 5 seconds | 220 Hz (A3) | No |
+
+#### Embedded Sounds (10100+)
+
+| Index | Description | Source |
+|-------|-------------|--------|
+| 10100 | Quack sound | Embedded WAV in firmware |
 
 **Notes**:
-- Indices 0-7 are reserved for game sounds
-- Indices 8-255 available for custom sounds
-- Mapping configured in audio module firmware (`sound_config.c`)
+- Indices 0-9999: SD card files at `/sdcard/sounds/XXXX.wav`
+- Indices 10000-10002: Embedded test tones (always available)
+- Index 10100: Embedded quack sound (always available)
+- Embedded sounds don't require SD card
+- Mapping configured in audio module firmware (`audio_player.c`)
 
 ---
 
