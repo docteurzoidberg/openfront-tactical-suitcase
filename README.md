@@ -1,151 +1,196 @@
 # OpenFront Tactical Suitcase (OTS)
 
-**Physical tactical controller for [OpenFront.io](https://openfront.io)** - Transform your browser-based strategy game into a hands-on hardware experience with buttons, LEDs, displays, and real-time alerts.
+**Physical tactical controller for [OpenFront.io](https://openfront.io)**.
+
+OTS bridges OpenFront.io gameplay to physical controls (buttons, LEDs, LCD, audio) and provides a dashboard + developer tooling to test everything without hardware.
 
 [![ESP32-S3](https://img.shields.io/badge/ESP32-S3-blue.svg)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Nuxt](https://img.shields.io/badge/Nuxt-4-00DC82.svg)](https://nuxt.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6.svg)](https://www.typescriptlang.org/)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP--IDF-orange.svg)](https://platformio.org/)
 
-## 🎮 What is OTS?
+## What is OTS?
 
-OTS bridges the gap between digital gameplay and physical interaction, providing:
+At a high level:
 
-- **🚀 Nuke Control Panel** - Launch atomic, hydrogen, and MIRV strikes with physical buttons
-- **⚠️ Alert Module** - LED indicators for incoming threats (nukes, land/naval invasions)
-- **👥 Troops Module** - Live troop counter with LCD display and deployment slider
-- **🔊 Audio Module** - Sound effects and ambient audio via ESP32-A1S
-- **📊 Dashboard** - Real-time hardware emulator and game state visualization
+- A **browser userscript** reads game state/events from the OpenFront.io page.
+- A **WebSocket endpoint** relays messages between clients.
+    - In **hardware mode**, the ESP32 firmware exposes `/ws` (WS/WSS) and clients connect to it.
+    - In **simulator mode**, the Nuxt app exposes `/ws` and emulates hardware in the UI.
+- The **firmware** drives real hardware modules (nukes, alerts, troops LCD/slider, audio over CAN).
 
-## 📚 Documentation
+- **Nuke control panel**: 3 buttons + LEDs (atom/hydro/MIRV)
+- **Alert module**: LED indicators for incoming threats
+- **Troops module**: 16×2 LCD troop display + slider (ADC)
+- **Audio module**: ESP32-A1S playback over CAN
+- **Dashboard**: real-time hardware emulator + event log
 
-### 👤 For Device Owners
-**→ [User Documentation](doc/user/)** - Setup, usage, and troubleshooting
+## Documentation
+
+### For device owners
+See [doc/user/](doc/user/) for setup, usage, and troubleshooting.
 - [Quick Start Guide](doc/user/quick-start.md) - Get running in 10 minutes
 - [WiFi Setup](doc/user/wifi-setup.md) - Connect your device
 - [Userscript Installation](doc/user/userscript-install.md) - Browser extension setup
 
-### 🛠️ For Developers
-**→ [Developer Documentation](doc/developer/)** - Development, architecture, and contributing
+### For developers
+See [doc/developer/](doc/developer/) for development, architecture, and contributing.
 - [Getting Started](doc/developer/getting-started.md) - Dev environment setup
+- [Development Environment](doc/developer/development-environment.md) - Tooling, flashing, debugging
 - [Repository Overview](doc/developer/repository-overview.md) - Codebase structure
-- [Architecture](doc/developer/architecture/) - System design and protocols
+- [WebSocket Protocol (guide)](doc/developer/websocket-protocol.md) - Implementation patterns and debugging
+- [CAN Bus Protocol (guide)](doc/developer/canbus-protocol.md) - Implementation patterns and debugging
 
-## 🚀 Quick Start
+Protocol references (single source of truth):
+- WebSocket: [prompts/WEBSOCKET_MESSAGE_SPEC.md](prompts/WEBSOCKET_MESSAGE_SPEC.md)
+- CAN bus: [prompts/CANBUS_MESSAGE_SPEC.md](prompts/CANBUS_MESSAGE_SPEC.md)
 
-### Device Owner Setup
+## OpenFront.io notice
 
-1. **Power on your OTS device**
-2. **Connect to WiFi** (see [WiFi Setup Guide](doc/user/wifi-setup.md))
-3. **Install userscript** (see [Installation Guide](doc/user/userscript-install.md))
-4. **Start playing!** Launch nukes, monitor alerts, deploy troops
+OTS is an independent, unofficial project and is **not affiliated with, endorsed by, or sponsored by OpenFront.io**.
 
-### Developer Setup
+- “OpenFront” / “OpenFront.io” may be trademarks of their respective owners.
+- This repo does **not** include OpenFront proprietary/premium assets; do not extract or reuse proprietary assets from OpenFront.
+- If you use the userscript, review OpenFront’s license/terms for any constraints that may apply to automated access.
+
+## Quick start
+
+Pick one of the two common workflows:
+
+### A) Simulator workflow (no hardware)
+
+1) Start the dashboard + WebSocket server:
 
 ```bash
-# Clone repository
-git clone https://github.com/docteurzoidberg/openfront-tactical-suitcase.git
-cd openfront-tactical-suitcase
-
-# Install server dependencies
 cd ots-simulator
 npm install
-npm run dev  # http://localhost:3000
-
-# Build userscript
-cd ../ots-userscript
-npm install
-npm run build  # Output: build/userscript.ots.user.js
-
-# Build firmware (requires PlatformIO)
-cd ../ots-fw-main
-pio run -e esp32-s3-dev -t upload
+npm run dev
 ```
 
-See [Developer Getting Started](doc/developer/getting-started.md) for complete setup instructions.
+2) Build the userscript and install it in Tampermonkey:
 
-## 📦 Repository Structure
+```bash
+cd ../ots-userscript
+npm install
+npm run build
+```
 
-### Core Components
+Output file: `ots-userscript/build/userscript.ots.user.js`
+
+3) In the userscript HUD settings, set the WS URL to `ws://localhost:3000/ws`.
+
+### B) Hardware workflow (ESP32-S3)
+
+1) Build/flash firmware:
+
+```bash
+cd ots-fw-main
+pio run -e esp32-s3-dev -t upload
+pio device monitor
+```
+
+2) Point the userscript (and dashboard, if used) at the device’s `/ws` endpoint.
+
+Notes:
+- Userscripts on `https://openfront.io/*` often require **WSS**; firmware supports TLS mode (see `WS_USE_TLS` in firmware config).
+- The firmware exposes an HTTP server (for `/ws` and optional web UI/handlers).
+
+See [doc/developer/getting-started.md](doc/developer/getting-started.md) for full setup details.
+
+## Repository structure
+
+### Core components
 
 | Directory | Description | Tech Stack |
 |-----------|-------------|------------|
-| **ots-fw-main/** | Main ESP32-S3 controller firmware | C, ESP-IDF, PlatformIO |
-| **ots-fw-audiomodule/** | ESP32-A1S audio playback module | C, ESP-IDF, CAN bus |
-| **ots-fw-cantest/** | CAN bus testing tool ⚠️ WIP/Untested | C, ESP-IDF |
+| **ots-fw-main/** | Main ESP32-S3 firmware (hardware controller + `/ws` server) | C, ESP-IDF, PlatformIO |
+| **ots-fw-audiomodule/** | ESP32-A1S audio playback module (CAN) | C, ESP-IDF |
+| **ots-fw-cantest/** | CAN bus testing/debug tool | C, ESP-IDF |
+| **ots-fw-can-hw-test/** | CAN hardware validation firmware | C, ESP-IDF |
 | **ots-fw-shared/** | Shared ESP-IDF components (CAN drivers) | C, ESP-IDF |
-| **ots-simulator/** | Nuxt dashboard + WebSocket simulator | Vue 3, Nuxt 4, TypeScript |
-| **ots-userscript/** | Browser extension (Tampermonkey) | TypeScript, esbuild |
+| **ots-simulator/** | Dashboard + WebSocket server (simulator mode) | Vue 3, Nuxt 4, TypeScript |
+| **ots-userscript/** | Tampermonkey userscript (polls game, sends events) | TypeScript, esbuild |
 | **ots-shared/** | Shared TypeScript protocol types | TypeScript |
-| **ots-hardware/** | Hardware specs, PCB designs, modules | Markdown, CAD |
+| **ots-hardware/** | Hardware specs, PCB designs, module docs | Markdown, CAD |
+| **ots-website/** | VitePress docs site (built from `doc/`) | VitePress |
 
-### Documentation & Configuration
+### Docs, prompts, release tooling
 
 | Directory | Description |
 |-----------|-------------|
 | **doc/** | Complete user and developer documentation |
-| **prompts/** | AI assistant prompts and protocol specs |
+| **prompts/** | Single source-of-truth protocol specs + AI workflow docs |
 | **.github/** | GitHub workflows and Copilot instructions |
+| **release.sh** | Unified release/version automation |
 
-## 🏗️ Architecture
+## Architecture
+
+Two supported runtime modes share the same message types:
+
+### Hardware mode (physical device)
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   OpenFront.io Game                     │
-│              (Browser-based Strategy Game)              │
-└────────────────────────┬────────────────────────────────┘
-                         │
-                         │ Polls every 100ms
-                         ↓
-         ┌───────────────────────────────────┐
-         │    Browser Userscript (HUD)       │
-         │  - Game state detection           │
-         │  - Event tracking                 │
-         │  - WebSocket client               │
-         └───────────────┬───────────────────┘
-                         │
-                         │ WebSocket Protocol
-                         ↓
-    ┌────────────────────────────────────────────┐
-    │        OTS Hardware / Dashboard            │
-    ├────────────────────────────────────────────┤
-    │  Option A: Physical Device (ESP32-S3)      │
-    │    - Nuke buttons with LED feedback        │
-    │    - Alert LEDs (6 types)                  │
-    │    - LCD troop counter + slider            │
-    │    - Audio module (ESP32-A1S + CAN bus)    │
-    │                                            │
-    │  Option B: Dashboard Emulator (Nuxt)       │
-    │    - Virtual hardware modules              │
-    │    - Real-time state visualization         │
-    │    - Development/testing tool              │
-    └────────────────────────────────────────────┘
+OpenFront.io page
+    ↓ (userscript polls + emits events)
+Userscript (WebSocket client)
+    ↓
+ESP32-S3 firmware (WebSocket server: /ws)
+    ↔ Dashboard UI (optional client)
+    ↓
+Hardware modules (I2C + CAN)
 ```
 
-## ✨ Key Features
+### Simulator mode (no hardware)
 
-### Hardware Integration
-- **Event-Driven Architecture** - Modular firmware with clean separation
-- **I2C Expansion** - MCP23017 I/O expanders for buttons and LEDs
-- **CAN Bus** - Multi-module communication (audio, future expansions)
-- **OTA Updates** - Over-the-air firmware updates (HTTP, port 3232)
-- **WebSocket Server** - Firmware acts as WSS server for dashboard/userscript
+```
+OpenFront.io page
+    ↓ (userscript polls + emits events)
+Userscript (WebSocket client)
+    ↓
+Nuxt dashboard (WebSocket server: /ws)
+    ↓
+Virtual hardware modules (UI)
+```
 
-### Software Features
-- **Real-time Event Tracking** - Detects nukes, invasions, game state changes
-- **Protocol-Driven** - Single source of truth in `prompts/WEBSOCKET_MESSAGE_SPEC.md`
-- **Hardware Emulation** - Full dashboard simulator for development
-- **Type Safety** - Shared TypeScript types across all components
-- **Modular Design** - Easy to add new modules or features
+## Key features
 
-### Protocol & Events
-- Alert events (ALERT_ATOM, ALERT_HYDRO, ALERT_MIRV, ALERT_LAND, ALERT_NAVAL)
-- Launch events (NUKE_LAUNCHED, HYDRO_LAUNCHED, MIRV_LAUNCHED)
-- Outcome events (NUKE_EXPLODED, NUKE_INTERCEPTED)
-- Game lifecycle (GAME_START, GAME_END, WIN, LOOSE)
-- Sound events (SOUND_PLAY for audio module integration)
+### Hardware integration
+- Event-driven firmware modules
+- I2C expanders (MCP23017) for buttons/LEDs
+- CAN bus for module-to-module communication (audio today, more later)
+- OTA firmware updates (see firmware docs)
+- WebSocket endpoint `/ws` (WS or WSS depending on config)
 
-## 🧪 Development
+### Software features
+- Userscript trackers detect game events and state transitions
+- Simulator dashboard for dev/testing without hardware
+- Shared TypeScript types in `ots-shared/`
+- Protocol-first workflow (spec → shared types → implementations)
+
+### Protocol highlights
+See [prompts/WEBSOCKET_MESSAGE_SPEC.md](prompts/WEBSOCKET_MESSAGE_SPEC.md) for the full list. Common ones include:
+
+- Alerts: `ALERT_ATOM`, `ALERT_HYDRO`, `ALERT_MIRV`, `ALERT_LAND`, `ALERT_NAVAL`
+- Launch/outcomes: `NUKE_LAUNCHED`, `NUKE_EXPLODED`, `NUKE_INTERCEPTED`
+- Lifecycle: `GAME_START`, `GAME_END`, `WIN`, `LOOSE`
+- Audio trigger: `SOUND_PLAY`
+
+## Development
+
+### Protocol change workflow (important)
+
+WebSocket protocol changes must start in the spec, then propagate:
+
+1) Update [prompts/WEBSOCKET_MESSAGE_SPEC.md](prompts/WEBSOCKET_MESSAGE_SPEC.md)
+2) Update shared TS types in `ots-shared/src/game.ts`
+3) Update firmware types/parsing in `ots-fw-main/include/protocol.h` (and related code)
+4) Update implementations in `ots-userscript/`, `ots-simulator/`, and/or firmware modules
+
+CAN protocol changes follow the same “spec first” approach:
+
+1) Update [prompts/CANBUS_MESSAGE_SPEC.md](prompts/CANBUS_MESSAGE_SPEC.md)
+2) Update [doc/developer/canbus-protocol.md](doc/developer/canbus-protocol.md)
+3) Update shared firmware components in `ots-fw-shared/components/`
 
 ### Testing Hardware
 ```bash
@@ -167,25 +212,25 @@ pio run -e esp32-s3-devkit -t upload && pio device monitor
 # See prompts/RELEASE.md for complete guide
 ```
 
-## 🤝 Contributing
+## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](doc/developer/CONTRIBUTING.md) for guidelines.
+We welcome contributions. Start with [doc/developer/README.md](doc/developer/README.md) and the workflow docs in [prompts/](prompts/).
 
 ### Development Workflow
 1. Create feature branch from `main`
-2. Make changes following [coding standards](doc/developer/standards/coding-standards.md)
+2. Make changes following [prompts/GIT_WORKFLOW.md](prompts/GIT_WORKFLOW.md)
 3. Test thoroughly (hardware tests, integration tests)
 4. Update documentation if needed
 5. Submit pull request with clear description
 
 ### Key Resources
-- [Protocol Changes](doc/developer/workflows/protocol-changes.md) - Modifying WebSocket protocol
-- [Adding Hardware Module](doc/developer/workflows/add-hardware-module.md) - New module workflow
-- [Git Workflow](doc/developer/standards/git-workflow.md) - Branching and commit conventions
+- [WebSocket Spec](prompts/WEBSOCKET_MESSAGE_SPEC.md) - Protocol source of truth
+- [CAN Spec](prompts/CANBUS_MESSAGE_SPEC.md) - CAN source of truth
+- [Release Guide](prompts/RELEASE.md) - Versioning and release process
 
 ## 📋 Project Status
 
-**Current Version**: See [weekly_announces.md](weekly_announces.md) for latest releases
+**Current version**: See [weekly_announces.md](weekly_announces.md) for release history.
 
 **Hardware Status**:
 - ✅ Main controller (ESP32-S3 + MCP23017 I/O expanders)
@@ -206,8 +251,9 @@ We welcome contributions! See [CONTRIBUTING.md](doc/developer/CONTRIBUTING.md) f
 
 ### Protocol & Architecture
 - [Protocol Specification](prompts/WEBSOCKET_MESSAGE_SPEC.md) - Complete WebSocket message format
-- [Firmware Architecture](doc/developer/architecture/firmware.md) - ESP32-S3 design
-- [Shared Components](doc/developer/architecture/shared-components.md) - Reusable code
+- [CAN Specification](prompts/CANBUS_MESSAGE_SPEC.md) - Complete CAN message format
+- [WebSocket Protocol (guide)](doc/developer/websocket-protocol.md) - Implementation patterns and debugging
+- [CAN Bus Protocol (guide)](doc/developer/canbus-protocol.md) - Implementation patterns and debugging
 
 ### Hardware Documentation  
 - [Hardware Specifications](ots-hardware/hardware-spec.md) - Main controller design
@@ -222,4 +268,7 @@ We welcome contributions! See [CONTRIBUTING.md](doc/developer/CONTRIBUTING.md) f
 
 ## License
 
-TODO: Add license information for this project.
+This repository does not currently ship a top-level LICENSE file.
+
+- If you want, I can add a LICENSE file (MIT / Apache-2.0 / GPLv3 / AGPLv3 / other) and update this section accordingly.
+- Note: OpenFront itself has its own license/terms; this project is separate and does not grant rights to OpenFront proprietary assets.
