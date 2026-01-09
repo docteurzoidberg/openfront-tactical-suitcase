@@ -51,8 +51,10 @@ static void can_rx_task(void *arg) {
     ESP_LOGI(TAG, "CAN RX task started");
     
     while (1) {
-        // Wait for CAN frames (blocking)
-        if (can_driver_receive(&frame, portMAX_DELAY) == ESP_OK) {
+        // Receive CAN frame with 100ms timeout (matches audiomodule/cantest pattern)
+        esp_err_t ret = can_driver_receive(&frame, pdMS_TO_TICKS(100));
+        
+        if (ret == ESP_OK) {
             // Handle MODULE_ANNOUNCE (discovery)
             if (frame.id == CAN_ID_MODULE_ANNOUNCE) {
                 module_info_t info;
@@ -74,7 +76,11 @@ static void can_rx_task(void *arg) {
             else if (frame.id == 0x425) {
                 ESP_LOGI(TAG, "Received SOUND_FINISHED (parsing not yet implemented)");
             }
+            
+            // Yield after processing to prevent watchdog (matches cantest pattern)
+            vTaskDelay(pdMS_TO_TICKS(1));
         }
+        // If timeout (no CAN traffic), just continue and check again
     }
 }
 
@@ -99,8 +105,14 @@ hardware_module_t* sound_module_get(void) {
 static esp_err_t sound_init(void) {
     ESP_LOGI(TAG, "Initializing sound module...");
     
-    // Initialize CAN driver (currently mock)
-    can_config_t config = CAN_CONFIG_DEFAULT();
+    // Initialize CAN driver with validated Phase 2.5/3.2 configuration
+    can_config_t config = {
+        .tx_gpio = 5,        // GPIO5 TX (matches Phase 2.5 ESP32-S3 config)
+        .rx_gpio = 4,        // GPIO4 RX (matches Phase 2.5 ESP32-S3 config)
+        .bitrate = 125000,   // 125 kbps (validated in Phase 2.5/3.2)
+        .loopback = false,   // Physical CAN bus (not loopback)
+        .mock_mode = false   // Auto-detect (falls back to mock if hardware missing)
+    };
     esp_err_t ret = can_driver_init(&config);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize CAN driver: %s", esp_err_to_name(ret));
@@ -117,7 +129,16 @@ static esp_err_t sound_init(void) {
     s_state.audio_module_discovered = false;
     
     // Start CAN RX task to receive discovery announcements and responses
-    BaseType_t task_ret = xTaskCreate(can_rx_task, "can_rx", 4096, NULL, 5, &s_can_rx_task);
+    // Use PinnedToCore with tskNO_AFFINITY and priority 6 (matches audiomodule pattern)
+    BaseType_t task_ret = xTaskCreatePinnedToCore(
+        can_rx_task, 
+        "can_rx", 
+        4096, 
+        NULL, 
+        6,  // Higher priority than serial
+        &s_can_rx_task,
+        tskNO_AFFINITY
+    );
     if (task_ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create CAN RX task");
         return ESP_FAIL;

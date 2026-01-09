@@ -35,6 +35,7 @@ typedef struct {
 
 typedef struct {
     bool initialized;
+    bool lcd_available;   // Is LCD hardware present?
     bool display_active;  // Are we controlling the display?
     bool display_dirty;
     bool player_won;      // true = victory, false = defeat
@@ -129,31 +130,39 @@ static void display_game_end(bool victory) {
 static esp_err_t system_status_init(void) {
     ESP_LOGI(TAG, "Initializing system status module...");
 
-    // Ensure the LCD is initialized before we attempt to draw anything.
+    // Try to initialize LCD, but continue if it's not present
     esp_err_t ret = lcd_init(ots_i2c_bus_get(), LCD_I2C_ADDR);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize LCD at 0x%02X: %s", LCD_I2C_ADDR, esp_err_to_name(ret));
-        return ret;
-    }
-    
-    // Show splash screen on boot
-    display_splash();
+        ESP_LOGW(TAG, "LCD not detected at 0x%02X: %s - continuing without display", 
+                 LCD_I2C_ADDR, esp_err_to_name(ret));
+        module_state.lcd_available = false;
+    } else {
+        ESP_LOGI(TAG, "LCD initialized successfully at 0x%02X", LCD_I2C_ADDR);
+        module_state.lcd_available = true;
+        
+        // Show splash screen on boot
+        display_splash();
 
-    // After a short splash, move to the normal "waiting for connection" screen.
-    // This prevents the LCD from sitting on "Booting..." forever if there are
-    // no events yet.
-    vTaskDelay(pdMS_TO_TICKS(1200));
+        // After a short splash, move to the normal "waiting for connection" screen.
+        // This prevents the LCD from sitting on "Booting..." forever if there are
+        // no events yet.
+        vTaskDelay(pdMS_TO_TICKS(1200));
+    }
     
     module_state.initialized = true;
     module_state.display_active = true;  // We start with control
     module_state.display_dirty = true;
     
-    ESP_LOGI(TAG, "System status module initialized");
+    ESP_LOGI(TAG, "System status module initialized (LCD: %s)", 
+             module_state.lcd_available ? "present" : "not present");
     return ESP_OK;
 }
 
 static esp_err_t system_status_update(void) {
     if (!module_state.initialized) return ESP_OK;
+    
+    // Skip all LCD operations if hardware not present
+    if (!module_state.lcd_available) return ESP_OK;
 
     // Auto-yield LCD control when game starts
     if (module_state.display_active && module_state.ws_connected && 
