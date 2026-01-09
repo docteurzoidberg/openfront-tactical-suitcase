@@ -52,11 +52,20 @@ esp_err_t can_driver_init(const can_config_t *config) {
                  (unsigned long)s_driver.config.bitrate, s_driver.config.loopback);
         
         // Configure TWAI general settings
+        // For TJA1050 transceiver: Use NO_ACK mode for loopback testing (single node)
+        // Use NORMAL mode only when bus is properly terminated (120Ω at both ends)
+        twai_mode_t selected_mode = s_driver.config.loopback ? TWAI_MODE_NO_ACK : TWAI_MODE_NORMAL;
+        ESP_LOGI(TAG, "Selected TWAI mode: %d (%s)", selected_mode, 
+                 selected_mode == TWAI_MODE_NO_ACK ? "NO_ACK" : 
+                 selected_mode == TWAI_MODE_NORMAL ? "NORMAL" : "OTHER");
+        
         twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(
             s_driver.config.tx_gpio, 
             s_driver.config.rx_gpio,
-            s_driver.config.loopback ? TWAI_MODE_LISTEN_ONLY : TWAI_MODE_NORMAL
+            selected_mode
         );
+        
+        ESP_LOGI(TAG, "TWAI g_config.mode after init: %d", g_config.mode);
         
         // Disable alerts we don't need to reduce interrupt overhead
         g_config.alerts_enabled = TWAI_ALERT_NONE;
@@ -153,6 +162,45 @@ esp_err_t can_driver_deinit(void) {
 }
 
 /**
+ * @brief Log detailed TWAI peripheral status for debugging
+ */
+void can_driver_log_twai_status(void) {
+    if (!s_driver.initialized || s_driver.mock_mode) {
+        ESP_LOGI(TAG, "TWAI status: Not available (mock mode or not initialized)");
+        return;
+    }
+    
+#if CONFIG_CAN_DRIVER_USE_TWAI
+    twai_status_info_t status;
+    esp_err_t ret = twai_get_status_info(&status);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to get TWAI status: %s", esp_err_to_name(ret));
+        return;
+    }
+    
+    const char *state_str = "UNKNOWN";
+    switch (status.state) {
+        case TWAI_STATE_STOPPED: state_str = "STOPPED"; break;
+        case TWAI_STATE_RUNNING: state_str = "RUNNING"; break;
+        case TWAI_STATE_BUS_OFF: state_str = "BUS_OFF"; break;
+        case TWAI_STATE_RECOVERING: state_str = "RECOVERING"; break;
+    }
+    
+    ESP_LOGI(TAG, "=== TWAI Peripheral Status ===");
+    ESP_LOGI(TAG, "  State: %s", state_str);
+    ESP_LOGI(TAG, "  TX Error Counter: %lu (BUS_OFF at 256)", (unsigned long)status.tx_error_counter);
+    ESP_LOGI(TAG, "  RX Error Counter: %lu (BUS_OFF at 256)", (unsigned long)status.rx_error_counter);
+    ESP_LOGI(TAG, "  TX Queue: %lu msgs waiting", (unsigned long)status.msgs_to_tx);
+    ESP_LOGI(TAG, "  RX Queue: %lu msgs waiting", (unsigned long)status.msgs_to_rx);
+    ESP_LOGI(TAG, "  TX Failed: %lu", (unsigned long)status.tx_failed_count);
+    ESP_LOGI(TAG, "  RX Missed: %lu", (unsigned long)status.rx_missed_count);
+    ESP_LOGI(TAG, "  RX Queue Full: %lu", (unsigned long)status.rx_overrun_count);
+    ESP_LOGI(TAG, "  Bus Errors: %lu", (unsigned long)status.bus_error_count);
+    ESP_LOGI(TAG, "  Arbitration Lost: %lu", (unsigned long)status.arb_lost_count);
+#endif
+}
+
+/**
  * @brief Check if CAN dri
  */
 esp_err_t can_driver_send(const can_frame_t *frame) {
@@ -195,13 +243,13 @@ esp_err_t can_driver_send(const can_frame_t *frame) {
     esp_err_t ret = twai_transmit(&msg, pdMS_TO_TICKS(100));
     if (ret == ESP_OK) {
         s_driver.tx_count++;
-        ESP_LOGD(TAG, "TX: ID=0x%03X DLC=%d", frame->id, frame->dlc);
+        ESP_LOGI(TAG, "✓ TX: ID=0x%03X DLC=%d", frame->id, frame->dlc);
     } else if (ret == ESP_ERR_TIMEOUT) {
         s_driver.tx_errors++;
-        ESP_LOGW(TAG, "TX timeout (bus busy or not connected)");
+        ESP_LOGW(TAG, "✗ TX timeout (bus busy or not connected): ID=0x%03X", frame->id);
     } else {
         s_driver.tx_errors++;
-        ESP_LOGW(TAG, "TX failed: %s", esp_err_to_name(ret));
+        ESP_LOGW(TAG, "✗ TX failed: %s (ID=0x%03X)", esp_err_to_name(ret), frame->id);
     }
     
     return ret;
@@ -225,13 +273,18 @@ esp_err_t can_driver_receive(can_frame_t *frame, uint32_t timeout_ms) {
     
     if (s_driver.mock_mode) {
         // Mock mode: No incoming frames
+        ESP_LOGD(TAG, "can_driver_receive: Mock mode, returning timeout");
         return ESP_ERR_TIMEOUT;
     }
     
 #if CONFIG_CAN_DRIVER_USE_TWAI
     // Physical mode: Receive via TWAI
+    ESP_LOGD(TAG, "→ can_driver_receive: timeout=%lu ms", (unsigned long)timeout_ms);
+    
     twai_message_t msg;
     esp_err_t ret = twai_receive(&msg, pdMS_TO_TICKS(timeout_ms));
+    
+    ESP_LOGD(TAG, "  twai_receive returned: %s", esp_err_to_name(ret));
     
     if (ret == ESP_OK) {
         frame->id = msg.identifier;
@@ -242,15 +295,16 @@ esp_err_t can_driver_receive(can_frame_t *frame, uint32_t timeout_ms) {
         
         s_driver.rx_count++;
         
-        ESP_LOGI(TAG, "RX: ID=0x%03X DLC=%d RTR=%d EXT=%d DATA=[%02X %02X %02X %02X %02X %02X %02X %02X]",
+        ESP_LOGI(TAG, "✓ RX: ID=0x%03X DLC=%d RTR=%d EXT=%d DATA=[%02X %02X %02X %02X %02X %02X %02X %02X]",
                  frame->id, frame->dlc, frame->rtr, frame->extended,
                  frame->data[0], frame->data[1], frame->data[2], frame->data[3],
                  frame->data[4], frame->data[5], frame->data[6], frame->data[7]);
     } else if (ret == ESP_ERR_TIMEOUT) {
         // Timeout is normal, not an error
+        ESP_LOGD(TAG, "  (timeout - no message available)");
     } else {
         s_driver.rx_errors++;
-        ESP_LOGW(TAG, "RX error: %s", esp_err_to_name(ret));
+        ESP_LOGW(TAG, "✗ RX error: %s", esp_err_to_name(ret));
     }
     
     return ret;
@@ -322,4 +376,79 @@ esp_err_t can_driver_set_filter(uint16_t filter_id, uint16_t filter_mask) {
     ESP_LOGW(TAG, "Dynamic filter configuration requires driver restart");
     ESP_LOGW(TAG, "Consider using acceptance filtering in application layer");
     return ESP_ERR_NOT_SUPPORTED;
+}
+
+/**
+ * @brief Recover from BUS_OFF state
+ */
+esp_err_t can_driver_recover(void) {
+    if (!s_driver.initialized) {
+        ESP_LOGE(TAG, "Driver not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    if (s_driver.mock_mode) {
+        ESP_LOGI(TAG, "Recovery (mock mode - no action needed)");
+        return ESP_OK;
+    }
+    
+    ESP_LOGI(TAG, "Initiating TWAI recovery from BUS_OFF...");
+    esp_err_t ret = twai_initiate_recovery();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initiate recovery: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    ESP_LOGI(TAG, "✓ Recovery initiated successfully");
+    return ESP_OK;
+}
+
+/**
+ * @brief Start the TWAI peripheral
+ */
+esp_err_t can_driver_start(void) {
+    if (!s_driver.initialized) {
+        ESP_LOGE(TAG, "Driver not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    if (s_driver.mock_mode) {
+        ESP_LOGI(TAG, "Start (mock mode - no action needed)");
+        return ESP_OK;
+    }
+    
+    ESP_LOGI(TAG, "Starting TWAI driver...");
+    esp_err_t ret = twai_start();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start TWAI: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    ESP_LOGI(TAG, "✓ TWAI driver started");
+    return ESP_OK;
+}
+
+/**
+ * @brief Stop the TWAI peripheral
+ */
+esp_err_t can_driver_stop(void) {
+    if (!s_driver.initialized) {
+        ESP_LOGE(TAG, "Driver not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    if (s_driver.mock_mode) {
+        ESP_LOGI(TAG, "Stop (mock mode - no action needed)");
+        return ESP_OK;
+    }
+    
+    ESP_LOGI(TAG, "Stopping TWAI driver...");
+    esp_err_t ret = twai_stop();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to stop TWAI: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    ESP_LOGI(TAG, "✓ TWAI driver stopped");
+    return ESP_OK;
 }

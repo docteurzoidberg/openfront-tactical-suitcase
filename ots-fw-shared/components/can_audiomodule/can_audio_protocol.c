@@ -155,24 +155,25 @@ void can_audio_build_sound_ack(uint8_t ok, uint16_t sound_index, uint8_t queue_i
     frame->rtr = false;
     frame->dlc = 8;
     
-    // Byte 0: OK flag (1=success, 0=error)
-    frame->data[0] = ok ? 1 : 0;
+    // CRITICAL: Match CANBUS_MESSAGE_SPEC.md format exactly
+    // Byte 0: Sound Index (echoed from request, 8-bit only)
+    frame->data[0] = sound_index & 0xFF;
     
-    // Byte 1-2: Sound index (echoed, little-endian)
-    frame->data[1] = sound_index & 0xFF;
-    frame->data[2] = (sound_index >> 8) & 0xFF;
+    // Byte 1: Status Code (0x00=success, 0x01=file not found, 0x02=mixer full, etc.)
+    frame->data[1] = ok ? 0x00 : error_code;
     
-    // Byte 3: Queue ID (1-255, or 0=error)
-    frame->data[3] = queue_id;
+    // Byte 2: Queue ID (1-255, or 0x00=invalid on error)
+    frame->data[2] = queue_id;
     
-    // Byte 4: Error code (if ok=0)
-    frame->data[4] = error_code;
+    // Byte 3: Reserved (must be 0x00)
+    frame->data[3] = 0x00;
     
-    // Byte 5-6: Request ID (echoed, little-endian)
-    frame->data[5] = request_id & 0xFF;
-    frame->data[6] = (request_id >> 8) & 0xFF;
+    // Bytes 4-7: Reserved (must be 0x00)
+    frame->data[4] = 0x00;
+    frame->data[5] = 0x00;
+    frame->data[6] = 0x00;
     
-    // Byte 7: Reserved
+    // Byte 7: Reserved (already zeroed by memset)
     frame->data[7] = 0;
 }
 

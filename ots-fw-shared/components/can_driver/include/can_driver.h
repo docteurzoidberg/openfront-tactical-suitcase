@@ -142,4 +142,48 @@ void can_driver_reset_stats(void);
  */
 esp_err_t can_driver_set_filter(uint16_t filter_id, uint16_t filter_mask);
 
+/**
+ * @brief Log detailed TWAI peripheral status for debugging
+ * 
+ * Shows:
+ * - Driver state (RUNNING, STOPPED, BUS_OFF, RECOVERING)
+ * - TX/RX queue depths
+ * - Error counters
+ * - Bus statistics
+ * 
+ * Useful for diagnosing why RX isn't working.
+ */
+void can_driver_log_twai_status(void);
+
+/**
+ * @brief Recover from BUS_OFF state
+ * 
+ * When the TWAI peripheral enters BUS_OFF state (error counter >= 256),
+ * it must be manually recovered. This function initiates recovery and
+ * restarts the bus.
+ * 
+ * @return ESP_OK on success, error otherwise
+ */
+esp_err_t can_driver_recover(void);
+
+/**
+ * @brief Start the TWAI peripheral
+ * 
+ * Starts the TWAI driver. Must be called after recovery or if the
+ * driver was previously stopped.
+ * 
+ * @return ESP_OK on success, error otherwise
+ */
+esp_err_t can_driver_start(void);
+
+/**
+ * @brief Stop the TWAI peripheral
+ * 
+ * Stops the TWAI driver. Can be restarted with can_driver_start().
+ * 
+ * @return ESP_OK on success, error otherwise
+ */
+esp_err_t can_driver_stop(void);
+
 #endif // CAN_DRIVER_H
+

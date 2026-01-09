@@ -30,12 +30,14 @@ esp_err_t can_discovery_announce(uint8_t module_type,
         }
     };
     
+    ESP_LOGI(TAG, "Attempting to send MODULE_ANNOUNCE (type=0x%02X ver=%d.%d block=0x%02X)...",
+             module_type, version_major, version_minor, can_block_base);
+    
     esp_err_t ret = can_driver_send(&msg);
     if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "Announced: type=0x%02X ver=%d.%d block=0x%02X",
-                 module_type, version_major, version_minor, can_block_base);
+        ESP_LOGI(TAG, "✓ MODULE_ANNOUNCE sent successfully");
     } else {
-        ESP_LOGE(TAG, "Failed to send ANNOUNCE: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "✗ Failed to send MODULE_ANNOUNCE: %s", esp_err_to_name(ret));
     }
     
     return ret;
