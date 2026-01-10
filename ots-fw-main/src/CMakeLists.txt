@@ -202,7 +202,6 @@ else()
         "system_status_module.c"
         "troops_module.c"
         "sound_module.c"
-        "can_protocol.c"
         "rgb_handler.c"
         "ots_logging.c"
         "nvs_storage.c"
@@ -226,6 +225,7 @@ else()
         ws2812_rmt
         can_driver
         can_discovery
+        can_audiomodule
     )
 endif()
 
