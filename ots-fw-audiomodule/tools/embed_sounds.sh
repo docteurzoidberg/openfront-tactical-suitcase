@@ -77,6 +77,7 @@ get_friendly_name() {
         0005) echo "game_alert_land" ;;
         0006) echo "game_alert_naval" ;;
         0007) echo "game_nuke_launch" ;;
+        0100) echo "audio_ready" ;;
         10000) echo "test_tone_1s_440hz" ;;
         10001) echo "test_tone_2s_880hz" ;;
         10002) echo "test_tone_5s_220hz" ;;

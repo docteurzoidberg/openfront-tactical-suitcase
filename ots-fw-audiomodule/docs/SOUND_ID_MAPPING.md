@@ -8,7 +8,7 @@ Sound IDs 0-9999 are reserved for game sounds stored on SD card at `/sdcard/soun
 
 **SD Card Priority**: If SD card is present and file exists, it will be played with high quality.
 
-**Embedded Fallback**: Sounds 0-7 have low-quality embedded versions (8-bit 22.05kHz mono) as fallback.
+**Embedded Fallback**: Sounds 0-7 and 0100 have low-quality embedded versions (8-bit 22.05kHz mono) as fallback.
 
 | Sound ID | Filename | Embedded? | Description | Naming Pattern |
 |----------|----------|-----------|-------------|----------------|
@@ -20,6 +20,7 @@ Sound IDs 0-9999 are reserved for game sounds stored on SD card at `/sdcard/soun
 | 5 | 0005.wav | ✓ Yes | Land invasion alert | `game_sound_0005_22050_8bit` |
 | 6 | 0006.wav | ✓ Yes | Naval invasion alert | `game_sound_0006_22050_8bit` |
 | 7 | 0007.wav | ✓ Yes | Nuke launch sound | `game_sound_0007_22050_8bit` |
+| 100 | 0100.wav | ✓ Yes | Audio module ready (boot) | `game_sound_0100_22050_8bit` |
 | 8-9999 | XXXX.wav | ✗ No | Custom sounds | N/A |
 
 ### Embedded Test Sounds (10000-10199)

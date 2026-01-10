@@ -487,6 +487,7 @@ Request audio playback (sent to firmware/dashboard).
 | `game_player_death` | 2 | Player death sound |
 | `game_victory` | 3 | Victory sound |
 | `game_defeat` | 4 | Defeat sound |
+| `audio-ready` | 100 | Audio module ready (boot). Reserved; userscript must not emit. |
 
 **Architecture:**
 - Userscript: Sends `SOUND_PLAY` events only (does NOT play sounds locally)

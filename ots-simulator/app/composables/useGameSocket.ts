@@ -1,4 +1,4 @@
-import { computed, ref, watchEffect } from 'vue'
+import { computed, ref, watch, watchEffect } from 'vue'
 import { useWebSocket } from '@vueuse/core'
 import type { GameEvent, IncomingMessage, OutgoingMessage, NukeType, NukeSentEventData, TroopsData, GamePhase } from '../../../ots-shared/src/game'
 import { PROTOCOL_CONSTANTS } from '../../../ots-shared/src/game'
@@ -91,6 +91,10 @@ const localSoundCandidatesForId = (soundId: string): string[] => {
     return ['/sounds/0004-game_defeat.mp3', '/sounds/0004-game_defeat.wav']
   }
 
+  if (soundId === 'audio-ready') {
+    return ['/sounds/0100-audio-ready.mp3', '/sounds/0100-audio-ready.wav']
+  }
+
   return []
 }
 
@@ -160,6 +164,39 @@ const tryPlayLocalSound = async (soundId: string): Promise<{ status: SoundPlayba
 }
 
 export function useGameSocket() {
+  const stopSharedAudio = () => {
+    if (!sharedAudio) return
+    try {
+      sharedAudio.pause()
+      sharedAudio.currentTime = 0
+    } catch {
+      // ignore
+    }
+  }
+
+  const playStartupSoundIfPowered = async () => {
+    if (typeof window === 'undefined') return
+    if (!powerOn.value || !soundModulePowerOn.value) return
+
+    const soundId = 'audio-ready'
+    lastSound.value = {
+      soundId,
+      requestedAt: Date.now(),
+      status: 'requested'
+    }
+
+    const res = await tryPlayLocalSound(soundId)
+    if (lastSound.value?.soundId === soundId) {
+      lastSound.value = {
+        soundId,
+        requestedAt: lastSound.value?.requestedAt ?? Date.now(),
+        status: res.status,
+        fileUrl: res.fileUrl,
+        error: res.error
+      }
+    }
+  }
+
   // Initialize audio context on first user interaction (browser requirement)
   if (typeof window !== 'undefined') {
     const initAudio = () => {
@@ -476,18 +513,32 @@ export function useGameSocket() {
     send(JSON.stringify(msg))
   }
 
+  // Startup sound behavior:
+  // - If global power flips ON while sound module toggle is ON, play startup sound.
+  // - If sound module flips ON while global power is already ON, play startup sound.
+  // - Only plays when transitioning from NOT powered -> powered.
+  watch(
+    [powerOn, soundModulePowerOn],
+    ([isPowerOn, isSoundModuleOn], [wasPowerOn, wasSoundModuleOn]) => {
+      const isPowered = isPowerOn && isSoundModuleOn
+      const wasPowered = wasPowerOn && wasSoundModuleOn
+
+      if (isPowered && !wasPowered) {
+        void playStartupSoundIfPowered()
+      }
+
+      // If global power is turned OFF, stop all audio immediately.
+      if (!isPowerOn && wasPowerOn) {
+        stopSharedAudio()
+      }
+    }
+  )
+
   const toggleSoundModulePower = () => {
     const next = !soundModulePowerOn.value
     soundModulePowerOn.value = next
 
-    if (!next && sharedAudio) {
-      try {
-        sharedAudio.pause()
-        sharedAudio.currentTime = 0
-      } catch {
-        // ignore
-      }
-    }
+    if (!next) stopSharedAudio()
   }
 
   const setSoundVolume = (volume: number) => {
@@ -518,7 +569,9 @@ export function useGameSocket() {
   }
 
   const togglePower = () => {
-    powerOn.value = !powerOn.value
+    const next = !powerOn.value
+    powerOn.value = next
+    if (!next) stopSharedAudio()
   }
 
   const sendSetTroopsPercent = (percent: number) => {

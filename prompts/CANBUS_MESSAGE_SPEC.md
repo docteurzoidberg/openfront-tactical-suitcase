@@ -476,6 +476,7 @@ Standard sound indices stored on SD card:
 | 5 | `/sdcard/sounds/0005.wav` | Land invasion | 80% | Yes |
 | 6 | `/sdcard/sounds/0006.wav` | Naval invasion | 80% | Yes |
 | 7 | `/sdcard/sounds/0007.wav` | Nuke launch | 100% | No |
+| 100 | `/sdcard/sounds/0100.wav` | Audio module ready (boot) | 80% | No |
 | 8-9999 | `/sdcard/sounds/XXXX.wav` | Custom sounds | Variable | Variable |
 
 #### Embedded Tones (10000-10002)

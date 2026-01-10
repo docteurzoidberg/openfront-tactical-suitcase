@@ -352,6 +352,7 @@ esp_err_t sound_module_stop(uint16_t sound_index, bool stop_all) {
  * - game_player_death → 2
  * - game_victory → 3
  * - game_defeat → 4
+ * - audio-ready → 100
  */
 static uint16_t map_sound_id_to_index(const char *sound_id) {
     if (!sound_id) return 0;
@@ -360,6 +361,7 @@ static uint16_t map_sound_id_to_index(const char *sound_id) {
     if (strcmp(sound_id, "game_player_death") == 0) return 2;
     if (strcmp(sound_id, "game_victory") == 0) return 3;
     if (strcmp(sound_id, "game_defeat") == 0) return 4;
+    if (strcmp(sound_id, "audio-ready") == 0) return 100;
     
     ESP_LOGW(TAG, "Unknown soundId: %s", sound_id);
     return 0;

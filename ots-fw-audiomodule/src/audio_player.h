@@ -26,6 +26,7 @@ extern "C" {
  * 
  * Embedded sound IDs:
  * - 0-7: Game sounds (start, victory, defeat, death, alerts, launch)
+ * - 100: Audio module ready (boot)
  * - 10000-10002: Test tones (440Hz, 880Hz, 220Hz)
  * - 10100: Quack sound
  * 

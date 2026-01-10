@@ -23,6 +23,7 @@
 #include "embedded/game_sound_0005_22050_8bit.h"
 #include "embedded/game_sound_0006_22050_8bit.h"
 #include "embedded/game_sound_0007_22050_8bit.h"
+#include "embedded/game_sound_0100_22050_8bit.h"
 #include "embedded/game_sound_10000_22050_8bit.h"
 #include "embedded/game_sound_10001_22050_8bit.h"
 #include "embedded/game_sound_10002_22050_8bit.h"
@@ -52,6 +53,8 @@ static const embedded_sound_t embedded_sounds[] = {
     {    5, game_sound_0005_22050_8bit_wav, 0, "game_alert_land" },
     {    6, game_sound_0006_22050_8bit_wav, 0, "game_alert_naval" },
     {    7, game_sound_0007_22050_8bit_wav, 0, "game_nuke_launch" },
+    // System sounds
+    {  100, game_sound_0100_22050_8bit_wav, 0, "audio_ready" },
     // Test tones (10000-10002)
     {10000, game_sound_10000_22050_8bit_wav, 0, "test_tone_440hz_1s" },
     {10001, game_sound_10001_22050_8bit_wav, 0, "test_tone_880hz_2s" },
@@ -82,12 +85,14 @@ static void init_embedded_sounds(void)
     embedded_sound_sizes[5]  = game_sound_0005_22050_8bit_wav_len;
     embedded_sound_sizes[6]  = game_sound_0006_22050_8bit_wav_len;
     embedded_sound_sizes[7]  = game_sound_0007_22050_8bit_wav_len;
+    // System sound 0100
+    embedded_sound_sizes[8]  = game_sound_0100_22050_8bit_wav_len;
     // Test tones 10000-10002
-    embedded_sound_sizes[8]  = game_sound_10000_22050_8bit_wav_len;
-    embedded_sound_sizes[9]  = game_sound_10001_22050_8bit_wav_len;
-    embedded_sound_sizes[10] = game_sound_10002_22050_8bit_wav_len;
+    embedded_sound_sizes[9]  = game_sound_10000_22050_8bit_wav_len;
+    embedded_sound_sizes[10] = game_sound_10001_22050_8bit_wav_len;
+    embedded_sound_sizes[11] = game_sound_10002_22050_8bit_wav_len;
     // Special sounds
-    embedded_sound_sizes[11] = game_sound_10100_22050_8bit_wav_len;
+    embedded_sound_sizes[12] = game_sound_10100_22050_8bit_wav_len;
     
     embedded_sounds_initialized = true;
     ESP_LOGI(TAG, "Initialized %d embedded sounds", NUM_EMBEDDED_SOUNDS);

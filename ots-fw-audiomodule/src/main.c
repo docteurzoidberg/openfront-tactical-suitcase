@@ -93,6 +93,7 @@ void app_main(void)
     // Initialize audio mixer (may fail if I2S/codec not working)
     ESP_LOGI(TAG, "Initializing audio mixer...");
     ret = audio_mixer_init();
+    const bool mixer_ok = (ret == ESP_OK);
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Audio mixer init failed (audio won't work without codec)");
     } else {
@@ -128,6 +129,19 @@ void app_main(void)
     ESP_ERROR_CHECK(can_audio_handler_start_task());
     ESP_LOGI(TAG, "CAN handler started");
     ESP_LOGI(TAG, "CAN discovery: Audio Module v1.0 on block 0x420-0x42F");
+
+    // Boot-ready sound: played by the audio module itself (not via CAN)
+    // Sound index 0100 is reserved for this purpose.
+    if (codec_ok && mixer_ok) {
+        const uint16_t sound_id = 100;
+        audio_source_handle_t handle = INVALID_SOURCE_HANDLE;
+        esp_err_t play_ret = audio_player_play_sound(sound_id, 80, false, false, &handle);
+        if (play_ret == ESP_OK) {
+            ESP_LOGI(TAG, "Played boot sound: audio-ready (id=%u, handle=%d)", (unsigned)sound_id, (int)handle);
+        } else {
+            ESP_LOGW(TAG, "Boot sound audio-ready failed (id=%u): %s", (unsigned)sound_id, esp_err_to_name(play_ret));
+        }
+    }
     
     // Initialize interactive console (unified audio control)
     ESP_LOGI(TAG, "=== Audio Console Starting ===");

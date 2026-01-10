@@ -66,8 +66,7 @@
           <div
             ref="knobElement"
             :class="[
-              'relative flex h-16 w-16 cursor-pointer items-center justify-center rounded-full border-4 border-slate-700 bg-gradient-to-br from-slate-800 to-slate-900 shadow-lg transition-all',
-              modulePowered ? 'hover:border-slate-600' : 'cursor-not-allowed opacity-50'
+              'relative flex h-16 w-16 cursor-pointer items-center justify-center rounded-full border-4 border-slate-700 bg-linear-to-br from-slate-800 to-slate-900 shadow-lg transition-all hover:border-slate-600'
             ]"
             @mousedown="handleMouseDown"
           >
@@ -133,7 +132,6 @@ const knobRotation = computed(() => {
 })
 
 const handleMouseDown = (event: MouseEvent) => {
-  if (!modulePowered.value) return
   startDrag(event)
 }
 
