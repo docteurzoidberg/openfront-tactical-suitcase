@@ -2,6 +2,22 @@
 
 Get the latest hardware files, firmware, and userscript for your OTS device.
 
+## Quick Links (Hosted Here)
+
+These links point to static files hosted directly by this site (VitePress `public/`).
+
+- Firmware (latest): [/releases/latest/firmware/ots-fw-main.bin](/releases/latest/firmware/ots-fw-main.bin)
+- Audio module firmware (latest): [/releases/latest/firmware/ots-fw-audiomodule.bin](/releases/latest/firmware/ots-fw-audiomodule.bin)
+- Userscript (latest): [/releases/latest/userscript/userscript.user.js](/releases/latest/userscript/userscript.user.js)
+
+::: tip Where to put files
+Drop release artifacts under `ots-website/public/releases/...`.
+
+Example:
+- `ots-website/public/releases/latest/firmware/ots-fw-main.bin`
+- `ots-website/public/releases/latest/userscript/userscript.user.js`
+:::
+
 ## Hardware Files
 
 ### CAD Files
@@ -12,6 +28,11 @@ Mechanical design files for the suitcase enclosure and module mounting.
 CAD files will be available in the next release.
 :::
 
+When available, they will be hosted under:
+
+- `/releases/latest/hardware/cad/` (STEP, ZIP)
+- `/releases/latest/hardware/fusion360/` (F3Z, ZIP)
+
 ### PCB Files (KiCad)
 
 Complete KiCad projects for all OTS circuit boards.
@@ -19,6 +40,10 @@ Complete KiCad projects for all OTS circuit boards.
 ::: info Coming Soon
 PCB schematics and designs will be available soon.
 :::
+
+When available, they will be hosted under:
+
+- `/releases/latest/hardware/kicad/` (ZIP)
 
 **Planned boards:**
 - Main Controller Board (ESP32-S3)
@@ -30,13 +55,20 @@ PCB schematics and designs will be available soon.
 
 Latest firmware releases for ESP32-S3 devices.
 
-See the [Releases](/releases) page for firmware downloads and changelogs.
+- Hosted on this site: [/releases/latest/firmware/ots-fw-main.bin](/releases/latest/firmware/ots-fw-main.bin)
+- Changelog + history: See the [Releases](/releases) page.
 
 ## Userscript
 
-Browser extension to connect OpenFront.io game to your OTS device.
+Built Tampermonkey userscript to connect OpenFront.io game to your OTS device.
 
-See the [Releases](/releases) page for userscript installation files.
+- Hosted on this site: [/releases/latest/userscript/userscript.ots.user.js](/releases/latest/userscript/userscript.ots.user.js)
+- Hosted on this site: [/releases/latest/userscript/userscript.user.js](/releases/latest/userscript/userscript.user.js)
+- Instructions: See the [Userscript Installation Guide](/user/userscript-install).
+
+::: warning Large files
+GitHub Pages works great for firmware and small ZIPs. For very large files (Fusion360 exports, big CAD bundles) or lots of historical releases, consider attaching artifacts to GitHub Releases and linking them here.
+:::
 
 ## Source Code
 

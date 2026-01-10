@@ -30,7 +30,7 @@
 static const char *TAG = "MAIN";
 
 // Version (updated by release script)
-#define AUDIO_MODULE_VERSION "2026-01-05.2-dev"
+#define AUDIO_MODULE_VERSION "2026-01-10.1"
 
 // Global state
 static bool g_sd_mounted = false;

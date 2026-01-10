@@ -201,6 +201,93 @@ build_project() {
     esac
 }
 
+# Stage release artifacts into the VitePress public/ folder so GitHub Pages can host them.
+# Note: This intentionally runs only during -u releases (when we create a release commit).
+stage_website_artifacts() {
+    local version=$1
+    local project=$2
+
+    if [ "$UPDATE_VERSION" != true ]; then
+        return 0
+    fi
+
+    if [ ! -d "ots-website" ]; then
+        echo -e "  ${YELLOW}⚠${NC} ots-website not found; skipping website artifact staging"
+        return 0
+    fi
+
+    case "$project" in
+        userscript)
+            local src_js="ots-userscript/build/userscript.ots.user.js"
+            if [ ! -f "$src_js" ]; then
+                echo -e "  ${RED}✗${NC} Userscript build output not found: ${src_js}"
+                return 1
+            fi
+
+            local website_base="ots-website/public/releases"
+            local dest_dir_version="${website_base}/${version}/userscript"
+            local dest_dir_latest="${website_base}/latest/userscript"
+
+            mkdir -p "$dest_dir_version" "$dest_dir_latest"
+
+            local dest_version_js="${dest_dir_version}/userscript-${version}.user.js"
+            local dest_latest_js="${dest_dir_latest}/userscript.user.js"
+
+            cp -f "$src_js" "$dest_version_js"
+            cp -f "$src_js" "$dest_latest_js"
+
+            echo -e "  ${GREEN}✓${NC} Staged userscript for website: ${dest_version_js}"
+            echo -e "  ${GREEN}✓${NC} Updated website latest: ${dest_latest_js}"
+            ;;
+
+        firmware)
+            local src_bin="ots-fw-main/.pio/build/esp32-s3-dev/firmware.bin"
+            if [ ! -f "$src_bin" ]; then
+                echo -e "  ${RED}✗${NC} Firmware binary not found: ${src_bin}"
+                return 1
+            fi
+
+            local website_base="ots-website/public/releases"
+            local dest_dir_version="${website_base}/${version}/firmware"
+            local dest_dir_latest="${website_base}/latest/firmware"
+
+            mkdir -p "$dest_dir_version" "$dest_dir_latest"
+
+            local dest_version_bin="${dest_dir_version}/ots-fw-main-${version}.bin"
+            local dest_latest_bin="${dest_dir_latest}/ots-fw-main.bin"
+
+            cp -f "$src_bin" "$dest_version_bin"
+            cp -f "$src_bin" "$dest_latest_bin"
+
+            echo -e "  ${GREEN}✓${NC} Staged firmware for website: ${dest_version_bin}"
+            echo -e "  ${GREEN}✓${NC} Updated website latest: ${dest_latest_bin}"
+            ;;
+
+        audiomodule)
+            local src_bin="ots-fw-audiomodule/.pio/build/esp32-a1s-espidf/firmware.bin"
+            if [ ! -f "$src_bin" ]; then
+                echo -e "  ${RED}✗${NC} Audio module firmware binary not found: ${src_bin}"
+                return 1
+            fi
+
+            local website_base="ots-website/public/releases"
+            local dest_dir_version="${website_base}/${version}/firmware"
+            local dest_dir_latest="${website_base}/latest/firmware"
+
+            mkdir -p "$dest_dir_version" "$dest_dir_latest"
+
+            local dest_version_bin="${dest_dir_version}/ots-fw-audiomodule-${version}.bin"
+            local dest_latest_bin="${dest_dir_latest}/ots-fw-audiomodule.bin"
+
+            cp -f "$src_bin" "$dest_version_bin"
+            cp -f "$src_bin" "$dest_latest_bin"
+
+            echo -e "  ${GREEN}✓${NC} Staged audio-module firmware for website: ${dest_version_bin}"
+            echo -e "  ${GREEN}✓${NC} Updated website latest: ${dest_latest_bin}"
+            ;;
+    esac
+}
+
 # Function to show usage
 usage() {
     echo -e "${GREEN}OTS Release Tagging Script${NC}"
@@ -383,6 +470,13 @@ for project in "${PROJECTS_TO_UPDATE[@]}"; do
     if ! build_project "$project"; then
         BUILD_FAILED=true
         echo -e "${RED}Build failed for ${project}${NC}"
+        break
+    fi
+
+    # Stage artifacts right after successful builds so they're included in the release commit.
+    if ! stage_website_artifacts "$VERSION" "$project"; then
+        BUILD_FAILED=true
+        echo -e "${RED}Artifact staging failed for ${project}${NC}"
         break
     fi
 done

@@ -1,6 +1,6 @@
 {
   "name": "ots-website",
-  "version": "2026-01-05.2-dev",
+  "version": "2026-01-10.1",
   "description": "OpenFront Tactical Suitcase documentation website",
   "type": "module",
   "scripts": {
