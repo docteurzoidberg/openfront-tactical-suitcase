@@ -70,6 +70,7 @@ Examples:
 - `sounds/0000.wav` → Game start sound
 - `sounds/0001.wav` → Game victory sound
 - `sounds/0007.wav` → Nuke launch sound
+- `sounds/0100.wav` → Audio module ready (boot/startup)
 - `sounds/0042.wav` → Custom sound 42
 
 ### File Format
@@ -157,14 +158,16 @@ const size_t game_sound_0000_22050_8bit_wav_len = sizeof(game_sound_0000_22050_8
 
 ## Integration with Firmware
 
-After running the script, you must integrate the generated files into the firmware:
+After running the script, you must integrate the generated files into the firmware.
 
-### Step 1: Add Includes to `src/audio_player.c`
+This project keeps the embedded registry centralized in `src/audio_player.c` (includes + `embedded_sounds[]` + size init).
 
-Find the include section (around line 12) and uncomment/add:
+### Step 1: Add `#include` in `src/audio_player.c`
+
+Add the generated header alongside the other embedded includes:
 
 ```c
-// Embedded game sounds (8-bit 22kHz for space efficiency)
+// Embedded sounds (8-bit 22kHz for space efficiency)
 #include "embedded/game_sound_0000_22050_8bit.h"  // Game start
 #include "embedded/game_sound_0001_22050_8bit.h"  // Victory
 #include "embedded/game_sound_0002_22050_8bit.h"  // Defeat
@@ -173,32 +176,24 @@ Find the include section (around line 12) and uncomment/add:
 #include "embedded/game_sound_0005_22050_8bit.h"  // Land invasion
 #include "embedded/game_sound_0006_22050_8bit.h"  // Naval invasion
 #include "embedded/game_sound_0007_22050_8bit.h"  // Nuke launch
+#include "embedded/game_sound_0100_22050_8bit.h"  // Audio-ready (boot)
 ```
 
-### Step 2: Populate `embedded_game_sounds[]` Array
+### Step 2: Add entry in the embedded registry
 
-Find the array definition (around line 40) and uncomment/add:
+Add an entry to the `embedded_sounds[]` table in `src/audio_player.c`:
 
 ```c
-static const embedded_game_sound_t embedded_game_sounds[] = {
-    { 0, game_sound_0000_22050_8bit_wav, game_sound_0000_22050_8bit_wav_len, "game_start" },
-    { 1, game_sound_0001_22050_8bit_wav, game_sound_0001_22050_8bit_wav_len, "game_victory" },
-    { 2, game_sound_0002_22050_8bit_wav, game_sound_0002_22050_8bit_wav_len, "game_defeat" },
-    { 3, game_sound_0003_22050_8bit_wav, game_sound_0003_22050_8bit_wav_len, "game_death" },
-    { 4, game_sound_0004_22050_8bit_wav, game_sound_0004_22050_8bit_wav_len, "alert_nuke" },
-    { 5, game_sound_0005_22050_8bit_wav, game_sound_0005_22050_8bit_wav_len, "alert_land" },
-    { 6, game_sound_0006_22050_8bit_wav, game_sound_0006_22050_8bit_wav_len, "alert_naval" },
-    { 7, game_sound_0007_22050_8bit_wav, game_sound_0007_22050_8bit_wav_len, "nuke_launch" },
+static const embedded_sound_t embedded_sounds[] = {
+  { 0, game_sound_0000_22050_8bit_wav, 0, "game_start" },
+  // ...
+  { 100, game_sound_0100_22050_8bit_wav, 0, "audio_ready" },
 };
 ```
 
-### Step 3: Update `NUM_EMBEDDED_GAME_SOUNDS` Macro
+### Step 3: Update the embedded size initialization
 
-```c
-#define NUM_EMBEDDED_GAME_SOUNDS (sizeof(embedded_game_sounds) / sizeof(embedded_game_sound_t))
-```
-
-This automatically calculates the array size.
+This project initializes embedded sizes in `init_embedded_sounds()` (populating an `embedded_sound_sizes[]` array from the generated `_len` symbols). When adding a new embedded sound, add the corresponding `_len` assignment there as well.
 
 ### Step 4: Add to CMake Build
 
@@ -469,13 +464,11 @@ Processing sound 0001 (game_victory)...
 ✓ Processed: 8 sounds
 
 Next steps:
-1. Add includes to src/audio_player.c:
-   #include "embedded/game_sound_XXXX_22050_8bit.h"
+1. Add the generated header include in src/audio_player.c
 
-2. Add entries to embedded_game_sounds[] array:
-   { XXXX, game_sound_XXXX_22050_8bit_wav, game_sound_XXXX_22050_8bit_wav_len, "name" }
+2. Add an entry in the embedded registry (and size init)
 
-3. Rebuild firmware:
+3. Rebuild firmware (PlatformIO):
    pio run -e esp32-a1s-espidf
 ================================================
 ```

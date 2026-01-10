@@ -1,8 +1,8 @@
-# OTS Sound Module Firmware - Project Documentation
+# OTS Audio Module Firmware - Project Documentation
 
 ## Project Overview
 
-**Sound Module firmware** for the **OpenFront Tactical Suitcase (OTS)** project. Runs on ESP32-A1S Audio Development Kit and provides CAN-controlled audio playback for game events.
+**Audio module firmware** for the **OpenFront Tactical Suitcase (OTS)** project. Runs on ESP32-A1S Audio Development Kit and provides CAN-controlled audio playback for game events.
 
 **Architecture:** Plain ESP-IDF (no ESP-ADF dependency) for maximum compatibility and control.
 
@@ -54,10 +54,10 @@
 - **Language:** C (C99 standard)
 
 ### Audio Pipeline (Custom - No ESP-ADF)
-- **Audio Format:** WAV only (16-bit PCM)
+- **Audio Format:** WAV only (PCM; SD audio is typically 16-bit, embedded fallback uses 8-bit)
 - **File I/O:** ESP-VFS + FAT32 on SD card
 - **I2S Streaming:** ESP-IDF I2S driver
-- **Codec Control:** AC101 driver via I2C
+- **Codec Control:** ES8388 driver via I2C
 - **NO ESP-ADF dependency** - full control, lighter binary
 
 ### Communication
@@ -68,7 +68,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    OTS Sound Module (Modular)                        │
+│                    OTS Audio Module (Modular)                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                       │
 │  ┌──────────────┐      ┌─────────────────┐      ┌────────────────┐ │
@@ -80,7 +80,7 @@
 │  │          Per-Source Pipeline │                          │       │
 │  │  ┌───────────────┐  ┌────────▼─────────┐  ┌─────────┐ │       │
 │  │  │ WAV Utils     │◀─│ Audio Decoder    │◀─│ SD Card │ │       │
-│  │  │ (Shared)      │  │ (FreeRTOS Task)  │  │/sounds/ │ │       │
+│  │  │ (Shared)      │  │ (FreeRTOS Task)  │  │/sdcard/ │ │       │
 │  │  └───────────────┘  └────────┬─────────┘  └─────────┘ │       │
 │  │                              │                          │       │
 │  │                              ▼ PCM Stream              │       │
@@ -91,18 +91,18 @@
 │                                  │ Volume Mixing                    │
 │                                  ▼                                  │
 │  ┌──────────────┐      ┌──────────────┐                            │
-│  │ I2S Driver   │─────▶│ AC101 Codec  │─────▶ 🔊 Speakers         │
+│  │ I2S Driver   │─────▶│ ES8388 Codec │─────▶ 🔊 Speakers         │
 │  │ (DMA Buffer) │      │ (I2C+I2S)    │                            │
 │  └──────────────┘      └──────────────┘                            │
 │                                                                      │
-│  Hardware Abstraction Layer: i2s.c, ac101.c, i2c.c, sdcard.c       │
+│  Hardware Abstraction Layer: i2s.c, es8388.c, i2c.c, sdcard.c      │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Audio Playback Flow
 
 1. **CAN Command Received** (0x420 PLAY_SOUND)
-2. **Sound Index Extracted** (e.g., 1 = `/sounds/0001.wav`)
+2. **Sound Index Extracted** (e.g., 1 = `/sdcard/sounds/0001.wav`)
 3. **Audio Mixer** creates new source slot
 4. **Decoder Task** spawned for this source:
    - Opens file from SD card via FatFS
@@ -113,7 +113,16 @@
    - Applies volume control
    - Mixes to single output stream
 6. **I2S Driver** writes mixed PCM to DMA buffer
-7. **AC101 Codec** outputs analog audio
+7. **ES8388 Codec** outputs analog audio
+
+## Boot-Ready Startup Sound
+
+On successful boot (codec + mixer OK), the module plays a short local startup sound:
+
+- **Sound ID**: 100
+- **SD filename**: `0100.wav` (if present)
+- **Embedded fallback**: `game_sound_0100_22050_8bit` (always available)
+- **Code**: `src/main.c` calls `audio_player_play_sound(100, ...)`
 
 ## Code Organization
 
@@ -170,70 +179,38 @@ The audio system has been refactored into focused, single-responsibility modules
 
 ## CAN Protocol Implementation
 
-### CAN IDs (Standard 11-bit)
+This firmware uses the shared `can_audiomodule` component from `ots-fw-shared`.
+
+- **Protocol header**: `ots-fw-shared/components/can_audiomodule/can_audio_protocol.h`
+- **Handler implementation**: `src/can_audio_handler.c`
+
+High-level CAN IDs (11-bit, 0x420-0x42F block):
 
 | ID | Direction | Purpose |
 |----|-----------|---------|
-| 0x420 | Main → Sound | PLAY_SOUND command |
-| 0x421 | Main → Sound | STOP_SOUND command |
-| 0x422 | Sound → Main | STATUS report (periodic) |
-| 0x423 | Sound → Main | ACK response (optional) |
-
-### PLAY_SOUND (0x420)
-
-**Frame Format:**
-```
-Byte 0: Command (0x01)
-Byte 1: Flags (bit0=interrupt, bit1=highPriority, bit2=loop)
-Byte 2-3: Sound Index (u16 little-endian)
-Byte 4: Volume Override (0xFF = use potentiometer)
-Byte 5: Reserved
-Byte 6-7: Request ID (u16 little-endian)
-```
-
-**Example:** Play sound #1 with high priority
-```
-ID=0x420 DLC=8 DATA=[01 02 01 00 FF 00 00 00]
-         ^^^^        ^^    ^^^^^
-         CMD         Flags Index=1
-```
-
-### STOP_SOUND (0x421)
-
-```
-Byte 0: Command (0x02)
-Byte 1: Flags (bit0=stopAll)
-Byte 2-3: Sound Index (0x0000 = stop current)
-Byte 4-7: Reserved
-```
-
-### STATUS (0x422)
-
-Sent periodically (1Hz) or on state change:
-```
-Byte 0: State (0x00=idle, 0x01=playing, 0x02=paused, 0xFF=error)
-Byte 1: Current sound index (u8, high byte)
-Byte 2: Current sound index (u8, low byte)
-Byte 3: Volume (0-100)
-Byte 4: Error code (if state=0xFF)
-Byte 5-7: Reserved
-```
+| 0x420 | Main → Audio | PLAY_SOUND (sound_id + flags + volume + request_id) |
+| 0x421 | Main → Audio | STOP_SOUND (queue_id + flags + request_id) |
+| 0x422 | Main → Audio | STOP_ALL |
+| 0x423 | Audio → Main | SOUND_ACK (ok/error + queue_id) |
+| 0x424 | Audio → Main | STOP_ACK |
+| 0x425 | Audio → Main | SOUND_FINISHED |
+| 0x426 | Audio → Main | SOUND_STATUS (periodic) |
 
 ## SD Card Structure
 
 ### Directory Layout
 ```
-/sounds/
-  ├── 0001.wav  (game_start)
-  ├── 0002.wav  (game_player_death)
-  ├── 0003.wav  (game_victory)
-  ├── 0004.wav  (game_defeat)
-  ├── 0010.wav  (alert_atom)
-  ├── 0011.wav  (alert_hydro)
-  ├── 0012.wav  (alert_mirv)
-  ├── 0013.wav  (alert_land)
-  ├── 0014.wav  (alert_naval)
-  └── ...
+/sdcard/sounds/
+   ├── 0000.wav  (game_start)
+   ├── 0001.wav  (game_victory)
+   ├── 0002.wav  (game_defeat)
+   ├── 0003.wav  (game_player_death)
+   ├── 0004.wav  (nuclear_alert)
+   ├── 0005.wav  (land_invasion)
+   ├── 0006.wav  (naval_invasion)
+   ├── 0007.wav  (nuke_launch)
+   ├── 0100.wav  (audio_ready_boot)
+   └── XXXX.wav  (custom)
 ```
 
 ### File Naming Convention
@@ -241,9 +218,9 @@ Byte 5-7: Reserved
 - **Index Range:** 0001-9999
 - **Audio Specs:** 16-bit PCM WAV, 44.1kHz stereo/mono
 
-### Sound Index Mapping
+### Sound ID Mapping
 
-See `../prompts/WEBSOCKET_MESSAGE_SPEC.md` for canonical soundId → soundIndex mapping table.
+See `docs/SOUND_ID_MAPPING.md` for the canonical sound ID list, filenames, and embedded fallback rules.
 
 ## Project Structure
 
@@ -266,13 +243,13 @@ ots-fw-audiomodule/
     ├── wav_utils.c/h           # Shared WAV parsing (116 lines)
     │
     ├── audio_console.c/h       # Interactive console (16 commands) ⚠️ UPDATE DOCS!
-    ├── can_handler.c/h         # CAN message handling (159 lines)
+   ├── can_audio_handler.c/h   # CAN message handling
     │
     ├── board_config.h          # ESP32-A1S pin definitions
     │
     └── hardware/               # Hardware abstraction layer
         ├── i2s.c/h             # I2S audio output
-        ├── es8388.c/h          # ES8388 codec driver
+      ├── es8388.c/h          # ES8388 codec driver
         ├── i2c.c/h             # I2C bus management
         ├── gpio.c/h            # GPIO initialization
         └── sdcard.c/h          # SD card FAT32 mount
@@ -314,7 +291,7 @@ Edit `platformio.ini` to adjust:
 
 ### Phase 1: Audio Foundation ✅ (Complete)
 - [x] ESP-IDF base project setup
-- [x] I2S + AC101 codec initialization
+- [x] I2S + ES8388 codec initialization
 - [x] SD card mount (FAT32)
 - [x] WAV file playback
 - [x] UART command interface (basic testing)
@@ -363,7 +340,7 @@ HELLO\n      → Plays /sdcard/hello.wav
 
 **Last Updated:** January 4, 2026  
 **Framework:** ESP-IDF v5.4.2 (plain, no ESP-ADF)  
-**Audio Format:** WAV only (16-bit PCM)  
+**Audio Format:** WAV only (PCM; SD audio is typically 16-bit, embedded fallback uses 8-bit)  
 **Code Status:** Refactored into modular architecture  
 **Build Status:** ✅ 343KB flash (8.2%), 30KB RAM (9.2%)  
 **Phase Status:** Phase 1 complete + refactored, Phase 2 (CAN) in progress
@@ -378,8 +355,8 @@ HELLO\n      → Plays /sdcard/hello.wav
 
 ### SD asset naming (recommended)
 
-- Directory: `/sounds/`
-- File: `NNNN.mp3` preferred, `NNNN.wav` fallback (example: `/sounds/0020.mp3`)
+- Directory: `/sdcard/sounds/`
+- File: `NNNN.wav` (4-digit zero-padded)
 
 ## Technology Stack
 
@@ -405,16 +382,16 @@ ots-fw-audiomodule/
 
 ```bash
 # Build the project
-pio run
+pio run -e esp32-a1s-espidf
 
 # Flash to ESP32
-pio run -t upload
+pio run -e esp32-a1s-espidf -t upload
 
 # Monitor serial output
-pio run -t monitor
+pio device monitor
 
 # Build + Flash + Monitor
-pio run -t upload -t monitor
+pio run -e esp32-a1s-espidf -t upload && pio device monitor
 ```
 
 ## Command Protocol (Current)
@@ -440,24 +417,25 @@ HELLO\n      → Plays /sdcard/hello.wav
 1. Format SD card as FAT32
 2. Copy WAV files to root directory
 3. Files should be one of:
-    - **Preferred (if supported by firmware)**: MP3
-    - Fallback: 16-bit PCM WAV (mono or stereo)
+   - **Supported**: WAV (PCM)
+   - **Not supported (yet)**: MP3/AAC/OGG
 
 WAV recommendations:
+- PCM 16-bit is recommended for SD-card audio
 - Sample rate: 44.1kHz or 48kHz
 
 ## Integration with OTS Main Controller
 
-This module is designed to work as an external peripheral for the main OpenFront Tactical Suitcase controller firmware located in `../of-fw-main`.
+This module is designed to work as an external peripheral for the main OpenFront Tactical Suitcase controller firmware located in `../ots-fw-main`.
 
 ### Communication Flow
 ```
-Main Controller (of-fw-main)
+Main Controller (ots-fw-main)
     ↓ UART/CAN Command
 Audio Module (ots-fw-audiomodule)
     ↓ Read WAV from SD Card
     ↓ Decode & Stream to I2S
-AC101 Audio Codec
+ES8388 Audio Codec
     ↓ Analog Output
 Speakers/Headphones
 ```
@@ -547,7 +525,7 @@ Complete user documentation for all serial console commands. This file MUST be u
 - [ ] Add error recovery mechanisms
 
 ### Medium Term
-- [ ] CAN bus communication implementation
+- [ ] Additional CAN audio features (more message types, richer status)
 - [ ] Advanced command protocol with checksums
 - [ ] Playlist/queue support
 - [ ] Dynamic command table (configurable via SD card)
@@ -568,7 +546,7 @@ Complete user documentation for all serial console commands. This file MUST be u
 
 ### No Audio Output
 - Verify I2S initialization
-- Check AC101 codec configuration
+- Check ES8388 codec configuration
 - Ensure WAV file format is compatible
 - Test with known-good audio files
 

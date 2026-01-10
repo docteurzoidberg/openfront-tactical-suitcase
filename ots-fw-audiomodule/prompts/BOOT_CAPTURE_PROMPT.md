@@ -53,11 +53,12 @@ A successful boot should show:
 3. **SD Card Init** (I (xxx) sdcard...)
    - Either mounts successfully OR fails gracefully
    - Should see: "SD card mount failed, continuing without SD"
+   - SD assets are expected under `/sdcard/sounds/XXXX.wav` (if present)
    - ~3-4 seconds
 
 4. **Hardware Init** (I (xxx) MAIN: Initializing hardware...)
    - GPIO, I2C, I2S initialization
-   - AC101 codec attempt (may fail gracefully)
+   - ES8388 codec init + start (may fail gracefully)
    - ~4-5 seconds
 
 5. **Audio Mixer Init** (I (xxx) MIXER: Initializing...)
@@ -65,13 +66,19 @@ A successful boot should show:
    - Hardware ready state set
    - ~5-6 seconds
 
-6. **CAN Driver Init** (I (xxx) CAN_HANDLER...)
-   - CAN initialization
-   - Mock mode active (no physical CAN hardware)
+6. **CAN Driver + Handler Init** (I (xxx) MAIN: Initializing CAN driver...)
+   - CAN initialization (may fall back to mock mode)
+   - CAN RX task starts (tag `CAN_AUDIO`)
+   - Should see: "CAN discovery: Audio Module v1.0 on block 0x420-0x42F"
    - ~6-7 seconds
 
-7. **Runtime** (I (xxx) CAN_HANDLER: STATUS...)
-   - Periodic status updates every 5 seconds
+7. **Boot Sound (audio-ready)** (I (xxx) MAIN: Played boot sound...)
+   - The audio module plays its own startup sound locally (not via CAN)
+   - Sound ID is `100` (SD filename `0100.wav`, embedded fallback exists)
+   - Look for: `Played boot sound: audio-ready (id=100, handle=...)`
+
+8. **Runtime**
+   - Periodic CAN STATUS frames (tag `CAN_AUDIO`) every 5 seconds
    - System stable and running
 
 ## Red Flags in Boot Logs
@@ -85,7 +92,7 @@ Watch for these issues:
 - Hang (no new logs after certain point)
 
 **Warnings (May Be OK):**
-- `AC101 codec init failed` - Expected if hardware not present
+- `ES8388 codec init failed` - Expected if codec not present / wiring issue
 - `SD card mount failed` - Expected if card not inserted
 - `Audio hardware not ready` - Expected without codec
 - `CAN_DRV: Physical mode not implemented` - Expected in mock mode
