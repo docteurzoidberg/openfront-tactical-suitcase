@@ -7,7 +7,7 @@
 #define OTS_PROJECT_NAME        "OpenFront Tactical Suitcase"
 #define OTS_PROJECT_ABBREV      "OTS"
 #define OTS_FIRMWARE_NAME       "ots-fw-main"
-#define OTS_FIRMWARE_VERSION    "2026-01-10.1"  // Updated by release.sh
+#define OTS_FIRMWARE_VERSION    "2026-01-10.2-dev"  // Updated by release.sh
 
 // Device Identity (for hardware diagnostic)
 #define OTS_DEVICE_SERIAL_NUMBER "OTS-FW-000001"  // Unique device serial number

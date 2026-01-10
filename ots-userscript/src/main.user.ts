@@ -4,7 +4,7 @@ import { GameBridge, WS_CLOSE_CODE_URL_CHANGED } from './game'
 import { loadWsUrl, saveWsUrl } from './storage/config'
 
 // Version (updated by release.sh)
-const VERSION = '2026-01-10.1'
+const VERSION = '2026-01-10.2-dev'
 
   ; (function start() {
     console.log(`[OTS Userscript] Version ${VERSION}`)

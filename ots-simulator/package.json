@@ -1,6 +1,6 @@
 {
   "name": "ots",
-  "version": "2026-01-10.1",
+  "version": "2026-01-10.2-dev",
   "type": "module",
   "private": true,
   "scripts": {
