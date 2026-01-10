@@ -10,13 +10,13 @@ These links point to static files hosted directly by this site (VitePress `publi
 - Audio module firmware (latest): [/releases/latest/firmware/ots-fw-audiomodule.bin](/releases/latest/firmware/ots-fw-audiomodule.bin)
 - Userscript (latest): [/releases/latest/userscript/userscript.user.js](/releases/latest/userscript/userscript.user.js)
 
-::: tip Where to put files
-Drop release artifacts under `ots-website/public/releases/...`.
+## Release Archives (Hosted Here)
 
-Example:
-- `ots-website/public/releases/latest/firmware/ots-fw-main.bin`
-- `ots-website/public/releases/latest/userscript/userscript.user.js`
-:::
+### 2026-01-10.1
+
+- Main firmware: [/releases/2026-01-10.1/firmware/ots-fw-main-2026-01-10.1.bin](/releases/2026-01-10.1/firmware/ots-fw-main-2026-01-10.1.bin)
+- Audio module firmware: [/releases/2026-01-10.1/firmware/ots-fw-audiomodule-2026-01-10.1.bin](/releases/2026-01-10.1/firmware/ots-fw-audiomodule-2026-01-10.1.bin)
+- Userscript: [/releases/2026-01-10.1/userscript/userscript-2026-01-10.1.user.js](/releases/2026-01-10.1/userscript/userscript-2026-01-10.1.user.js)
 
 ## Hardware Files
 
@@ -51,24 +51,10 @@ When available, they will be hosted under:
 - Power Distribution Board
 - Module Connector Boards
 
-## Firmware
+## Notes
 
-Latest firmware releases for ESP32-S3 devices.
-
-- Hosted on this site: [/releases/latest/firmware/ots-fw-main.bin](/releases/latest/firmware/ots-fw-main.bin)
 - Changelog + history: See the [Releases](/releases) page.
-
-## Userscript
-
-Built Tampermonkey userscript to connect OpenFront.io game to your OTS device.
-
-- Hosted on this site: [/releases/latest/userscript/userscript.ots.user.js](/releases/latest/userscript/userscript.ots.user.js)
-- Hosted on this site: [/releases/latest/userscript/userscript.user.js](/releases/latest/userscript/userscript.user.js)
-- Instructions: See the [Userscript Installation Guide](/user/userscript-install).
-
-::: warning Large files
-GitHub Pages works great for firmware and small ZIPs. For very large files (Fusion360 exports, big CAD bundles) or lots of historical releases, consider attaching artifacts to GitHub Releases and linking them here.
-:::
+- Userscript install instructions: See the [Userscript Installation Guide](/user/userscript-install).
 
 ## Source Code
 
