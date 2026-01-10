@@ -39,6 +39,8 @@ typedef struct {
     uint32_t tx_timeouts;
     uint64_t last_tx_timeout_time_ms;
     uint64_t last_discovery_query_time_ms;
+    uint32_t recovery_attempts;
+    uint64_t last_recovery_attempt_time_ms;
 } sound_module_state_t;
 
 static sound_module_state_t s_state = {0};
@@ -54,6 +56,7 @@ static QueueHandle_t s_can_tx_queue = NULL;
 // Use several intervals to tolerate jitter and startup.
 #define SOUND_AUDIO_OFFLINE_TIMEOUT_MS (CAN_AUDIO_STATUS_INTERVAL_MS * 3)
 #define SOUND_DISCOVERY_RETRY_INTERVAL_MS 2000
+#define SOUND_RECOVERY_RETRY_INTERVAL_MS 5000
 
 typedef enum {
     SOUND_TX_KIND_PLAY = 1,
@@ -206,6 +209,22 @@ static void can_tx_task(void *arg) {
 
             // Drop any queued sound commands to avoid repeated 100ms blocks.
             xQueueReset(s_can_tx_queue);
+        } else {
+            // Non-timeout errors can indicate BUS_OFF or driver stopped.
+            // Attempt recovery in the TX task so the main event loop remains non-blocking.
+            const uint64_t now_ms = esp_timer_get_time() / 1000;
+            s_state.can_ready = false;
+
+            if (now_ms - s_state.last_recovery_attempt_time_ms >= SOUND_RECOVERY_RETRY_INTERVAL_MS) {
+                s_state.last_recovery_attempt_time_ms = now_ms;
+                s_state.recovery_attempts++;
+
+                ESP_LOGW(TAG, "CAN TX error (%s) - attempting TWAI recovery/start", esp_err_to_name(ret));
+                can_driver_log_twai_status();
+                (void)can_driver_recover();
+                vTaskDelay(pdMS_TO_TICKS(50));
+                (void)can_driver_start();
+            }
         }
 
         // Yield after processing to prevent watchdog
@@ -267,6 +286,8 @@ static esp_err_t sound_init(void) {
     s_state.tx_timeouts = 0;
     s_state.last_tx_timeout_time_ms = 0;
     s_state.last_discovery_query_time_ms = 0;
+    s_state.recovery_attempts = 0;
+    s_state.last_recovery_attempt_time_ms = 0;
     
     // Start CAN RX task to receive discovery announcements and responses
     // Use PinnedToCore with tskNO_AFFINITY and priority 6 (matches audiomodule pattern)
