@@ -1,8 +1,11 @@
 #include "can_bus_manager.h"
 
+#include "can_discovery.h"
+
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 
 #include <string.h>
@@ -24,7 +27,11 @@ typedef struct {
     TaskHandle_t tx_task;
     QueueHandle_t tx_queue;
 
+    SemaphoreHandle_t lock;
+
     handler_entry_t handlers[CAN_BUS_MANAGER_MAX_HANDLERS];
+
+    can_bus_module_info_t modules[CAN_BUS_MANAGER_MAX_MODULES];
 
     uint64_t last_recovery_attempt_ms;
 
@@ -42,6 +49,59 @@ typedef struct {
     can_frame_t frame;
 } tx_item_t;
 
+static void registry_update_from_announce(const can_frame_t *frame) {
+    if (!frame) return;
+    if ((uint16_t)frame->id != CAN_ID_MODULE_ANNOUNCE) return;
+
+    can_frame_t tmp = *frame;
+    module_info_t info;
+    if (can_discovery_parse_announce(&tmp, &info) != ESP_OK) {
+        return;
+    }
+
+    const uint64_t now_ms = uptime_ms();
+
+    if (s_mgr.lock) {
+        (void)xSemaphoreTake(s_mgr.lock, portMAX_DELAY);
+    }
+
+    // Update existing entry
+    for (size_t i = 0; i < CAN_BUS_MANAGER_MAX_MODULES; i++) {
+        can_bus_module_info_t *m = &s_mgr.modules[i];
+        if (!m->valid) continue;
+        if (m->module_type == info.module_type && m->node_id == info.node_id) {
+            m->version_major = info.version_major;
+            m->version_minor = info.version_minor;
+            m->capabilities = info.capabilities;
+            m->can_block_base = info.can_block_base;
+            m->last_seen_ms = now_ms;
+            if (s_mgr.lock) {
+                (void)xSemaphoreGive(s_mgr.lock);
+            }
+            return;
+        }
+    }
+
+    // Insert into first free slot
+    for (size_t i = 0; i < CAN_BUS_MANAGER_MAX_MODULES; i++) {
+        can_bus_module_info_t *m = &s_mgr.modules[i];
+        if (m->valid) continue;
+        m->valid = true;
+        m->module_type = info.module_type;
+        m->version_major = info.version_major;
+        m->version_minor = info.version_minor;
+        m->capabilities = info.capabilities;
+        m->can_block_base = info.can_block_base;
+        m->node_id = info.node_id;
+        m->last_seen_ms = now_ms;
+        break;
+    }
+
+    if (s_mgr.lock) {
+        (void)xSemaphoreGive(s_mgr.lock);
+    }
+}
+
 static void rx_task(void *arg) {
     (void)arg;
 
@@ -52,6 +112,11 @@ static void rx_task(void *arg) {
         esp_err_t ret = can_driver_receive(&frame, CAN_BUS_MANAGER_RX_TIMEOUT_MS);
         if (ret == ESP_OK) {
             s_mgr.stats.rx_received++;
+
+            // Opportunistically update discovery registry
+            if ((uint16_t)frame.id == CAN_ID_MODULE_ANNOUNCE) {
+                registry_update_from_announce(&frame);
+            }
 
             // Dispatch to matching handlers
             for (size_t i = 0; i < CAN_BUS_MANAGER_MAX_HANDLERS; i++) {
@@ -125,6 +190,11 @@ esp_err_t can_bus_manager_init(const can_config_t *config) {
         return ESP_ERR_NO_MEM;
     }
 
+    s_mgr.lock = xSemaphoreCreateMutex();
+    if (!s_mgr.lock) {
+        return ESP_ERR_NO_MEM;
+    }
+
     BaseType_t ok = xTaskCreatePinnedToCore(rx_task, "can_rx", 4096, NULL, 6, &s_mgr.rx_task, tskNO_AFFINITY);
     if (ok != pdPASS) {
         return ESP_FAIL;
@@ -156,6 +226,10 @@ esp_err_t can_bus_manager_deinit(void) {
     if (s_mgr.tx_queue) {
         vQueueDelete(s_mgr.tx_queue);
         s_mgr.tx_queue = NULL;
+    }
+    if (s_mgr.lock) {
+        vSemaphoreDelete(s_mgr.lock);
+        s_mgr.lock = NULL;
     }
 
     s_mgr.initialized = false;
@@ -209,6 +283,66 @@ esp_err_t can_bus_manager_discovery_query_all(void) {
     frame.data[0] = 0xFF;
 
     return can_bus_manager_send(&frame);
+}
+
+esp_err_t can_bus_manager_get_module(uint8_t module_type, uint8_t node_id, can_bus_module_info_t *out_info) {
+    if (!out_info) return ESP_ERR_INVALID_ARG;
+
+    if (s_mgr.lock) {
+        (void)xSemaphoreTake(s_mgr.lock, portMAX_DELAY);
+    }
+
+    for (size_t i = 0; i < CAN_BUS_MANAGER_MAX_MODULES; i++) {
+        const can_bus_module_info_t *m = &s_mgr.modules[i];
+        if (!m->valid) continue;
+        if (m->module_type == module_type && m->node_id == node_id) {
+            *out_info = *m;
+            if (s_mgr.lock) {
+                (void)xSemaphoreGive(s_mgr.lock);
+            }
+            return ESP_OK;
+        }
+    }
+
+    if (s_mgr.lock) {
+        (void)xSemaphoreGive(s_mgr.lock);
+    }
+    memset(out_info, 0, sizeof(*out_info));
+    return ESP_ERR_NOT_FOUND;
+}
+
+bool can_bus_manager_is_module_present(uint8_t module_type, uint8_t node_id, uint64_t max_age_ms) {
+    can_bus_module_info_t info;
+    if (can_bus_manager_get_module(module_type, node_id, &info) != ESP_OK) {
+        return false;
+    }
+    if (max_age_ms == 0) {
+        return true;
+    }
+    const uint64_t now_ms = uptime_ms();
+    return (now_ms >= info.last_seen_ms) && ((now_ms - info.last_seen_ms) <= max_age_ms);
+}
+
+size_t can_bus_manager_list_modules(can_bus_module_info_t *out_items, size_t max_items) {
+    if (!out_items || max_items == 0) return 0;
+
+    size_t count = 0;
+
+    if (s_mgr.lock) {
+        (void)xSemaphoreTake(s_mgr.lock, portMAX_DELAY);
+    }
+
+    for (size_t i = 0; i < CAN_BUS_MANAGER_MAX_MODULES && count < max_items; i++) {
+        const can_bus_module_info_t *m = &s_mgr.modules[i];
+        if (!m->valid) continue;
+        out_items[count++] = *m;
+    }
+
+    if (s_mgr.lock) {
+        (void)xSemaphoreGive(s_mgr.lock);
+    }
+
+    return count;
 }
 
 void can_bus_manager_get_stats(can_bus_manager_stats_t *out_stats) {

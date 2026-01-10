@@ -64,34 +64,6 @@ static uint16_t map_event_to_sound_index(game_event_type_t event_type);
 static esp_err_t parse_sound_play_data(const char *json_data, uint16_t *sound_index, 
                                        bool *interrupt, bool *high_priority);
 
-static void on_can_module_announce(const can_frame_t *frame, void *ctx) {
-    (void)ctx;
-    if (!frame) return;
-
-    const uint64_t now_ms = esp_timer_get_time() / 1000;
-
-    module_info_t info;
-    can_frame_t tmp = *frame;
-    if (can_discovery_parse_announce(&tmp, &info) != ESP_OK) {
-        return;
-    }
-    if (info.module_type != MODULE_TYPE_AUDIO) {
-        return;
-    }
-
-    s_state.audio_module_discovered = true;
-    s_state.audio_module_version_major = info.version_major;
-    s_state.audio_module_version_minor = info.version_minor;
-    s_state.audio_discovered_time_ms = now_ms;
-
-    // Treat as usable immediately; status frames will refine liveness.
-    s_state.can_ready = true;
-    s_state.tx_timeouts = 0;
-
-    ESP_LOGI(TAG, "Audio module v%d.%d discovered on CAN block 0x%02X",
-             info.version_major, info.version_minor, info.can_block_base);
-}
-
 static void on_can_sound_status(const can_frame_t *frame, void *ctx) {
     (void)ctx;
     if (!frame || frame->dlc < 8) return;
@@ -184,7 +156,6 @@ static esp_err_t sound_init(void) {
     s_state.last_mgr_recovery_attempts = 0;
     
     // Register RX handlers (single shared RX task)
-    (void)can_bus_manager_register_handler(CAN_ID_MODULE_ANNOUNCE, 0x7FF, on_can_module_announce, NULL);
     (void)can_bus_manager_register_handler(CAN_ID_SOUND_STATUS, 0x7FF, on_can_sound_status, NULL);
     (void)can_bus_manager_register_handler(CAN_ID_SOUND_ACK, 0x7FF, on_can_sound_ack, NULL);
     (void)can_bus_manager_register_handler(CAN_ID_SOUND_FINISHED, 0x7FF, on_can_sound_finished, NULL);
@@ -211,6 +182,27 @@ static esp_err_t sound_update(void) {
     if (!s_state.initialized) return ESP_FAIL;
 
     const uint64_t now_ms = esp_timer_get_time() / 1000;
+
+    // Discovery presence (from can_bus_manager registry)
+    can_bus_module_info_t audio_info = {0};
+    if (can_bus_manager_get_module(MODULE_TYPE_AUDIO, 0, &audio_info) == ESP_OK) {
+        const bool was_discovered = s_state.audio_module_discovered;
+
+        s_state.audio_module_discovered = true;
+        s_state.audio_module_version_major = audio_info.version_major;
+        s_state.audio_module_version_minor = audio_info.version_minor;
+        s_state.audio_discovered_time_ms = audio_info.last_seen_ms;
+
+        if (!was_discovered) {
+            ESP_LOGI(TAG, "Audio module v%d.%d discovered (CAN block 0x%02X)",
+                     audio_info.version_major, audio_info.version_minor, audio_info.can_block_base);
+            // Treat as usable immediately; status frames will refine liveness.
+            s_state.can_ready = true;
+            s_state.tx_timeouts = 0;
+        }
+    } else {
+        s_state.audio_module_discovered = false;
+    }
 
     // Fast offline detection: if we start seeing CAN TX timeouts, treat audio as offline.
     // (Timeout means no ACK on bus; common when the audio ESP is powered off.)

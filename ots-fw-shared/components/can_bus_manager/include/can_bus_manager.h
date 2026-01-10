@@ -5,7 +5,6 @@
 
 #include "esp_err.h"
 #include "can_driver.h"
-#include "can_discovery.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,6 +18,10 @@ extern "C" {
 
 #ifndef CAN_BUS_MANAGER_MAX_HANDLERS
 #define CAN_BUS_MANAGER_MAX_HANDLERS 32
+#endif
+
+#ifndef CAN_BUS_MANAGER_MAX_MODULES
+#define CAN_BUS_MANAGER_MAX_MODULES 16
 #endif
 
 #ifndef CAN_BUS_MANAGER_RX_TIMEOUT_MS
@@ -45,6 +48,19 @@ typedef struct {
 
     uint32_t recovery_attempts;
 } can_bus_manager_stats_t;
+
+// ---- Optional discovery registry ----
+
+typedef struct {
+    bool valid;
+    uint8_t module_type;
+    uint8_t version_major;
+    uint8_t version_minor;
+    uint8_t capabilities;
+    uint8_t can_block_base;
+    uint8_t node_id;
+    uint64_t last_seen_ms;
+} can_bus_module_info_t;
 
 /**
  * @brief Initialize CAN bus manager.
@@ -77,6 +93,25 @@ esp_err_t can_bus_manager_register_handler(uint16_t id, uint16_t mask, can_bus_r
  * Non-blocking: enqueues the query frame into TX queue.
  */
 esp_err_t can_bus_manager_discovery_query_all(void);
+
+/**
+ * @brief Lookup discovered module info by (module_type, node_id).
+ *
+ * This is populated opportunistically by parsing MODULE_ANNOUNCE frames.
+ */
+esp_err_t can_bus_manager_get_module(uint8_t module_type, uint8_t node_id, can_bus_module_info_t *out_info);
+
+/**
+ * @brief True if module exists in registry and (optionally) was seen recently.
+ *
+ * If max_age_ms is 0, only checks existence.
+ */
+bool can_bus_manager_is_module_present(uint8_t module_type, uint8_t node_id, uint64_t max_age_ms);
+
+/**
+ * @brief Copy up to max_items modules into out_items. Returns number copied.
+ */
+size_t can_bus_manager_list_modules(can_bus_module_info_t *out_items, size_t max_items);
 
 /**
  * @brief Get internal manager statistics.
