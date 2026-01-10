@@ -11,7 +11,7 @@
 #include "esp_err.h"
 #include "nvs_flash.h"
 
-#include "can_driver.h"
+#include "can_bus_manager.h"
 #include "can_audio_handler.h"
 #include "audio_mixer.h"
 #include "audio_player.h"
@@ -108,8 +108,8 @@ void app_main(void)
         }
     }
     
-    // Initialize CAN driver
-    ESP_LOGI(TAG, "Initializing CAN driver...");
+    // Initialize CAN bus manager (shared RX dispatch + TX queue)
+    ESP_LOGI(TAG, "Initializing CAN bus manager...");
     can_config_t can_config = {
         .tx_gpio = CAN_TX_GPIO,
         .rx_gpio = CAN_RX_GPIO,
@@ -117,11 +117,11 @@ void app_main(void)
         .loopback = false,
         .mock_mode = false
     };
-    ret = can_driver_init(&can_config);
+    ret = can_bus_manager_init(&can_config);
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "CAN driver init failed, running in mock mode");
+        ESP_LOGW(TAG, "CAN bus manager init failed, running in mock mode");
     } else {
-        ESP_LOGI(TAG, "CAN driver initialized @ %d bps", CAN_BITRATE);
+        ESP_LOGI(TAG, "CAN bus manager initialized @ %d bps", CAN_BITRATE);
     }
 
     // Initialize and start CAN handler

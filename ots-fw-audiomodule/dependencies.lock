@@ -12,6 +12,6 @@ dependencies:
 direct_dependencies:
 - espressif/can_driver
 - idf
-manifest_hash: 9e1e9e974548275550ecc43424a8a5734ebcd97f8cb4b17d4314933e800bfb2b
+manifest_hash: b858ee129be2c45dea1f47da3221213e599ff632fca5689483d662b5456a158a
 target: esp32
 version: 2.0.0
