@@ -1,0 +1,30 @@
+# can_bus_manager - Component Prompt
+
+## Purpose
+
+`can_bus_manager` provides shared runtime infrastructure for CAN-based modules:
+
+- Single **TX queue + TX task** (non-blocking for callers)
+- Single **RX task** with **ID/mask dispatch** to registered handlers
+- Rate-limited **BUS_OFF recovery** attempts using `can_driver_recover()` + `can_driver_start()`
+
+It intentionally does **not** define message formats. Message formats live in protocol components like `can_discovery`, `can_audiomodule`, etc.
+
+## Public API
+
+See `include/can_bus_manager.h`.
+
+## Usage Pattern (fw-main)
+
+1. Initialize once at boot:
+   - `can_bus_manager_init(&config)`
+2. For each module:
+   - register RX handlers for CAN IDs it cares about
+   - build outbound frames using `can_<module>` helpers
+   - send via `can_bus_manager_send()`
+
+## Notes
+
+- `can_bus_manager_send()` is enqueue-only. It returns `ESP_ERR_TIMEOUT` if the queue is full.
+- If the bus is missing ACKs (e.g., only one powered node), `can_driver_send()` may return `ESP_ERR_TIMEOUT`. This is treated as a timeout (not a fatal error).
+- Non-timeout send errors trigger recovery attempts with backoff.
