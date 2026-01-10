@@ -1,14 +1,12 @@
 #include "sound_module.h"
 #include "can_audio_protocol.h"
+#include "can_bus_manager.h"
 #include "can_discovery.h"
 #include "protocol.h"
 #include "event_dispatcher.h"
 #include "cJSON.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
-#include "freertos/task.h"
 #include <string.h>
 
 static const char *TAG = "SOUND_MODULE";
@@ -36,40 +34,23 @@ typedef struct {
     uint8_t last_status_error_code;
     uint8_t last_status_volume;
     uint16_t last_status_uptime;
-    uint32_t tx_timeouts;
+    uint32_t tx_timeouts; // observed CAN TX timeouts (for fast offline detection)
     uint64_t last_tx_timeout_time_ms;
     uint64_t last_discovery_query_time_ms;
-    uint32_t recovery_attempts;
-    uint64_t last_recovery_attempt_time_ms;
+
+    // Snapshot of global manager stats for delta tracking
+    uint32_t last_mgr_tx_send_timeouts;
+    uint32_t last_mgr_tx_send_errors;
+    uint32_t last_mgr_recovery_attempts;
 } sound_module_state_t;
 
 static sound_module_state_t s_state = {0};
 static uint16_t s_request_counter = 0;
-static TaskHandle_t s_can_rx_task = NULL;
-static TaskHandle_t s_can_tx_task = NULL;
-static QueueHandle_t s_can_tx_queue = NULL;
-
-#define SOUND_CAN_RX_TIMEOUT_MS 100
-#define SOUND_CAN_TX_QUEUE_DEPTH 16
 
 // Consider audio module offline if no status received for this long.
 // Use several intervals to tolerate jitter and startup.
 #define SOUND_AUDIO_OFFLINE_TIMEOUT_MS (CAN_AUDIO_STATUS_INTERVAL_MS * 3)
 #define SOUND_DISCOVERY_RETRY_INTERVAL_MS 2000
-#define SOUND_RECOVERY_RETRY_INTERVAL_MS 5000
-
-typedef enum {
-    SOUND_TX_KIND_PLAY = 1,
-    SOUND_TX_KIND_STOP_ALL = 2,
-    SOUND_TX_KIND_DISCOVERY_QUERY = 3,
-} sound_tx_kind_t;
-
-typedef struct {
-    sound_tx_kind_t kind;
-    uint16_t sound_index;
-    uint16_t request_id;
-    can_frame_t frame;
-} sound_tx_item_t;
 
 // Forward declarations
 static esp_err_t sound_init(void);
@@ -83,153 +64,65 @@ static uint16_t map_event_to_sound_index(game_event_type_t event_type);
 static esp_err_t parse_sound_play_data(const char *json_data, uint16_t *sound_index, 
                                        bool *interrupt, bool *high_priority);
 
-static void can_tx_task(void *arg);
-static esp_err_t enqueue_can_tx(const sound_tx_item_t *item);
-static esp_err_t enqueue_discovery_query(uint64_t now_ms);
+static void on_can_module_announce(const can_frame_t *frame, void *ctx) {
+    (void)ctx;
+    if (!frame) return;
 
-/**
- * @brief CAN RX task - receives discovery announcements and sound status
- */
-static void can_rx_task(void *arg) {
-    can_frame_t frame;
-    ESP_LOGI(TAG, "CAN RX task started");
-    
-    while (1) {
-        // Receive CAN frame with 100ms timeout (matches audiomodule/cantest pattern)
-        esp_err_t ret = can_driver_receive(&frame, SOUND_CAN_RX_TIMEOUT_MS);
-        
-        if (ret == ESP_OK) {
-            const uint64_t now_ms = esp_timer_get_time() / 1000;
-            // Handle MODULE_ANNOUNCE (discovery)
-            if (frame.id == CAN_ID_MODULE_ANNOUNCE) {
-                module_info_t info;
-                if (can_discovery_parse_announce(&frame, &info) == ESP_OK) {
-                    if (info.module_type == MODULE_TYPE_AUDIO) {
-                        s_state.audio_module_discovered = true;
-                        s_state.audio_module_version_major = info.version_major;
-                        s_state.audio_module_version_minor = info.version_minor;
-                        s_state.audio_discovered_time_ms = now_ms;
-                        // Treat as usable immediately; status will refine liveness.
-                        s_state.can_ready = true;
-                        s_state.tx_timeouts = 0;
-                        ESP_LOGI(TAG, "Audio module v%d.%d discovered on CAN block 0x%02X",
-                                 info.version_major, info.version_minor, info.can_block_base);
-                    }
-                }
-            }
-            // Handle SOUND_STATUS (0x426)
-            else if (frame.id == CAN_ID_SOUND_STATUS && frame.dlc >= 8) {
-                // Layout from can_audiomodule component:
-                // data[0]=state_bits, [1-2]=current_sound (LE), [3]=error_code,
-                // [4]=volume, [5-6]=uptime_sec (LE), [7]=reserved
-                s_state.last_status_time_ms = now_ms;
-                s_state.last_status_state_bits = frame.data[0];
-                s_state.last_status_current_sound = frame.data[1] | (frame.data[2] << 8);
-                s_state.last_status_error_code = frame.data[3];
-                s_state.last_status_volume = frame.data[4];
-                s_state.last_status_uptime = frame.data[5] | (frame.data[6] << 8);
+    const uint64_t now_ms = esp_timer_get_time() / 1000;
 
-                // If we are receiving status, the module is definitely online.
-                s_state.can_ready = true;
-                s_state.audio_module_discovered = true;
-                s_state.tx_timeouts = 0;
-            }
-            // Handle SOUND_ACK (0x423) - future implementation
-            else if (frame.id == CAN_ID_SOUND_ACK) {
-                ESP_LOGI(TAG, "Received SOUND_ACK (parsing not yet implemented)");
-            }
-            // Handle SOUND_FINISHED (0x425) - future implementation
-            else if (frame.id == CAN_ID_SOUND_FINISHED) {
-                ESP_LOGI(TAG, "Received SOUND_FINISHED (parsing not yet implemented)");
-            }
-            
-            // Yield after processing to prevent watchdog (matches cantest pattern)
-            vTaskDelay(pdMS_TO_TICKS(1));
-        }
-        // If timeout (no CAN traffic), just continue and check again
+    module_info_t info;
+    can_frame_t tmp = *frame;
+    if (can_discovery_parse_announce(&tmp, &info) != ESP_OK) {
+        return;
     }
+    if (info.module_type != MODULE_TYPE_AUDIO) {
+        return;
+    }
+
+    s_state.audio_module_discovered = true;
+    s_state.audio_module_version_major = info.version_major;
+    s_state.audio_module_version_minor = info.version_minor;
+    s_state.audio_discovered_time_ms = now_ms;
+
+    // Treat as usable immediately; status frames will refine liveness.
+    s_state.can_ready = true;
+    s_state.tx_timeouts = 0;
+
+    ESP_LOGI(TAG, "Audio module v%d.%d discovered on CAN block 0x%02X",
+             info.version_major, info.version_minor, info.can_block_base);
 }
 
-static esp_err_t enqueue_can_tx(const sound_tx_item_t *item) {
-    if (!item || !s_can_tx_queue) return ESP_ERR_INVALID_STATE;
-    if (xQueueSend(s_can_tx_queue, item, 0) != pdTRUE) {
-        return ESP_ERR_TIMEOUT;
-    }
-    return ESP_OK;
+static void on_can_sound_status(const can_frame_t *frame, void *ctx) {
+    (void)ctx;
+    if (!frame || frame->dlc < 8) return;
+    const uint64_t now_ms = esp_timer_get_time() / 1000;
+
+    // Layout from can_audiomodule component:
+    // data[0]=state_bits, [1-2]=current_sound (LE), [3]=error_code,
+    // [4]=volume, [5-6]=uptime_sec (LE), [7]=reserved
+    s_state.last_status_time_ms = now_ms;
+    s_state.last_status_state_bits = frame->data[0];
+    s_state.last_status_current_sound = frame->data[1] | (frame->data[2] << 8);
+    s_state.last_status_error_code = frame->data[3];
+    s_state.last_status_volume = frame->data[4];
+    s_state.last_status_uptime = frame->data[5] | (frame->data[6] << 8);
+
+    // If we are receiving status, the module is definitely online.
+    s_state.can_ready = true;
+    s_state.audio_module_discovered = true;
+    s_state.tx_timeouts = 0;
 }
 
-static esp_err_t enqueue_discovery_query(uint64_t now_ms) {
-    if (!s_state.can_driver_ready) return ESP_ERR_INVALID_STATE;
-    if (now_ms - s_state.last_discovery_query_time_ms < SOUND_DISCOVERY_RETRY_INTERVAL_MS) {
-        return ESP_OK;
-    }
-
-    sound_tx_item_t item = {0};
-    item.kind = SOUND_TX_KIND_DISCOVERY_QUERY;
-    item.request_id = 0;
-    item.sound_index = 0;
-
-    // Build MODULE_QUERY (0x411): [FF 00 00 00 00 00 00 00]
-    memset(&item.frame, 0, sizeof(item.frame));
-    item.frame.id = CAN_ID_MODULE_QUERY;
-    item.frame.extended = false;
-    item.frame.rtr = false;
-    item.frame.dlc = 8;
-    item.frame.data[0] = 0xFF;
-
-    esp_err_t ret = enqueue_can_tx(&item);
-    if (ret == ESP_OK) {
-        s_state.last_discovery_query_time_ms = now_ms;
-    }
-    return ret;
+static void on_can_sound_ack(const can_frame_t *frame, void *ctx) {
+    (void)frame;
+    (void)ctx;
+    ESP_LOGI(TAG, "Received SOUND_ACK (parsing not yet implemented)");
 }
 
-static void can_tx_task(void *arg) {
-    (void)arg;
-    ESP_LOGI(TAG, "CAN TX task started");
-
-    sound_tx_item_t item;
-    while (1) {
-        if (xQueueReceive(s_can_tx_queue, &item, portMAX_DELAY) != pdTRUE) {
-            continue;
-        }
-
-        esp_err_t ret = can_driver_send(&item.frame);
-        if (ret == ESP_OK) {
-            // Success implies at least one node ACKed the frame.
-            // (Doesn't guarantee audio module accepted payload, but status/ACK will.)
-        } else if (ret == ESP_ERR_TIMEOUT) {
-            const uint64_t now_ms = esp_timer_get_time() / 1000;
-            s_state.tx_timeouts++;
-            s_state.last_tx_timeout_time_ms = now_ms;
-
-            // Fast-fail: if we can't get CAN ACKs, assume the audio ESP is offline.
-            // Stop accepting new sound requests until status resumes.
-            s_state.can_ready = false;
-
-            // Drop any queued sound commands to avoid repeated 100ms blocks.
-            xQueueReset(s_can_tx_queue);
-        } else {
-            // Non-timeout errors can indicate BUS_OFF or driver stopped.
-            // Attempt recovery in the TX task so the main event loop remains non-blocking.
-            const uint64_t now_ms = esp_timer_get_time() / 1000;
-            s_state.can_ready = false;
-
-            if (now_ms - s_state.last_recovery_attempt_time_ms >= SOUND_RECOVERY_RETRY_INTERVAL_MS) {
-                s_state.last_recovery_attempt_time_ms = now_ms;
-                s_state.recovery_attempts++;
-
-                ESP_LOGW(TAG, "CAN TX error (%s) - attempting TWAI recovery/start", esp_err_to_name(ret));
-                can_driver_log_twai_status();
-                (void)can_driver_recover();
-                vTaskDelay(pdMS_TO_TICKS(50));
-                (void)can_driver_start();
-            }
-        }
-
-        // Yield after processing to prevent watchdog
-        vTaskDelay(pdMS_TO_TICKS(1));
-    }
+static void on_can_sound_finished(const can_frame_t *frame, void *ctx) {
+    (void)frame;
+    (void)ctx;
+    ESP_LOGI(TAG, "Received SOUND_FINISHED (parsing not yet implemented)");
 }
 
 // Module interface
@@ -261,9 +154,9 @@ static esp_err_t sound_init(void) {
         .loopback = false,   // Physical CAN bus (not loopback)
         .mock_mode = false   // Auto-detect (falls back to mock if hardware missing)
     };
-    esp_err_t ret = can_driver_init(&config);
+    esp_err_t ret = can_bus_manager_init(&config);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize CAN driver: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to initialize CAN bus manager: %s", esp_err_to_name(ret));
         s_state.can_ready = false;
         return ret;
     }
@@ -286,65 +179,19 @@ static esp_err_t sound_init(void) {
     s_state.tx_timeouts = 0;
     s_state.last_tx_timeout_time_ms = 0;
     s_state.last_discovery_query_time_ms = 0;
-    s_state.recovery_attempts = 0;
-    s_state.last_recovery_attempt_time_ms = 0;
+    s_state.last_mgr_tx_send_timeouts = 0;
+    s_state.last_mgr_tx_send_errors = 0;
+    s_state.last_mgr_recovery_attempts = 0;
     
-    // Start CAN RX task to receive discovery announcements and responses
-    // Use PinnedToCore with tskNO_AFFINITY and priority 6 (matches audiomodule pattern)
-    BaseType_t task_ret = xTaskCreatePinnedToCore(
-        can_rx_task, 
-        "can_rx", 
-        4096, 
-        NULL, 
-        6,  // Higher priority than serial
-        &s_can_rx_task,
-        tskNO_AFFINITY
-    );
-    if (task_ret != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create CAN RX task");
-        return ESP_FAIL;
-    }
+    // Register RX handlers (single shared RX task)
+    (void)can_bus_manager_register_handler(CAN_ID_MODULE_ANNOUNCE, 0x7FF, on_can_module_announce, NULL);
+    (void)can_bus_manager_register_handler(CAN_ID_SOUND_STATUS, 0x7FF, on_can_sound_status, NULL);
+    (void)can_bus_manager_register_handler(CAN_ID_SOUND_ACK, 0x7FF, on_can_sound_ack, NULL);
+    (void)can_bus_manager_register_handler(CAN_ID_SOUND_FINISHED, 0x7FF, on_can_sound_finished, NULL);
 
-    // Create CAN TX queue + task (non-blocking SOUND_PLAY handling)
-    s_can_tx_queue = xQueueCreate(SOUND_CAN_TX_QUEUE_DEPTH, sizeof(sound_tx_item_t));
-    if (!s_can_tx_queue) {
-        ESP_LOGE(TAG, "Failed to create CAN TX queue");
-        return ESP_FAIL;
-    }
-
-    task_ret = xTaskCreatePinnedToCore(
-        can_tx_task,
-        "can_tx",
-        4096,
-        NULL,
-        5,
-        &s_can_tx_task,
-        tskNO_AFFINITY
-    );
-    if (task_ret != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create CAN TX task");
-        return ESP_FAIL;
-    }
-    
-    // Send module discovery query
+    // Trigger discovery (non-blocking). We no longer block init waiting for replies.
     ESP_LOGI(TAG, "Discovering CAN modules...");
-    ret = can_discovery_query_all();
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to send discovery query: %s", esp_err_to_name(ret));
-    }
-    
-    // Wait for discovery responses
-    vTaskDelay(pdMS_TO_TICKS(500));
-    
-    if (s_state.audio_module_discovered) {
-        ESP_LOGI(TAG, "✓ Audio module v%d.%d detected",
-                 s_state.audio_module_version_major,
-                 s_state.audio_module_version_minor);
-        s_state.can_ready = true;
-    } else {
-        ESP_LOGW(TAG, "✗ No audio module detected - sound features disabled");
-        s_state.can_ready = false;
-    }
+    (void)can_bus_manager_discovery_query_all();
     
     ESP_LOGI(TAG, "Sound module initialized successfully");
     ESP_LOGI(TAG, "Sound module ready: %s", s_state.can_ready ? "YES" : "NO");
@@ -365,6 +212,23 @@ static esp_err_t sound_update(void) {
 
     const uint64_t now_ms = esp_timer_get_time() / 1000;
 
+    // Fast offline detection: if we start seeing CAN TX timeouts, treat audio as offline.
+    // (Timeout means no ACK on bus; common when the audio ESP is powered off.)
+    can_bus_manager_stats_t mgr_stats = {0};
+    can_bus_manager_get_stats(&mgr_stats);
+    if (mgr_stats.tx_send_timeouts != s_state.last_mgr_tx_send_timeouts) {
+        const uint32_t delta = mgr_stats.tx_send_timeouts - s_state.last_mgr_tx_send_timeouts;
+        s_state.last_mgr_tx_send_timeouts = mgr_stats.tx_send_timeouts;
+        s_state.tx_timeouts += delta;
+        s_state.last_tx_timeout_time_ms = now_ms;
+        s_state.can_ready = false;
+    }
+    if (mgr_stats.tx_send_errors != s_state.last_mgr_tx_send_errors) {
+        s_state.last_mgr_tx_send_errors = mgr_stats.tx_send_errors;
+        s_state.can_ready = false;
+    }
+    s_state.last_mgr_recovery_attempts = mgr_stats.recovery_attempts;
+
     // Liveness: if we had status and it went stale, mark offline.
     if (s_state.audio_module_discovered) {
         if (s_state.last_status_time_ms != 0 &&
@@ -379,9 +243,12 @@ static esp_err_t sound_update(void) {
         s_state.can_ready = false;
     }
 
-    // If offline, periodically broadcast a discovery query (via TX task)
+    // If offline, periodically broadcast a discovery query
     if (!s_state.can_ready) {
-        (void)enqueue_discovery_query(now_ms);
+        if (now_ms - s_state.last_discovery_query_time_ms >= SOUND_DISCOVERY_RETRY_INTERVAL_MS) {
+            (void)can_bus_manager_discovery_query_all();
+            s_state.last_discovery_query_time_ms = now_ms;
+        }
     }
 
     return ESP_OK;
@@ -477,21 +344,7 @@ static esp_err_t sound_shutdown(void) {
     // Stop all sounds before shutdown (best-effort)
     (void)sound_module_stop(0, true);
     
-    // Stop CAN RX task
-    if (s_can_rx_task) {
-        vTaskDelete(s_can_rx_task);
-        s_can_rx_task = NULL;
-    }
-
-    if (s_can_tx_task) {
-        vTaskDelete(s_can_tx_task);
-        s_can_tx_task = NULL;
-    }
-
-    if (s_can_tx_queue) {
-        vQueueDelete(s_can_tx_queue);
-        s_can_tx_queue = NULL;
-    }
+    // Note: CAN bus manager is shared; do not deinit here.
     
     s_state.initialized = false;
     s_state.can_ready = false;
@@ -522,13 +375,10 @@ esp_err_t sound_module_play(uint16_t sound_index, bool interrupt, bool high_prio
 
     const uint16_t request_id = can_audio_allocate_request_id(&s_request_counter);
 
-    sound_tx_item_t item = {0};
-    item.kind = SOUND_TX_KIND_PLAY;
-    item.sound_index = sound_index;
-    item.request_id = request_id;
-    can_audio_build_play_sound(sound_index, flags, CAN_AUDIO_VOLUME_USE_POT, request_id, &item.frame);
+    can_frame_t frame = {0};
+    can_audio_build_play_sound(sound_index, flags, CAN_AUDIO_VOLUME_USE_POT, request_id, &frame);
 
-    esp_err_t ret = enqueue_can_tx(&item);
+    esp_err_t ret = can_bus_manager_send(&frame);
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Failed to queue PLAY_SOUND (queue full/offline)");
     } else {
@@ -557,13 +407,10 @@ esp_err_t sound_module_stop(uint16_t sound_index, bool stop_all) {
         return ESP_ERR_NOT_SUPPORTED;
     }
 
-    sound_tx_item_t item = {0};
-    item.kind = SOUND_TX_KIND_STOP_ALL;
-    item.sound_index = 0;
-    item.request_id = 0;
-    can_audio_build_stop_all(&item.frame);
+    can_frame_t frame = {0};
+    can_audio_build_stop_all(&frame);
 
-    esp_err_t ret = enqueue_can_tx(&item);
+    esp_err_t ret = can_bus_manager_send(&frame);
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Failed to queue STOP_ALL");
         return ret;

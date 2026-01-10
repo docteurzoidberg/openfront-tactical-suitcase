@@ -226,6 +226,7 @@ else()
         can_driver
         can_discovery
         can_audiomodule
+        can_bus_manager
     )
 endif()
 
