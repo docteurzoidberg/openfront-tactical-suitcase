@@ -11,7 +11,7 @@
 Optional (but recommended):
 - **Discovery registry**: parses `MODULE_ANNOUNCE` frames and keeps a small in-memory table of discovered modules (type/version/caps/node/block + last-seen time).
 
-It intentionally does **not** define message formats. Message formats live in protocol components like `can_discovery`, `can_audiomodule`, etc.
+It intentionally does **not** define message formats. Message formats live in protocol components like `can_protocol_discovery`, `can_protocol_audiomodule`, etc.
 
 ## Public API
 

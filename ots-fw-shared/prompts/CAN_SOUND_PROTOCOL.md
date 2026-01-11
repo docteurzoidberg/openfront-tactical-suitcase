@@ -11,7 +11,7 @@ The audio module automatically responds to discovery queries:
 - **CAN ID Block**: 0x42 (uses CAN IDs 0x420-0x42F)
 - **Capabilities**: `MODULE_CAP_STATUS` (sends periodic status updates)
 
-**Discovery Reference**: `/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md`
+**Discovery Reference**: `/ots-fw-shared/components/can_protocol_discovery/include/can_protocol_discovery.h`
 
 If no audio module is discovered at boot, the main controller disables sound features and logs:
 ```

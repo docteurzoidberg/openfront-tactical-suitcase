@@ -5,7 +5,7 @@ This document describes how the **audio module** integrates with the OTS CAN bus
 ## Related Documentation
 
 - **CAN Driver Component**: `/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md` - Generic hardware layer
-- **CAN Discovery Component**: `/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md` - ✅ **Module discovery protocol**
+- **CAN Discovery Protocol**: `/ots-fw-shared/components/can_protocol_discovery/include/can_protocol_discovery.h` - ✅ **Discovery constants/helpers**
 - **Multi-Module Architecture**: `/ots-fw-shared/prompts/CAN_PROTOCOL_ARCHITECTURE.md` - Future extensible protocol
 - **Audio Protocol Spec**: `CAN_SOUND_PROTOCOL.md` - Current audio-specific protocol
 - **Main Controller Roadmap**: `/ots-fw-main/docs/CAN_MULTI_MODULE_ROADMAP.md` - Implementation phases
@@ -21,7 +21,7 @@ This document describes how the **audio module** integrates with the OTS CAN bus
 The audio module automatically responds to `MODULE_QUERY` (0x411) messages:
 
 ```c
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 
 void can_rx_task(void *arg) {
     can_frame_t frame;
@@ -29,14 +29,21 @@ void can_rx_task(void *arg) {
         if (can_driver_receive(&frame, portMAX_DELAY) == ESP_OK) {
             // Handle discovery query
             if (frame.id == CAN_ID_MODULE_QUERY) {
-                can_discovery_handle_query(&frame, 
-                    MODULE_TYPE_AUDIO,      // Type: Audio module
-                    1,                      // Firmware major: 1
-                    0,                      // Firmware minor: 0
-                    MODULE_CAP_STATUS,      // Capabilities: STATUS
-                    0x42,                   // CAN block: 0x420-0x42F
-                    0                       // Node ID (reserved)
-                );
+                // MODULE_QUERY expects magic byte 0xFF to enumerate all modules.
+                if (frame.dlc >= 1 && frame.data[0] == 0xFF) {
+                    can_frame_t announce;
+                    if (can_discovery_build_announce(
+                            &announce,
+                            MODULE_TYPE_AUDIO,      // Type: Audio module
+                            1,                      // Firmware major: 1
+                            0,                      // Firmware minor: 0
+                            MODULE_CAP_STATUS,      // Capabilities: STATUS
+                            0x42,                   // CAN block: 0x420-0x42F
+                            0                       // Node ID (reserved)
+                        ) == ESP_OK) {
+                        (void)can_driver_send(&announce, 100);
+                    }
+                }
             }
             
             // Handle sound protocol messages...
@@ -51,12 +58,15 @@ void can_rx_task(void *arg) {
 The main controller queries for modules at boot:
 
 ```c
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 
 void sound_init(void) {
     // Send discovery query
     ESP_LOGI(TAG, "Discovering CAN modules...");
-    can_discovery_query_all();
+    can_frame_t q;
+    if (can_discovery_build_query_all(&q) == ESP_OK) {
+        (void)can_driver_send(&q, 100);
+    }
     
     // Wait for responses
     vTaskDelay(pdMS_TO_TICKS(500));
@@ -74,8 +84,8 @@ void sound_init(void) {
 }
 ```
 
-For complete discovery API reference, see:  
-**`/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md`**
+For complete discovery reference, see:  
+`/ots-fw-shared/components/can_protocol_discovery/include/can_protocol_discovery.h`
 
 ---
 
@@ -109,7 +119,7 @@ For complete discovery API reference, see:
 │  - Control mixer                    │  - Send ACKs
 │  - Track queue IDs                  │
 ├─────────────────────────────────────┤
-│  Discovery Layer                    │  can_discovery (shared)
+│  Discovery Layer                    │  can_protocol_discovery (shared)
 │  - Boot-time module detection       │  - MODULE_QUERY/ANNOUNCE
 │  - Module type/version tracking     │  - 0x410-0x411
 ├─────────────────────────────────────┤

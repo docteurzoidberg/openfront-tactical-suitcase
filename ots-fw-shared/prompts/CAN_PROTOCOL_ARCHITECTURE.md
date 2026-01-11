@@ -147,8 +147,8 @@ Reserved for module type-specific messages.
 
 ## Module Discovery Protocol
 
-> **✅ IMPLEMENTED**: Boot-time discovery protocol is fully implemented in the shared component.  
-> See: `/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md`
+> **✅ IMPLEMENTED**: Boot-time discovery protocol is implemented via protocol helpers + a bus manager registry.  
+> See: `/ots-fw-shared/components/can_protocol_discovery/COMPONENT_PROMPT.md` and `/ots-fw-shared/components/can_bus_manager/COMPONENT_PROMPT.md`
 
 ### Startup Sequence
 
@@ -266,16 +266,27 @@ Main Controller                          Audio Module
 
 **Module Side (e.g., audio module)**:
 ```c
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 
 void can_rx_task(void *arg) {
     can_frame_t frame;
     while (1) {
         if (can_driver_receive(&frame, portMAX_DELAY) == ESP_OK) {
             if (frame.id == CAN_ID_MODULE_QUERY) {
-                // Auto-respond to discovery
-                can_discovery_handle_query(&frame, MODULE_TYPE_AUDIO,
-                                          1, 0, MODULE_CAP_STATUS, 0x42, 0);
+                // MODULE_QUERY expects magic byte 0xFF to enumerate all modules.
+                if (frame.dlc >= 1 && frame.data[0] == 0xFF) {
+                    can_frame_t announce;
+                    if (can_discovery_build_announce(
+                            &announce,
+                            MODULE_TYPE_AUDIO,
+                            1, 0,
+                            MODULE_CAP_STATUS,
+                            0x42,
+                            0
+                        ) == ESP_OK) {
+                        (void)can_driver_send(&announce, 100);
+                    }
+                }
             }
             // ... handle other messages ...
         }
@@ -285,11 +296,14 @@ void can_rx_task(void *arg) {
 
 **Main Controller Side**:
 ```c
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 
 void discover_modules(void) {
     // Send discovery query
-    can_discovery_query_all();
+    can_frame_t query;
+    if (can_discovery_build_query_all(&query) == ESP_OK) {
+        (void)can_driver_send(&query, 100);
+    }
     
     // Wait for responses
     vTaskDelay(pdMS_TO_TICKS(500));
@@ -300,7 +314,7 @@ void discover_modules(void) {
 ```
 
 For complete API reference and integration examples, see:  
-**`/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md`**
+**`/ots-fw-shared/components/can_protocol_discovery/COMPONENT_PROMPT.md`**
 
 ## Controller Implementation
 

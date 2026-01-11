@@ -1,8 +1,8 @@
-# CAN Audio Module Component
+# can_protocol_audiomodule - Component Prompt
 
 ## Overview
 
-The `can_audiomodule` component provides audio module-specific CAN message definitions and parsing/building functions for the OTS (OpenFront Tactical Station) audio module communication.
+The `can_protocol_audiomodule` component provides audio module-specific CAN message definitions and parsing/building helpers for OTS audio module communication.
 
 ## Purpose
 
@@ -14,14 +14,14 @@ This shared component enables both the **main controller** (`ots-fw-main`) and *
 
 ## Location
 
-- **Component**: `/ots-fw-shared/components/can_audiomodule/`
+- **Component**: `/ots-fw-shared/components/can_protocol_audiomodule/`
 - **Protocol Spec**: `/prompts/CANBUS_MESSAGE_SPEC.md`
 - **Developer Guide**: `/doc/developer/canbus-protocol.md`
 
 ## Files
 
-- `can_audio_protocol.h` - Audio message IDs, flags, status bits, error codes, function declarations
-- `can_audio_protocol.c` - Message parsing and building implementation
+- `can_protocol_audiomodule.h` - Audio message IDs, flags, status bits, error codes, function declarations
+- `can_protocol_audiomodule.c` - Message parsing and building implementation
 - `CMakeLists.txt` - ESP-IDF component registration
 - `idf_component.yml` - Component dependencies (requires `can_driver`)
 - `COMPONENT_PROMPT.md` - This file
@@ -40,7 +40,7 @@ Audio protocol uses the **0x420-0x42F** CAN ID block:
 |----|------|-----------|-------------|
 | 0x420 | PLAY_SOUND | main → audio | Play request with loop/volume |
 | 0x421 | STOP_SOUND | main → audio | Stop by queue ID |
-| 0x422 | SOUND_STATUS | audio → main | Periodic status (1Hz) |
+| 0x426 | SOUND_STATUS | audio → main | Periodic status (5s) |
 | 0x423 | SOUND_ACK | audio → main | Play ACK with queue ID |
 | 0x424 | STOP_ALL | main → audio | Stop all sounds |
 | 0x425 | SOUND_FINISHED | audio → main | Playback completion |
@@ -171,7 +171,7 @@ Build FINISHED (0x425) notification when playback completes or stops.
 ## Usage Example (Main Controller)
 
 ```c
-#include "can_audio_protocol.h"
+#include "can_protocol_audiomodule.h"
 #include "can_driver.h"
 
 // State variables
@@ -230,7 +230,7 @@ void handle_can_message(const can_frame_t *frame) {
 ## Usage Example (Audio Module)
 
 ```c
-#include "can_audio_protocol.h"
+#include "can_protocol_audiomodule.h"
 
 // State variables
 static uint8_t g_queue_id_counter = 1;
@@ -282,9 +282,9 @@ To integrate:
    ```
 2. Require in component CMakeLists:
    ```cmake
-   REQUIRES can_driver can_audiomodule
+    REQUIRES can_driver can_protocol_audiomodule
    ```
-3. Include header: `#include "can_audio_protocol.h"`
+3. Include header: `#include "can_protocol_audiomodule.h"`
 4. Create sound module wrapper (see `/ots-fw-main/prompts/SOUND_MODULE_PROMPT.md`)
 
 ## Protocol Versions

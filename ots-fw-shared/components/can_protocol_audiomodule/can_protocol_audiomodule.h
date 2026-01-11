@@ -1,12 +1,12 @@
-#ifndef CAN_AUDIO_PROTOCOL_H
-#define CAN_AUDIO_PROTOCOL_H
+#ifndef CAN_PROTOCOL_AUDIOMODULE_H
+#define CAN_PROTOCOL_AUDIOMODULE_H
 
 #include "can_driver.h"
 #include <stdint.h>
 #include <stdbool.h>
 
 /**
- * @file can_audio_protocol.h
+ * @file can_protocol_audiomodule.h
  * @brief Audio-specific CAN protocol for OTS sound module
  * 
  * This file defines the audio module's CAN message format, IDs, and functions.
@@ -231,4 +231,5 @@ void can_audio_build_sound_ack(uint8_t ok, uint16_t sound_index, uint8_t queue_i
 void can_audio_build_sound_finished(uint8_t queue_id, uint16_t sound_index, 
                                    uint8_t reason, can_frame_t *frame);
 
-#endif // CAN_AUDIO_PROTOCOL_H
+#endif // CAN_PROTOCOL_AUDIOMODULE_H
+

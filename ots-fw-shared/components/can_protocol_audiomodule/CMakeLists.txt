@@ -1,5 +1,6 @@
 idf_component_register(
-    SRCS "can_audio_protocol.c"
+    SRCS "can_protocol_audiomodule.c"
     INCLUDE_DIRS "."
     REQUIRES can_driver
 )
+

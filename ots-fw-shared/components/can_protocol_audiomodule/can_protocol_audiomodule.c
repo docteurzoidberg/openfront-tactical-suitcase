@@ -1,8 +1,8 @@
-#include "can_audio_protocol.h"
+#include "can_protocol_audiomodule.h"
 #include <string.h>
 
 /**
- * @file can_audio_protocol.c
+ * @file can_protocol_audiomodule.c
  * @brief Audio-specific CAN protocol implementation
  */
 

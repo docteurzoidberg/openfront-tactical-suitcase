@@ -1,0 +1,4 @@
+version: "1.0.0"
+description: "CAN Audio Module Protocol - Audio module-specific CAN protocol helpers"
+dependencies:
+  can_driver: "*"

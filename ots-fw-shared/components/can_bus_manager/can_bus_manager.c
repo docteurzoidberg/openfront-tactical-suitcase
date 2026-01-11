@@ -1,6 +1,6 @@
 #include "can_bus_manager.h"
 
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -53,9 +53,8 @@ static void registry_update_from_announce(const can_frame_t *frame) {
     if (!frame) return;
     if ((uint16_t)frame->id != CAN_ID_MODULE_ANNOUNCE) return;
 
-    can_frame_t tmp = *frame;
-    module_info_t info;
-    if (can_discovery_parse_announce(&tmp, &info) != ESP_OK) {
+    can_discovery_announce_t info = {0};
+    if (!can_discovery_parse_announce(frame, &info)) {
         return;
     }
 
