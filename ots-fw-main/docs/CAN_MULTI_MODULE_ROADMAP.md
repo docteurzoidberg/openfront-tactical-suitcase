@@ -18,8 +18,15 @@
 - Version tracking and capability flags
 - CAN block allocation (audio uses 0x420-0x42F)
 - Graceful degradation if modules missing
-- **Location:** `/ots-fw-shared/components/can_discovery/`
-- **Documentation:** `/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md`
+- **Location:** `/ots-fw-shared/components/can_protocol_discovery/`
+- **Documentation:** `/ots-fw-shared/components/can_protocol_discovery/COMPONENT_PROMPT.md`
+
+✅ **Shared Runtime Complete** ✅ NEW
+- TX queue + TX task (non-blocking for callers)
+- RX dispatch to registered handlers
+- Optional discovery registry (tracks module presence / last seen)
+- **Location:** `/ots-fw-shared/components/can_bus_manager/`
+- **Documentation:** `/ots-fw-shared/components/can_bus_manager/COMPONENT_PROMPT.md`
 
 ✅ **Audio Module Protocol Implemented**
 - Application-specific protocol in CAN block 0x420-0x42F
@@ -106,7 +113,8 @@ Main Controller                Audio Module
 
 **Components:**
 - ✅ `can_driver` - Generic hardware layer
-- ✅ `can_discovery` - Boot-time module detection
+- ✅ `can_protocol_discovery` - Boot-time module detection helpers
+- ✅ `can_bus_manager` - Shared runtime + discovery registry
 - ✅ `can_protocol.{h,c}` - Audio-specific protocol
 - ✅ `sound_module.c` - Audio module integration with discovery
 

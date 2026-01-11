@@ -26,7 +26,7 @@ import termios
 import threading
 import time
 from dataclasses import dataclass
-from typing import Deque, Optional
+from typing import Callable, Deque, Optional
 
 
 class OtsTestError(RuntimeError):
@@ -315,9 +315,26 @@ class SerialLogWatcher:
         self._thread: Optional[threading.Thread] = None
         self._lines: Deque[str] = collections.deque(maxlen=keep_lines)
         self._cv = threading.Condition()
+        self._listeners: list[Callable[[str], None]] = []
+        self._listeners_lock = threading.Lock()
+
+    def add_listener(self, fn: Callable[[str], None]) -> None:
+        """Register a callback invoked for each newly received serial line.
+
+        Callbacks are best-effort: exceptions are swallowed and do not stop the
+        serial reader.
+        """
+        with self._listeners_lock:
+            self._listeners.append(fn)
+
+    def remove_listener(self, fn: Callable[[str], None]) -> None:
+        with self._listeners_lock:
+            self._listeners = [f for f in self._listeners if f is not fn]
 
     def start(self) -> None:
-        fd = os.open(self.port, os.O_RDONLY | os.O_NOCTTY | os.O_NONBLOCK)
+        # Open read/write so we can safely manipulate modem control lines
+        # (DTR/RTS) on adapters that require it for output or auto-reset.
+        fd = os.open(self.port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         attrs = termios.tcgetattr(fd)
 
         # Raw-ish mode.
@@ -341,6 +358,36 @@ class SerialLogWatcher:
         attrs[4] = baud_map[self.baud]
         attrs[5] = baud_map[self.baud]
         termios.tcsetattr(fd, termios.TCSANOW, attrs)
+
+        # Some adapters require modem control lines to be in a particular state
+        # for output to flow.
+        #
+        # - CDC ACM devices (e.g. ESP32-S3 USB-Serial/JTAG) often need DTR=1.
+        #   They can also hold the target in reset if RTS is asserted.
+        # - USB-UART adapters (e.g. CP2102 on ttyUSB*) vary; some boards will not
+        #   emit logs unless RTS is asserted.
+        try:
+            import array
+            import fcntl
+
+            if hasattr(termios, "TIOCMGET") and hasattr(termios, "TIOCMSET"):
+                buf = array.array("i", [0])
+                fcntl.ioctl(fd, termios.TIOCMGET, buf, True)
+                status = int(buf[0])
+
+                if hasattr(termios, "TIOCM_DTR"):
+                    status |= termios.TIOCM_DTR
+
+                # Only force RTS low on ttyACM-style devices where asserting RTS
+                # is commonly wired to EN/reset. On ttyUSB, leave RTS untouched.
+                if "ttyACM" in self.port and hasattr(termios, "TIOCM_RTS"):
+                    status &= ~termios.TIOCM_RTS
+
+                buf[0] = status
+                fcntl.ioctl(fd, termios.TIOCMSET, buf, True)
+        except Exception:
+            # Best-effort; serial logging still works on classic UARTs.
+            pass
 
         self._fd = fd
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -381,6 +428,18 @@ class SerialLogWatcher:
                 with self._cv:
                     self._lines.append(text)
                     self._cv.notify_all()
+
+                # Invoke listeners outside the condition lock.
+                try:
+                    with self._listeners_lock:
+                        listeners = list(self._listeners)
+                    for fn in listeners:
+                        try:
+                            fn(text)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
 
     def wait_for(self, pattern: str, timeout_s: float) -> str:
         rx = re.compile(pattern)
@@ -476,9 +535,8 @@ class SerialPort:
         attrs[5] = baud_map[self.baud]
         termios.tcsetattr(fd, termios.TCSANOW, attrs)
 
-        # For CDC ACM devices (e.g. ESP32-S3 USB-Serial/JTAG), the device may not
-        # transmit until the host asserts DTR. Also ensure RTS is deasserted to
-        # avoid holding the target in reset on some auto-reset circuits.
+        # Some adapters require modem control lines to be in a particular state
+        # for output to flow. See SerialLogWatcher.start() for details.
         try:
             import array
             import fcntl
@@ -490,7 +548,8 @@ class SerialPort:
 
                 if hasattr(termios, "TIOCM_DTR"):
                     status |= termios.TIOCM_DTR
-                if hasattr(termios, "TIOCM_RTS"):
+
+                if "ttyACM" in self.port and hasattr(termios, "TIOCM_RTS"):
                     status &= ~termios.TIOCM_RTS
 
                 buf[0] = status

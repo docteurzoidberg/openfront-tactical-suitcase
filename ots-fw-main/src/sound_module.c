@@ -1,7 +1,7 @@
 #include "sound_module.h"
-#include "can_audio_protocol.h"
+#include "can_protocol_audiomodule.h"
 #include "can_bus_manager.h"
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 #include "protocol.h"
 #include "event_dispatcher.h"
 #include "cJSON.h"
@@ -69,7 +69,7 @@ static void on_can_sound_status(const can_frame_t *frame, void *ctx) {
     if (!frame || frame->dlc < 8) return;
     const uint64_t now_ms = esp_timer_get_time() / 1000;
 
-    // Layout from can_audiomodule component:
+    // Layout from can_protocol_audiomodule component:
     // data[0]=state_bits, [1-2]=current_sound (LE), [3]=error_code,
     // [4]=volume, [5-6]=uptime_sec (LE), [7]=reserved
     s_state.last_status_time_ms = now_ms;

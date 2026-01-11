@@ -283,22 +283,17 @@ void app_main(void) {
     module_manager_register((hardware_module_t *)troops_module_get());
     // Sound module uses CAN bus (not MCP23017), register independently
     module_manager_register(sound_module_get());
-    
-    if (io_expanders_ready) {
-        module_manager_register(&nuke_module);
-        module_manager_register(&alert_module);
-        module_manager_register(&main_power_module);
 
-        // Initialize all hardware modules (includes splash screen)
-        if (module_manager_init_all() != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to initialize hardware modules - continuing without hardware modules");
-            io_expanders_ready = false;
-        }
-    } else {
-        // Still initialize SystemStatus (LCD screens) even without MCP23017 boards.
-        if (module_manager_init_all() != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to initialize SystemStatus module");
-        }
+    // These modules primarily drive MCP23017 I/O, but we still register them
+    // even when the I/O boards are absent so game events are handled and logged
+    // (useful for integration testing without the full hardware stack).
+    module_manager_register(&nuke_module);
+    module_manager_register(&alert_module);
+    module_manager_register(&main_power_module);
+
+    // Initialize all modules (modules that rely on missing hardware should degrade gracefully).
+    if (module_manager_init_all() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize one or more hardware modules");
     }
 
     // Start periodic module updates (LCD screen refresh, timers, etc.).

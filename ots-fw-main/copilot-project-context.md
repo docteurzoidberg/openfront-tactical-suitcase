@@ -521,7 +521,7 @@ When user requests CAN protocol changes (new messages, CAN IDs, or data fields):
    - Both must reflect the same CAN IDs and message formats
 
 3. **Firmware-specific updates:**
-   - Update shared components (`can_audiomodule`) if protocol-level changes
+  - Update shared components (`can_protocol_audiomodule`) if protocol-level changes
    - Update module handlers (`sound_module.c`) for behavior changes
    - Document hardware behavior in spec (LED states, timing)
 
@@ -533,7 +533,7 @@ When user requests CAN protocol changes (new messages, CAN IDs, or data fields):
 
 **When implementing CAN communication with audio module**:
 1. ⚠️ **Reference `/prompts/CANBUS_MESSAGE_SPEC.md` for message formats**
-2. Use the **shared component**: `/ots-fw-shared/components/can_audiomodule/`
+2. Use the **shared component**: `/ots-fw-shared/components/can_protocol_audiomodule/`
 3. Use queue IDs (1-255) to track and control individual sounds
 4. Implement retry logic for mixer-full errors (wait 500ms, retry once)
 5. Set 200ms timeout for ACK responses

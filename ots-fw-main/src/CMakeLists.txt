@@ -224,8 +224,8 @@ else()
         esp_http_server_core
         ws2812_rmt
         can_driver
-        can_discovery
-        can_audiomodule
+        can_protocol_discovery
+        can_protocol_audiomodule
         can_bus_manager
     )
 endif()

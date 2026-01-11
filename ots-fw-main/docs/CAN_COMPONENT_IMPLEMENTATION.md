@@ -4,8 +4,9 @@
 
 Successfully created CAN infrastructure as reusable ESP-IDF components:
 - **CAN Driver**: `/ots-fw-shared/components/can_driver/` - Hardware layer
-- **CAN Discovery**: `/ots-fw-shared/components/can_discovery/` - ✅ **Boot-time module discovery**
-- **CAN Audio Module**: `/ots-fw-shared/components/can_audiomodule/` - Audio protocol implementation
+- **CAN Discovery Protocol**: `/ots-fw-shared/components/can_protocol_discovery/` - ✅ **Boot-time module discovery helpers**
+- **CAN Bus Manager**: `/ots-fw-shared/components/can_bus_manager/` - ✅ **Shared runtime (TX queue + RX dispatch + registry)**
+- **CAN Audio Module Protocol**: `/ots-fw-shared/components/can_protocol_audiomodule/` - Audio module protocol helpers
 
 ## Architecture
 
@@ -27,9 +28,8 @@ Successfully created CAN infrastructure as reusable ESP-IDF components:
 
 ### Layer 2: Discovery Protocol (Shared Component) ✅ NEW
 
-**Location:** `/ots-fw-shared/components/can_discovery/`
-- **can_discovery.h** - Discovery protocol API and constants
-- **can_discovery.c** - Implementation (query/announce)
+**Location:** `/ots-fw-shared/components/can_protocol_discovery/`
+- **include/can_protocol_discovery.h** - Discovery protocol constants + helpers
 - **COMPONENT_PROMPT.md** - Complete documentation
 
 **Features:**
@@ -94,19 +94,24 @@ ots-fw-shared/components/
 │   ├── include/can_driver.h
 │   └── can_driver.c
 │
-├── can_discovery/                 # Layer 2: Discovery ✅ NEW
+├── can_bus_manager/               # Shared runtime (TX queue + RX dispatch)
 │   ├── CMakeLists.txt
 │   ├── idf_component.yml
-│   ├── COMPONENT_PROMPT.md       # Complete API docs
-│   ├── include/can_discovery.h
-│   └── can_discovery.c
+│   ├── COMPONENT_PROMPT.md
+│   ├── include/can_bus_manager.h
+│   └── can_bus_manager.c
 │
-└── can_audiomodule/               # Layer 3: Audio Protocol
+├── can_protocol_discovery/        # Layer 2: Discovery helpers ✅ NEW
+│   ├── CMakeLists.txt
+│   ├── COMPONENT_PROMPT.md       # Protocol + helper reference
+│   └── include/can_protocol_discovery.h
+│
+└── can_protocol_audiomodule/      # Layer 3: Audio Protocol
     ├── CMakeLists.txt
     ├── idf_component.yml
     ├── COMPONENT_PROMPT.md
-    ├── include/can_audio_protocol.h
-    └── can_audio_handler.c
+    ├── can_protocol_audiomodule.h
+    └── can_protocol_audiomodule.c
 ```
 
 ## Discovery Integration
@@ -115,13 +120,13 @@ ots-fw-shared/components/
 
 **CMakeLists.txt:**
 ```cmake
-REQUIRES can_driver can_discovery  # Added discovery
+REQUIRES can_driver can_protocol_discovery  # Added discovery helpers
 ```
 
 **Code (can_audio_handler.c):**
 ```c
 #include "can_driver.h"
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 
 void can_rx_task(void *arg) {
     can_frame_t frame;
@@ -129,8 +134,20 @@ void can_rx_task(void *arg) {
         if (can_driver_receive(&frame, portMAX_DELAY) == ESP_OK) {
             // Handle discovery query
             if (frame.id == CAN_ID_MODULE_QUERY) {
-                can_discovery_handle_query(&frame, MODULE_TYPE_AUDIO,
-                                          1, 0, MODULE_CAP_STATUS, 0x42, 0);
+                // MODULE_QUERY expects magic byte 0xFF to enumerate all modules.
+                if (frame.dlc >= 1 && frame.data[0] == 0xFF) {
+                    can_frame_t announce;
+                    if (can_discovery_build_announce(
+                            &announce,
+                            MODULE_TYPE_AUDIO,
+                            1, 0,
+                            MODULE_CAP_STATUS,
+                            0x42,
+                            0
+                        ) == ESP_OK) {
+                        (void)can_driver_send(&announce, 100);
+                    }
+                }
             }
             
             // Handle sound protocol messages...
@@ -143,13 +160,13 @@ void can_rx_task(void *arg) {
 
 **CMakeLists.txt:**
 ```cmake
-REQUIRES can_driver can_discovery  # Added discovery
+REQUIRES can_driver can_protocol_discovery  # Added discovery helpers
 ```
 
 **Code (sound_module.c):**
 ```c
 #include "can_driver.h"
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 
 static bool audio_module_discovered = false;
 static uint8_t audio_module_version_major = 0;
@@ -161,8 +178,8 @@ void can_rx_task(void *arg) {
         if (can_driver_receive(&frame, portMAX_DELAY) == ESP_OK) {
             // Parse MODULE_ANNOUNCE
             if (frame.id == CAN_ID_MODULE_ANNOUNCE) {
-                module_info_t info;
-                if (can_discovery_parse_announce(&frame, &info) == ESP_OK) {
+                can_discovery_announce_t info;
+                if (can_discovery_parse_announce(&frame, &info)) {
                     if (info.module_type == MODULE_TYPE_AUDIO) {
                         audio_module_discovered = true;
                         audio_module_version_major = info.version_major;
@@ -183,7 +200,12 @@ esp_err_t sound_init(void) {
     
     // Query for modules
     ESP_LOGI(TAG, "Discovering CAN modules...");
-    can_discovery_query_all();
+    {
+        can_frame_t query;
+        if (can_discovery_build_query_all(&query) == ESP_OK) {
+            (void)can_driver_send(&query, 100);
+        }
+    }
     vTaskDelay(pdMS_TO_TICKS(500));  // Wait for responses
     
     if (audio_module_discovered) {

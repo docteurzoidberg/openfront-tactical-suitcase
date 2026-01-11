@@ -5,6 +5,10 @@
 static const char *TAG = "OTS_NUKE_TRK";
 
 #define MAX_TRACKED_NUKES 32  // Maximum simultaneous nukes to track
+// Keep a small cache of recently-resolved unit IDs to make resolve idempotent.
+// This avoids noisy warnings when multiple modules attempt to resolve the same
+// nuke outcome event (e.g., incoming vs outgoing handlers both see it).
+#define RECENTLY_RESOLVED_CACHE_SIZE 16
 
 typedef struct {
     uint32_t unit_id;
@@ -17,13 +21,40 @@ typedef struct {
 static tracked_nuke_t tracked_nukes[MAX_TRACKED_NUKES];
 static bool initialized = false;
 
+static uint32_t s_recently_resolved_ids[RECENTLY_RESOLVED_CACHE_SIZE];
+static uint8_t s_recently_resolved_next = 0;
+
+static bool recently_resolved_contains(uint32_t unit_id) {
+    for (int i = 0; i < RECENTLY_RESOLVED_CACHE_SIZE; i++) {
+        if (s_recently_resolved_ids[i] == unit_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void recently_resolved_add(uint32_t unit_id) {
+    s_recently_resolved_ids[s_recently_resolved_next] = unit_id;
+    s_recently_resolved_next = (uint8_t)((s_recently_resolved_next + 1) % RECENTLY_RESOLVED_CACHE_SIZE);
+}
+
+static void recently_resolved_remove(uint32_t unit_id) {
+    for (int i = 0; i < RECENTLY_RESOLVED_CACHE_SIZE; i++) {
+        if (s_recently_resolved_ids[i] == unit_id) {
+            s_recently_resolved_ids[i] = 0;
+        }
+    }
+}
+
 esp_err_t nuke_tracker_init(void) {
     if (initialized) {
-        ESP_LOGW(TAG, "Already initialized");
+        ESP_LOGD(TAG, "Already initialized");
         return ESP_OK;
     }
     
     memset(tracked_nukes, 0, sizeof(tracked_nukes));
+    memset(s_recently_resolved_ids, 0, sizeof(s_recently_resolved_ids));
+    s_recently_resolved_next = 0;
     initialized = true;
     
     ESP_LOGI(TAG, "Nuke tracker initialized (max %d nukes)", MAX_TRACKED_NUKES);
@@ -48,6 +79,9 @@ esp_err_t nuke_tracker_register_launch(uint32_t unit_id, nuke_type_t type, nuke_
             return ESP_OK;
         }
     }
+
+    // Allow re-tracking a unit ID that was recently resolved (defensive).
+    recently_resolved_remove(unit_id);
     
     // Find empty slot
     for (int i = 0; i < MAX_TRACKED_NUKES; i++) {
@@ -87,11 +121,20 @@ esp_err_t nuke_tracker_resolve_nuke(uint32_t unit_id, bool exploded) {
             
             // Deactivate the slot
             tracked_nukes[i].active = false;
+
+            // Remember this ID to make duplicate resolves idempotent.
+            recently_resolved_add(unit_id);
             
             return ESP_OK;
         }
     }
-    
+
+    // If another module already resolved this nuke, avoid warning spam.
+    if (recently_resolved_contains(unit_id)) {
+        ESP_LOGD(TAG, "Nuke %lu already resolved (duplicate resolve)", (unsigned long)unit_id);
+        return ESP_OK;
+    }
+
     ESP_LOGW(TAG, "Nuke %lu not found in tracker", (unsigned long)unit_id);
     return ESP_ERR_NOT_FOUND;
 }
@@ -121,6 +164,8 @@ void nuke_tracker_clear_all(void) {
     
     ESP_LOGI(TAG, "Clearing all tracked nukes");
     memset(tracked_nukes, 0, sizeof(tracked_nukes));
+    memset(s_recently_resolved_ids, 0, sizeof(s_recently_resolved_ids));
+    s_recently_resolved_next = 0;
 }
 
 void nuke_tracker_get_stats(nuke_type_t type, nuke_direction_t direction,
