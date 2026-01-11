@@ -266,7 +266,8 @@ When adding support for new module types:
 
 ## See Also
 
-- **CAN Discovery Protocol**: `/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md`
+- **CAN Discovery Protocol**: `/ots-fw-shared/components/can_protocol_discovery/COMPONENT_PROMPT.md`
 - **CAN Protocol Spec**: `/prompts/CANBUS_MESSAGE_SPEC.md`
 - **Developer Guide**: `/doc/developer/canbus-protocol.md`
 - **CAN Driver Component**: `/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md`
+

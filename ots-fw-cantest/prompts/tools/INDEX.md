@@ -33,6 +33,7 @@ These are orchestration scripts (not generic tools), but they’re included here
 - [TEST_TWO_DEVICE](TEST_TWO_DEVICE.md) — Phase 2.5 baseline: cantest ↔ cantest.
 - [TEST_PRODUCTION_AUDIO](TEST_PRODUCTION_AUDIO.md) — Phase 3.2: cantest → production audiomodule.
 - [TEST_PRODUCTION_MAIN](TEST_PRODUCTION_MAIN.md) — Phase 3.3: production main → cantest audio sim.
+- [TEST_PRODUCTION_LIVE_GAME](TEST_PRODUCTION_LIVE_GAME.md) — Phase 3.4: production main ↔ production audio, driven by a mock userscript over WSS.
 - [TEST_DISCOVERY_FIXED](TEST_DISCOVERY_FIXED.md) — Debugging harness for discovery on two ports.
 - [SIMPLE_DISCOVERY_TEST](SIMPLE_DISCOVERY_TEST.md) — Minimal “do we see 0x411?” check.
 - [TEST_LOOPBACK](TEST_LOOPBACK.md) — Two-device loopback-focused CAN debug.

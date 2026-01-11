@@ -12,7 +12,7 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "can_driver.h"
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 #include "can_test.h"
 
 static const char *TAG = "can_test";

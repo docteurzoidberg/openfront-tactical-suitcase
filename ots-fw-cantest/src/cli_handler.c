@@ -9,7 +9,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "can_test.h"
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 
 static const char *TAG = "cli";
 

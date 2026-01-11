@@ -13,5 +13,5 @@ idf_component_register(
         driver
         nvs_flash
         can_driver
-        can_discovery
+        can_protocol_discovery
 )

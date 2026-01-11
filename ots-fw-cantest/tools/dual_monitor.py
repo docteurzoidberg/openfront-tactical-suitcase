@@ -4,16 +4,12 @@ Dual CAN Board Monitor
 Monitors both ESP32 boards simultaneously and displays their output side-by-side
 """
 
+import argparse
 import serial
 import threading
 import sys
 import time
 from queue import Queue
-
-# Serial ports
-AUDIO_PORT = '/dev/ttyUSB0'
-CTRL_PORT = '/dev/ttyACM0'
-BAUD_RATE = 115200
 
 # Output queues
 audio_queue = Queue()
@@ -48,15 +44,28 @@ def send_command(port, command):
     port.flush()
 
 def main():
+    parser = argparse.ArgumentParser(description='Dual CAN Board Monitor (interactive)')
+    parser.add_argument('--audio', default='/dev/ttyUSB0', help='Audio device serial port')
+    parser.add_argument('--controller', default='/dev/ttyACM0', help='Controller device serial port')
+    parser.add_argument('--baud', type=int, default=115200, help='Serial baud rate')
+    args = parser.parse_args()
+
+    audio_port = args.audio
+    ctrl_port = args.controller
+    baud_rate = args.baud
+
     print("=== Dual CAN Board Monitor ===")
-    print(f"Audio Module: {AUDIO_PORT}")
-    print(f"Controller:   {CTRL_PORT}")
+    print(f"Audio Module: {audio_port}")
+    print(f"Controller:   {ctrl_port}")
     print("")
+
+    audio_serial = None
+    ctrl_serial = None
     
     try:
         # Open serial ports
-        audio_serial = serial.Serial(AUDIO_PORT, BAUD_RATE, timeout=1)
-        ctrl_serial = serial.Serial(CTRL_PORT, BAUD_RATE, timeout=1)
+        audio_serial = serial.Serial(audio_port, baud_rate, timeout=1)
+        ctrl_serial = serial.Serial(ctrl_port, baud_rate, timeout=1)
         
         print("✓ Both serial ports opened")
         print("")
@@ -74,12 +83,12 @@ def main():
         # Start reader threads
         audio_thread = threading.Thread(
             target=read_serial, 
-            args=(AUDIO_PORT, audio_serial, audio_queue, "AUDIO"),
+            args=(audio_port, audio_serial, audio_queue, "AUDIO"),
             daemon=True
         )
         ctrl_thread = threading.Thread(
             target=read_serial,
-            args=(CTRL_PORT, ctrl_serial, ctrl_queue, "CTRL"),
+            args=(ctrl_port, ctrl_serial, ctrl_queue, "CTRL"),
             daemon=True
         )
         
@@ -131,8 +140,10 @@ def main():
         return 1
     finally:
         print("\nClosing connections...")
-        audio_serial.close()
-        ctrl_serial.close()
+        if audio_serial:
+            audio_serial.close()
+        if ctrl_serial:
+            ctrl_serial.close()
         
     return 0
 

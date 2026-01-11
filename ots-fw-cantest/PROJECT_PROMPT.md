@@ -13,7 +13,7 @@ This firmware is a **development and debugging tool**, NOT part of the productio
 3. **Traffic Monitoring**: Passive bus sniffer with human-readable protocol decoding
 4. **Integration Testing**: Test communication between main controller and modules
 5. **Debugging Aid**: Diagnose protocol issues, timing problems, and communication failures
-6. **Shared Component Validation**: Validate CAN shared components in `ots-fw-shared` (e.g., `can_driver`, `can_discovery`, `can_audiomodule`) as used by both `ots-fw-main` and `ots-fw-audiomodule`
+6. **Shared Component Validation**: Validate CAN shared components in `ots-fw-shared` (e.g., `can_driver`, `can_bus_manager`, `can_protocol_discovery`, `can_protocol_audiomodule`) as used by both `ots-fw-main` and `ots-fw-audiomodule`
 
 **Key Distinction from ots-fw-can-hw-test**:
 - **ots-fw-can-hw-test**: Hardware validation (tests TWAI peripheral and transceiver)
@@ -532,7 +532,7 @@ main.c
 
 Uses components from `ots-fw-shared/`:
 - **can_driver**: Generic CAN/TWAI hardware abstraction
-- **can_discovery**: Discovery protocol constants and helpers
+- **can_protocol_discovery**: Discovery protocol constants and helpers
 
 ## Troubleshooting
 
@@ -773,7 +773,7 @@ print("✓ All tests passed")
 - **CAN Protocol Specification**: [`/prompts/CANBUS_MESSAGE_SPEC.md`](../prompts/CANBUS_MESSAGE_SPEC.md)
 - **Developer Guide**: [`/doc/developer/canbus-protocol.md`](../doc/developer/canbus-protocol.md)
 - **CAN Driver Component**: [`/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md`](../ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md)
-- **Discovery Protocol**: [`/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md`](../ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md)
+- **Discovery Protocol**: [`/ots-fw-shared/components/can_protocol_discovery/COMPONENT_PROMPT.md`](../ots-fw-shared/components/can_protocol_discovery/COMPONENT_PROMPT.md)
 - **Hardware Test**: [`/ots-fw-can-hw-test/PROJECT_PROMPT.md`](../ots-fw-can-hw-test/PROJECT_PROMPT.md)
 
 ---

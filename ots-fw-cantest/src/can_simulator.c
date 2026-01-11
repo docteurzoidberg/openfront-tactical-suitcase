@@ -9,7 +9,7 @@
 #include "freertos/task.h"
 #include "can_test.h"
 #include "can_driver.h"
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 
 static const char *TAG = "simulator";
 
@@ -92,13 +92,26 @@ void can_simulator_process_frame(const can_frame_t *frame) {
         if (frame->id == CAN_ID_MODULE_QUERY) {
             printf("← RX: ");
             can_decoder_print_frame(frame, false, true);
-            
-            printf("[DEBUG] Calling can_discovery_handle_query()...\n");
-            
+
+            if (frame->dlc < 1 || frame->data[0] != 0xFF) {
+                return;
+            }
+
             // Auto-respond with MODULE_ANNOUNCE
-            esp_err_t ret = can_discovery_handle_query(frame, MODULE_TYPE_AUDIO, 1, 0, 
-                                                        MODULE_CAP_STATUS, 0x42, 0);
-            
+            can_frame_t announce = {0};
+            esp_err_t ret = can_discovery_build_announce(
+                &announce,
+                MODULE_TYPE_AUDIO,
+                1,
+                0,
+                MODULE_CAP_STATUS,
+                0x42,
+                0
+            );
+            if (ret == ESP_OK) {
+                ret = can_driver_send(&announce);
+            }
+
             if (ret == ESP_OK) {
                 printf("→ TX: MODULE_ANNOUNCE (AUDIO v1.0, block 0x42) - SUCCESS\n");
                 g_test_state.tx_count++;

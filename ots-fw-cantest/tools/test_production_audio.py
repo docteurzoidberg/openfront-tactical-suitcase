@@ -46,6 +46,12 @@ class ProductionAudioTest:
         
         # Audio log events (playback confirmation)
         self.audio_events = []
+
+        # Heuristic state for mapping generic playback logs back to a sound index
+        self._last_play_sound_index = None
+
+        # Per-test dedupe so output stays readable
+        self._seen_audio_event_keys = set()
         
         # Reader threads
         self.controller_reader = None
@@ -198,19 +204,58 @@ class ProductionAudioTest:
         
         line_lower = line.lower()
         
-        # Playing sound
-        if 'playing' in line_lower and 'sound' in line_lower:
-            match = re.search(r'sound[:\s]+(\d+)', line_lower)
+        # Parse/track the sound index from common production logs
+        # Examples:
+        # - "CAN_AUDIO: PLAY_SOUND: index=1 flags=0x00 vol=100 req_id=0"
+        # - "AUDIO_PLAYER: Play sound 1: vol=100% loop=0 int=0"
+        # - "AUDIO_PLAYER: Playing embedded 'game_victory' (ID 1, 44178 bytes)"
+        sound_id = None
+        for pattern in (
+            r'\bplay_sound:\s*index=(\d+)\b',
+            r'\bplay\s+sound\s+(\d+)\b',
+            r'\bplaying\s+sound\s+(\d+)\b',
+            r'\(id\s*(\d+)[,\)]',
+            r'\bsound_index[=:]\s*(\d+)\b',
+        ):
+            match = re.search(pattern, line_lower)
             if match:
-                sound_id = int(match.group(1))
-                event = {
-                    'timestamp': time.time(),
-                    'type': 'sound_start',
-                    'sound_id': sound_id,
-                    'raw': line
-                }
-                self.audio_events.append(event)
-                print(f"  [AUDIO EVENT] Playing sound {sound_id}")
+                try:
+                    sound_id = int(match.group(1))
+                    break
+                except ValueError:
+                    pass
+
+        if sound_id is not None:
+            self._last_play_sound_index = sound_id
+
+        # Sound start / playback confirmed
+        if (
+            (('play' in line_lower) and ('sound' in line_lower) and (sound_id is not None))
+            or ('playback started' in line_lower)
+            or ('playing embedded' in line_lower)
+            or ('playing sd' in line_lower)
+        ):
+            event_sound_id = sound_id if sound_id is not None else self._last_play_sound_index
+            if event_sound_id is not None:
+                key = ('sound_start', event_sound_id)
+                if key not in self._seen_audio_event_keys:
+                    self._seen_audio_event_keys.add(key)
+                    event = {
+                        'timestamp': time.time(),
+                        'type': 'sound_start',
+                        'sound_id': event_sound_id,
+                        'raw': line
+                    }
+                    self.audio_events.append(event)
+                    print(f"  [AUDIO EVENT] Playback start (sound {event_sound_id})")
+                elif self.verbose:
+                    # Still record raw lines in verbose mode for debugging.
+                    self.audio_events.append({
+                        'timestamp': time.time(),
+                        'type': 'sound_start_duplicate',
+                        'sound_id': event_sound_id,
+                        'raw': line
+                    })
         
         # Sound finished
         if 'finished' in line_lower or 'complete' in line_lower:
@@ -218,14 +263,24 @@ class ProductionAudioTest:
                 match = re.search(r'sound[:\s]+(\d+)', line_lower)
                 if match:
                     sound_id = int(match.group(1))
-                    event = {
-                        'timestamp': time.time(),
-                        'type': 'sound_finish',
-                        'sound_id': sound_id,
-                        'raw': line
-                    }
-                    self.audio_events.append(event)
-                    print(f"  [AUDIO EVENT] Sound {sound_id} finished")
+                    key = ('sound_finish', sound_id)
+                    if key not in self._seen_audio_event_keys:
+                        self._seen_audio_event_keys.add(key)
+                        event = {
+                            'timestamp': time.time(),
+                            'type': 'sound_finish',
+                            'sound_id': sound_id,
+                            'raw': line
+                        }
+                        self.audio_events.append(event)
+                        print(f"  [AUDIO EVENT] Sound {sound_id} finished")
+                    elif self.verbose:
+                        self.audio_events.append({
+                            'timestamp': time.time(),
+                            'type': 'sound_finish_duplicate',
+                            'sound_id': sound_id,
+                            'raw': line
+                        })
         
         # Mixer status
         if 'mixer' in line_lower and 'active' in line_lower:
@@ -233,6 +288,7 @@ class ProductionAudioTest:
             if match:
                 active = int(match.group(1))
                 total = int(match.group(2))
+                # Mixer status is noisy; always record, only print in verbose.
                 event = {
                     'timestamp': time.time(),
                     'type': 'mixer_status',
@@ -312,6 +368,8 @@ class ProductionAudioTest:
         while not self.audio_queue.empty():
             self.audio_queue.get()
         self.audio_events.clear()
+        self._seen_audio_event_keys.clear()
+        self._last_play_sound_index = None
         
         # Send discovery command
         print("Sending MODULE_QUERY from controller...")
@@ -386,6 +444,8 @@ class ProductionAudioTest:
         while not self.audio_queue.empty():
             self.audio_queue.get()
         self.audio_events.clear()
+        self._seen_audio_event_keys.clear()
+        self._last_play_sound_index = None
         
         # Send play sound command
         sound_index = 1

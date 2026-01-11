@@ -34,6 +34,20 @@ class CANId(IntEnum):
     PLAY_SOUND_ACK = 0x423   # Audio → Main: Play acknowledgment
     STOP_SOUND_ACK = 0x424   # Audio → Main: Stop acknowledgment
     SOUND_FINISHED = 0x425   # Audio → Main: Sound completed
+    SOUND_STATUS = 0x426     # Audio → Main: Periodic status snapshot
+
+
+# ==============================================================================
+# Audio Status Bits
+# ==============================================================================
+
+class AudioStatusBits:
+    """Bit definitions for SOUND_STATUS state_bits (byte 0)."""
+    READY = 1 << 0
+    SD_MOUNTED = 1 << 1
+    PLAYING = 1 << 2
+    MUTED = 1 << 3
+    ERROR = 1 << 4
 
 
 # ==============================================================================
@@ -260,6 +274,49 @@ class SoundFinished:
         }
 
 
+@dataclass
+class SoundStatus:
+    """Parsed SOUND_STATUS message (0x426)."""
+    state_bits: int
+    current_sound_index: int
+    last_error_code: int
+    volume: int
+    uptime_sec: int
+    reserved: int
+
+    def is_ready(self) -> bool:
+        return bool(self.state_bits & AudioStatusBits.READY)
+
+    def is_sd_mounted(self) -> bool:
+        return bool(self.state_bits & AudioStatusBits.SD_MOUNTED)
+
+    def is_playing(self) -> bool:
+        return bool(self.state_bits & AudioStatusBits.PLAYING)
+
+    def is_muted(self) -> bool:
+        return bool(self.state_bits & AudioStatusBits.MUTED)
+
+    def has_error(self) -> bool:
+        return bool(self.state_bits & AudioStatusBits.ERROR)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'state_bits': self.state_bits,
+            'ready': self.is_ready(),
+            'sd_mounted': self.is_sd_mounted(),
+            'playing': self.is_playing(),
+            'muted': self.is_muted(),
+            'error': self.has_error(),
+            'current_sound_index': self.current_sound_index,
+            'current_sound_index_hex': f"0x{self.current_sound_index:04X}",
+            'last_error_code': self.last_error_code,
+            'volume': self.volume,
+            'volume_source': 'pot' if self.volume == 0xFF else 'fixed',
+            'uptime_sec': self.uptime_sec,
+            'reserved': self.reserved
+        }
+
+
 # ==============================================================================
 # Decoder Functions
 # ==============================================================================
@@ -410,6 +467,30 @@ def decode_sound_finished(frame: CANFrame) -> Optional[SoundFinished]:
     )
 
 
+def decode_sound_status(frame: CANFrame) -> Optional[SoundStatus]:
+    """Decode SOUND_STATUS message (0x426).
+
+    Format: [Bits CurLo CurHi Err Vol UpLo UpHi Rsvd]
+
+    Returns:
+        SoundStatus object, or None if invalid
+    """
+    if frame.can_id != CANId.SOUND_STATUS or frame.dlc != 8:
+        return None
+
+    current_sound_index = frame.data[1] | (frame.data[2] << 8)
+    uptime_sec = frame.data[5] | (frame.data[6] << 8)
+
+    return SoundStatus(
+        state_bits=frame.data[0],
+        current_sound_index=current_sound_index,
+        last_error_code=frame.data[3],
+        volume=frame.data[4],
+        uptime_sec=uptime_sec,
+        reserved=frame.data[7]
+    )
+
+
 def decode_frame(frame: CANFrame) -> Dict[str, Any]:
     """Decode any CAN frame to structured data.
     
@@ -472,6 +553,12 @@ def decode_frame(frame: CANFrame) -> Dict[str, Any]:
         finished = decode_sound_finished(frame)
         if finished:
             result['decoded'] = finished.to_dict()
+
+    elif frame.can_id == CANId.SOUND_STATUS:
+        result['message_type'] = 'SOUND_STATUS'
+        status = decode_sound_status(frame)
+        if status:
+            result['decoded'] = status.to_dict()
     
     return result
 

@@ -5,11 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 #include "can_test.h"
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 
 // CAN IDs from protocol
-#define CAN_ID_MODULE_ANNOUNCE 0x410
-#define CAN_ID_MODULE_QUERY    0x411
 #define CAN_ID_PLAY_SOUND      0x420
 #define CAN_ID_STOP_SOUND      0x421
 #define CAN_ID_STOP_ALL        0x422
