@@ -10,14 +10,18 @@
 - **Non-blocking**: module code must never block on CAN transmit (e.g. 100ms `twai_transmit()` timeout).
 - **Reusable**: new CAN modules should only implement protocol encode/decode + register handlers.
 - **Resilient**: automatic BUS_OFF recovery with backoff.
-- **Discovery-friendly**: optional integration with `can_discovery` for module registry.
+- **Discovery-friendly**: optional integration with `can_protocol_discovery` for module registry.
 
 ## Constraints / Non-goals
 
 - Do **not** redesign CAN IDs or message formats.
 - Keep `can_driver` as low-level TWAI abstraction.
-- Keep `can_discovery` as protocol helper (query/announce parsing/building).
-- Keep module-specific protocol components (e.g. `can_audiomodule`) as encode/decode only.
+- Keep `can_protocol_discovery` as protocol helper (query/announce parsing/building).
+- Keep module-specific protocol components (e.g. `can_protocol_audiomodule`) as encode/decode only.
+
+Naming convention:
+- Module-specific helpers: `can_protocol_<modulename>`
+- Shared protocol helpers: `can_protocol_<feature>`
 
 ### Decision: integrate discovery into manager
 
@@ -31,7 +35,7 @@
 
 **Tradeoffs / guardrails**:
 - Avoid making the manager discovery-*required*; registry should be **optional** (works fine on a single-node bus too).
-- Keep the public header as **generic as possible** (ideally no hard dependency on `can_discovery.h` in the public API).
+- Keep the public header as **generic as possible** (ideally no hard dependency on `can_protocol_discovery.h` in the public API).
 
 ---
 
@@ -59,6 +63,11 @@
 - Refactor `ots-fw-audiomodule/src/can_audio_handler.c` to register RX handlers + enqueue TX frames (no module-owned CAN RX loop).
 - Update `ots-fw-audiomodule/src/CMakeLists.txt` dependency list.
 
+### Refactor fw-cantest (optional but recommended)
+- Use `can_bus_manager` as the common runtime in the CAN testing tool.
+- Add a CLI view to print the discovery registry (modules seen + last-seen age).
+- Add a CLI command to broadcast discovery query (`MODULE_QUERY`) via manager.
+
 ---
 
 ## Status
@@ -81,11 +90,14 @@
 | - Registry data model + storage | ✅ Done | UNTESTED | Fixed-size table keyed by (module_type,node_id) |
 | - RX hook for MODULE_ANNOUNCE | ✅ Done | UNTESTED | Parse via `can_discovery_parse_announce()` |
 | - Public query API | ✅ Done | UNTESTED | Presence + last-seen + lookup helpers |
-| - Header decoupling from discovery | ✅ Done | UNTESTED | `can_discovery.h` kept out of public API |
+| - Header decoupling from discovery | ✅ Done | UNTESTED | `can_protocol_discovery.h` kept out of public API |
 | Refactor fw-main sound module | ✅ Done | UNTESTED | Uses `can_bus_manager`; no per-module CAN tasks/queues |
 | Build esp32-s3-dev | ✅ Done | UNTESTED | `pio run -e esp32-s3-dev` succeeded |
 | Refactor fw-audiomodule CAN runtime | ✅ Done | UNTESTED | Uses `can_bus_manager` + handler registration + STATUS task |
 | Build esp32-a1s-espidf | ✅ Done | UNTESTED | `pio run -e esp32-a1s-espidf` succeeded |
+| Refactor fw-cantest to use manager | ⬜ Not started | UNTESTED | Optional; useful as validation + debugging UI |
+| - Add registry printing command | ⬜ Not started | UNTESTED | Show module_type/node/version/caps/block + age |
+| - Add discovery query command | ⬜ Not started | UNTESTED | Send `MODULE_QUERY` and confirm registry updates |
 | Local commits (no push) | ✅ Done | UNTESTED | f709e6c, e753d85, 623120d |
 | Hardware test: audio ESP power toggle | ⬜ Not started | UNTESTED | Verify main stays responsive while audio ESP is off/on |
 | Hardware test: BUS_OFF recovery | ⬜ Not started | UNTESTED | Force BUS_OFF (if feasible) and confirm recovery/backoff |

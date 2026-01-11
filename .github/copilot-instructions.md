@@ -157,7 +157,7 @@ pio device monitor               # Serial output
 - CAN bus integration for sound commands from main controller
 - SD card support for custom sound banks
 - Embedded WAV files for testing
-- Uses shared components: can_driver, can_audiomodule, can_discovery
+- Uses shared components: can_driver, can_protocol_audiomodule, can_protocol_discovery
 
 **Sound System:**
 - Audio mixer with up to 8 concurrent sounds
@@ -196,15 +196,15 @@ pio device monitor               # Serial + interactive CLI
 **Features:**
 - Protocol decoder: Human-readable message parsing with raw hex
 - Statistics tracking: RX/TX/error counts, message rates
-- Uses shared components: can_driver, can_discovery
+- Uses shared components: can_driver, can_protocol_discovery
 - Lightweight: 242KB flash, 13KB RAM
 
 ### ots-fw-shared (Shared ESP-IDF Components)
 
 **Components:**
 - **can_driver**: Generic CAN bus (TWAI) driver with mock fallback
-- **can_discovery**: Module discovery protocol (MODULE_ANNOUNCE, MODULE_QUERY)
-- **can_audiomodule**: Audio module CAN protocol implementation
+- **can_protocol_discovery**: Module discovery protocol constants/helpers (MODULE_ANNOUNCE, MODULE_QUERY)
+- **can_protocol_audiomodule**: Audio module CAN protocol helpers
 
 **CAN Bus Protocol:**
 - **Specification**: [`/prompts/CANBUS_MESSAGE_SPEC.md`](../prompts/CANBUS_MESSAGE_SPEC.md) - Single source of truth for CAN message formats

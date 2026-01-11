@@ -1,7 +1,7 @@
 # CAN Bus Protocol - Developer Guide
 
-**Last Updated**: January 5, 2026  
-**Protocol Version**: 1.0 (Audio Module + Discovery)
+**Last Updated**: January 11, 2026  
+**Protocol Version**: 1.1 (Audio Module + Discovery + Audio Status)
 
 ## Purpose
 
@@ -23,6 +23,12 @@ This guide provides implementation patterns, code examples, and debugging strate
 
 ## Getting Started
 
+### Component Naming Convention
+
+- Module-specific protocol helpers: `can_protocol_<modulename>` (example: `can_protocol_audiomodule`)
+- Shared/non-module-specific protocol helpers: `can_protocol_<feature>` (example: `can_protocol_discovery`)
+- Runtime/orchestration (tasks, TX queue, RX dispatch, registries) should live in `can_bus_manager` (not in `*_protocol` components)
+
 ### Prerequisites
 
 - ESP-IDF v5.0 or later
@@ -37,8 +43,8 @@ This guide provides implementation patterns, code examples, and debugging strate
 │  Application Layer                      │  Your firmware code
 │  - Sound module, game events, etc.     │
 ├─────────────────────────────────────────┤
-│  Discovery Layer (optional)             │  can_discovery component
-│  - Boot-time module detection          │
+│  Discovery Layer (optional)             │  can_protocol_discovery component
+│  - Query/announce frame helpers         │
 ├─────────────────────────────────────────┤
 │  Protocol Layer (application-specific)  │  can_audio_protocol component
 │  - Message encoding/decoding           │
@@ -65,8 +71,8 @@ idf_component_register(
     REQUIRES 
         driver
         can_driver          # Hardware layer
-        can_discovery       # Discovery protocol (optional)
-        can_audiomodule     # Audio protocol (optional)
+    can_protocol_discovery  # Discovery protocol helpers (optional)
+        can_protocol_audiomodule  # Audio protocol (optional)
 )
 ```
 
@@ -119,7 +125,7 @@ Audio module (ESP32-A1S):
 
 ```c
 #include "can_driver.h"
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 
 void can_rx_task(void *pvParameters) {
     can_frame_t frame;
@@ -134,18 +140,23 @@ void can_rx_task(void *pvParameters) {
         // Handle discovery query
         if (frame.id == CAN_ID_MODULE_QUERY) {
             ESP_LOGI(TAG, "Discovery query received");
-            
-            // Auto-respond with MODULE_ANNOUNCE
-            can_discovery_handle_query(&frame,
-                MODULE_TYPE_AUDIO,      // Module type: Audio
-                1,                      // Firmware major: 1
-                0,                      // Firmware minor: 0
-                MODULE_CAP_STATUS,      // Capabilities: STATUS
-                0x42,                   // CAN block: 0x420-0x42F
-                0                       // Node ID: 0 (primary)
-            );
-            
-            ESP_LOGI(TAG, "Sent MODULE_ANNOUNCE");
+
+            // MODULE_QUERY expects magic byte 0xFF to enumerate all modules.
+            if (frame.dlc >= 1 && frame.data[0] == 0xFF) {
+                can_frame_t announce;
+                if (can_discovery_build_announce(
+                        &announce,
+                        MODULE_TYPE_AUDIO, // Module type: Audio
+                        1,                 // Firmware major: 1
+                        0,                 // Firmware minor: 0
+                        MODULE_CAP_STATUS, // Capabilities: STATUS
+                        0x42,              // CAN block: 0x420-0x42F
+                        0                  // Node ID: 0 (primary)
+                    ) == ESP_OK) {
+                    (void)can_driver_send(&announce, 100);
+                    ESP_LOGI(TAG, "Sent MODULE_ANNOUNCE");
+                }
+            }
         }
         
         // Handle other CAN messages (sound commands, etc.)
@@ -162,14 +173,15 @@ void can_rx_task(void *pvParameters) {
 ```c
 void announce_module(void) {
     can_frame_t frame;
-    can_discovery_announce(
-        MODULE_TYPE_AUDIO,
-        1, 0,                      // Version 1.0
-        MODULE_CAP_STATUS,
-        0x42, 0,
-        &frame
-    );
-    can_driver_send(&frame, 100);
+    if (can_discovery_build_announce(
+            &frame,
+            MODULE_TYPE_AUDIO,
+            1, 0,                      // Version 1.0
+            MODULE_CAP_STATUS,
+            0x42, 0
+        ) == ESP_OK) {
+        can_driver_send(&frame, 100);
+    }
 }
 ```
 
@@ -179,7 +191,7 @@ void announce_module(void) {
 
 ```c
 #include "can_driver.h"
-#include "can_discovery.h"
+#include "can_protocol_discovery.h"
 
 // Module registry
 typedef struct {
@@ -202,8 +214,8 @@ void can_rx_task(void *pvParameters) {
         
         // Parse MODULE_ANNOUNCE
         if (frame.id == CAN_ID_MODULE_ANNOUNCE) {
-            module_info_t info;
-            if (can_discovery_parse_announce(&frame, &info) == ESP_OK) {
+            can_discovery_announce_t info;
+            if (can_discovery_parse_announce(&frame, &info)) {
                 
                 // Check if audio module
                 if (info.module_type == MODULE_TYPE_AUDIO) {
@@ -227,7 +239,10 @@ void discover_modules(void) {
     ESP_LOGI(TAG, "Discovering CAN modules...");
     
     // Send query broadcast
-    can_discovery_query_all();
+    can_frame_t query;
+    if (can_discovery_build_query_all(&query) == ESP_OK) {
+        (void)can_driver_send(&query, 100);
+    }
     
     // Wait for responses (500ms is standard)
     vTaskDelay(pdMS_TO_TICKS(500));
@@ -281,7 +296,7 @@ void play_sound(uint8_t sound_index) {
 **Example 1: Play one-shot sound**
 
 ```c
-#include "can_audio_protocol.h"
+#include "can_protocol_audiomodule.h"
 
 // State tracking
 static uint16_t g_request_id = 0;
@@ -439,7 +454,7 @@ void handle_sound_finished(const can_frame_t *frame) {
 **Processing PLAY_SOUND:**
 
 ```c
-#include "can_audio_protocol.h"
+#include "can_protocol_audiomodule.h"
 #include "audio_mixer.h"
 
 static uint8_t g_queue_id_counter = 1;
@@ -719,7 +734,7 @@ cd ots-fw-main
 pio run -e esp32-s3-dev -t upload && pio device monitor
 
 # Expected output (main controller):
-# [can_discovery] Sent MODULE_QUERY
+# [can_bus_manager] Sent MODULE_QUERY
 # [can_rx] MODULE_ANNOUNCE received: type=AUDIO v1.0
 # [sound_module] ✓ Audio module detected
 ```
@@ -909,7 +924,7 @@ ESP_LOGI(TAG, "Direct play test: %s", esp_err_to_name(ret));
 can.id == 0x410 || can.id == 0x411
 
 # Show only audio protocol
-can.id >= 0x420 && can.id <= 0x425
+can.id >= 0x420 && can.id <= 0x426
 
 # Show errors only
 can.error_flag == 1
@@ -1034,8 +1049,8 @@ See [`/ots-fw-cantest/`](../../ots-fw-cantest/) for CAN bus testing and debuggin
 
 **Component Documentation**:
 - [`/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md`](../../ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md)
-- [`/ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md`](../../ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md)
-- [`/ots-fw-shared/components/can_audiomodule/COMPONENT_PROMPT.md`](../../ots-fw-shared/components/can_audiomodule/COMPONENT_PROMPT.md)
+- [`/ots-fw-shared/components/can_protocol_discovery/COMPONENT_PROMPT.md`](../../ots-fw-shared/components/can_protocol_discovery/COMPONENT_PROMPT.md)
+- [`/ots-fw-shared/components/can_protocol_audiomodule/COMPONENT_PROMPT.md`](../../ots-fw-shared/components/can_protocol_audiomodule/COMPONENT_PROMPT.md)
 
 **ESP-IDF Resources**:
 - [TWAI Driver Documentation](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/twai.html)

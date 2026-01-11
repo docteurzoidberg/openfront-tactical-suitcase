@@ -1,8 +1,8 @@
 # CAN Bus Protocol Specification
 
-**Version**: 1.0  
-**Date**: January 5, 2026  
-**Status**: Implemented (Audio Module + Discovery)
+**Version**: 1.1  
+**Date**: January 11, 2026  
+**Status**: Implemented (Audio Module + Discovery + Audio Status)
 
 ## Purpose
 
@@ -260,6 +260,7 @@ If no audio module discovered at boot:
 | **0x424** | Audio → Main | STOP_SOUND_ACK | Stop acknowledgment |
 | **0x422** | Main → Audio | STOP_ALL_REQUEST | Stop all sounds |
 | **0x425** | Audio → Main | SOUND_FINISHED | Sound completed (not looping) |
+| **0x426** | Audio → Main | SOUND_STATUS | Periodic status snapshot (optional) |
 
 **Note**: STOP_ALL_ACK is reserved for future implementation (no CAN ID assigned yet).
 
@@ -446,6 +447,45 @@ Data: [03 01 00 00 00 00 00 00]
 ```
 
 **Note**: SOUND_FINISHED is only sent for non-looping sounds that reach their natural end. Looping sounds never send this message unless explicitly stopped.
+
+### SOUND_STATUS (0x426)
+
+**Direction**: Audio module → Main controller  
+**Purpose**: Periodic status snapshot to aid monitoring/diagnostics (optional)  
+**DLC**: 8 bytes
+
+This message is sent periodically by the audio module (default: every 5s). Receivers that don't care about status can safely ignore it.
+
+```
+┌─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┐
+│Bits │CurLo│CurHi│Err  │Vol  │UpLo │UpHi │Rsvd │
+└─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘
+
+Byte 0: State bits (bitfield)
+       bit 0: READY      (module ready / last_error == 0)
+       bit 1: SD_MOUNTED (SD card mounted)
+       bit 2: PLAYING    (one or more active sources)
+       bit 3: MUTED      (reserved)
+       bit 4: ERROR      (last_error != 0)
+       bits 5-7: Reserved (0)
+Byte 1-2: Current sound index (little-endian)
+         0xFFFF = none
+Byte 3: Last error code (0x00 = OK)
+Byte 4: Volume (0-100) or 0xFF = use potentiometer
+Byte 5-6: Uptime in seconds (little-endian, wraps at 65535)
+Byte 7: Reserved (0x00). (Planned future use: active source count)
+
+Example - idle/ready, no sound, volume from POT:
+CAN ID: 0x426
+Data: [01 FF FF 00 FF AE 02 00]
+       │  │  │  │  │  │  │
+       │  │  │  │  │  │  └─ Reserved
+       │  │  │  │  │  └──── Uptime: 0x02AE = 686s
+       │  │  │  │  └─────── Volume: 0xFF (POT)
+       │  │  │  └────────── Error: 0x00
+       │  └─────────────── Current sound: 0xFFFF (none)
+       └────────────────── State bits: 0x01 (READY)
+```
 
 ### Queue ID Management
 
@@ -634,16 +674,17 @@ Main Controller                          Audio Module
 
 ## Protocol Version
 
-**Current Version**: 1.0  
+**Current Version**: 1.1  
 **Implementation Status**:
 - ✅ Discovery protocol (MODULE_QUERY, MODULE_ANNOUNCE)
-- ✅ Audio module protocol (PLAY, STOP, ACK, FINISHED)
+- ✅ Audio module protocol (PLAY, STOP, ACK, FINISHED, STATUS)
 - 📋 Future: Display module protocol
 - 📋 Future: Lighting module protocol
 - 📋 Future: Generic multi-module routing
 
 **Changelog**:
 - **v1.0** (2026-01-05): Initial specification with discovery and audio protocols
+- **v1.1** (2026-01-11): Documented `SOUND_STATUS (0x426)` as implemented
 
 ---
 
@@ -652,7 +693,7 @@ Main Controller                          Audio Module
 ### Short Term
 - STOP_ALL_ACK implementation (with stopped sound count)
 - Volume query command (get current master volume)
-- Audio module status periodic messages
+- Audio module status enhancements (active source count, mute flag, richer error codes)
 
 ### Medium Term
 - Display module protocol (LCD/OLED text, graphics commands)
@@ -671,8 +712,8 @@ Main Controller                          Audio Module
 
 **Component Documentation**:
 - `/ots-fw-shared/components/can_driver/` - Generic CAN driver (hardware layer)
-- `/ots-fw-shared/components/can_discovery/` - Discovery protocol implementation
-- `/ots-fw-shared/components/can_audiomodule/` - Audio protocol implementation
+- `/ots-fw-shared/components/can_protocol_discovery/` - Discovery protocol constants/helpers (query/announce)
+- `/ots-fw-shared/components/can_protocol_audiomodule/` - Audio module protocol helpers
 
 **Implementation**:
 - `ots-fw-main` - Main controller (initiates discovery, sends commands)

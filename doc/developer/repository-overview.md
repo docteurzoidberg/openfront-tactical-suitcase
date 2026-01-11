@@ -292,13 +292,18 @@ ots-fw-shared/components/
 │   ├── can_driver.c
 │   └── COMPONENT_PROMPT.md
 │
-├── can_discovery/                  # Module discovery protocol
-│   ├── can_discovery.h
-│   └── can_discovery.c
+├── can_bus_manager/                # Shared CAN runtime (RX dispatch + TX queue)
+│   ├── can_bus_manager.c
+│   ├── include/
+│   └── COMPONENT_PROMPT.md
 │
-└── can_audiomodule/                # Audio module CAN protocol
-    ├── can_audiomodule.h
-    └── can_audiomodule.c
+├── can_protocol_discovery/         # Discovery protocol helpers (header-only)
+│   ├── include/
+│   └── COMPONENT_PROMPT.md
+│
+└── can_protocol_audiomodule/       # Audio module CAN protocol helpers
+    ├── can_protocol_audiomodule.h
+    └── can_protocol_audiomodule.c
 ```
 
 ### Usage

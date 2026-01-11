@@ -135,8 +135,9 @@ Use with `PROMPT_REVIEW_GUIDE.md` to review files one at a time. For each file:
 ### Component Documentation
 - [ ] `ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md` - CAN driver
 - [ ] `ots-fw-shared/components/can_driver/README.md` - CAN driver readme
-- [ ] `ots-fw-shared/components/can_discovery/COMPONENT_PROMPT.md` - Module discovery
-- [ ] `ots-fw-shared/components/can_audiomodule/COMPONENT_PROMPT.md` - Audio protocol
+- [ ] `ots-fw-shared/components/can_bus_manager/COMPONENT_PROMPT.md` - Shared CAN bus runtime
+- [ ] `ots-fw-shared/components/can_protocol_discovery/COMPONENT_PROMPT.md` - Discovery protocol helpers
+- [ ] `ots-fw-shared/components/can_protocol_audiomodule/COMPONENT_PROMPT.md` - Audio protocol
 
 ### CAN Protocol Documentation
 - [ ] 🗑️ `ots-fw-shared/prompts/CAN_PROTOCOL_ARCHITECTURE.md` - Multi-module architecture **[TO BE DELETED - consolidated into CANBUS_MESSAGE_SPEC.md]**
