@@ -179,9 +179,9 @@ The audio system has been refactored into focused, single-responsibility modules
 
 ## CAN Protocol Implementation
 
-This firmware uses the shared `can_audiomodule` component from `ots-fw-shared`.
+This firmware uses the shared `can_protocol_audiomodule` component from `ots-fw-shared`.
 
-- **Protocol header**: `ots-fw-shared/components/can_audiomodule/can_audio_protocol.h`
+- **Protocol header**: `ots-fw-shared/components/can_protocol_audiomodule/can_protocol_audiomodule.h`
 - **Handler implementation**: `src/can_audio_handler.c`
 
 High-level CAN IDs (11-bit, 0x420-0x42F block):
@@ -581,7 +581,7 @@ When user requests CAN protocol changes (new messages, CAN IDs, or data fields):
    - Both must reflect the same CAN IDs and message formats
 
 3. **Audio module-specific updates:**
-   - Update shared component (`can_audiomodule`) if protocol-level changes
+   - Update shared component (`can_protocol_audiomodule`) if protocol-level changes
    - Update handlers in `src/can_audio_handler.c` for behavior changes
    - Test changes in BOTH audio module AND main controller firmware
    - Document sound playback behavior in spec
@@ -595,7 +595,7 @@ When user requests CAN protocol changes (new messages, CAN IDs, or data fields):
 **When modifying the CAN protocol** (adding messages, changing formats, etc.):
 1. ⚠️ **UPDATE `/prompts/CANBUS_MESSAGE_SPEC.md` FIRST**
 2. Update `/doc/developer/canbus-protocol.md` with implementation examples
-3. Update the shared component: `/ots-fw-shared/components/can_audiomodule/`
+3. Update the shared component: `/ots-fw-shared/components/can_protocol_audiomodule/`
 4. Update handlers in `src/can_audio_handler.c` if needed
 5. Test changes in both audio module AND main controller firmware
 

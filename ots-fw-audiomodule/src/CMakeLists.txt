@@ -11,5 +11,5 @@ message(STATUS "Audio console: ENABLED (unified command interface)")
 
 idf_component_register(
     SRCS ${app_sources}
-    REQUIRES can_driver can_audiomodule can_discovery can_bus_manager
+    REQUIRES can_driver can_protocol_audiomodule can_bus_manager can_protocol_discovery
 )

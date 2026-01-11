@@ -4,8 +4,8 @@
  */
 
 #include "can_audio_handler.h"
-#include "can_audio_protocol.h"
-#include "can_discovery.h"
+#include "can_protocol_audiomodule.h"
+#include "can_protocol_discovery.h"
 #include "can_bus_manager.h"
 #include "sound_config.h"
 #include "audio_mixer.h"
@@ -30,21 +30,17 @@ static bool s_handlers_registered = false;
 
 static void send_module_announce(void) {
     can_frame_t announce = {0};
-    announce.id = CAN_ID_MODULE_ANNOUNCE;
-    announce.extended = false;
-    announce.rtr = false;
-    announce.dlc = 8;
-
-    announce.data[0] = MODULE_TYPE_AUDIO;
-    announce.data[1] = 1; // v1.0
-    announce.data[2] = 0;
-    announce.data[3] = MODULE_CAP_STATUS;
-    announce.data[4] = 0x42; // 0x420-0x42F
-    announce.data[5] = 0;    // node_id
-    announce.data[6] = 0;
-    announce.data[7] = 0;
-
-    (void)can_bus_manager_send(&announce);
+    if (can_discovery_build_announce(
+            &announce,
+            MODULE_TYPE_AUDIO,
+            1,
+            0,
+            MODULE_CAP_STATUS,
+            0x42, // 0x420-0x42F
+            0     // node_id
+        ) == ESP_OK) {
+        (void)can_bus_manager_send(&announce);
+    }
 }
 
 static void on_can_module_query(const can_frame_t *frame, void *ctx) {
