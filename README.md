@@ -4,12 +4,20 @@
 
 OTS bridges OpenFront.io gameplay to physical controls (buttons, LEDs, LCD, audio) and provides a dashboard + developer tooling to test everything without hardware.
 
+![OTS Suitcase Assembly](images/suitcase-assembly-render.png)
+
+<!-- TODO: Add photo of assembled device -->
+![OTS Physical Device](images/device-photo.jpg)
+
 [![ESP32-S3](https://img.shields.io/badge/ESP32-S3-blue.svg)](https://www.espressif.com/en/products/socs/esp32-s3)
 [![Nuxt](https://img.shields.io/badge/Nuxt-4-00DC82.svg)](https://nuxt.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6.svg)](https://www.typescriptlang.org/)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP--IDF-orange.svg)](https://platformio.org/)
 
 ## What is OTS?
+
+<!-- TODO: Add system architecture diagram -->
+![System Architecture](images/architecture-diagram.png)
 
 At a high level:
 
@@ -25,6 +33,14 @@ At a high level:
 - **Keypad module**: 15-key RGB mechanical keyboard (CAN/USB dual-mode)
 - **Audio module**: ESP32-A1S playback over CAN
 - **Dashboard**: real-time hardware emulator + event log
+
+### Screenshots
+
+<!-- TODO: Add simulator dashboard screenshot -->
+![Dashboard Simulator](images/simulator-dashboard.png)
+
+<!-- TODO: Add userscript HUD screenshot -->
+![Userscript HUD](images/userscript-hud.png)
 
 ## Documentation
 
