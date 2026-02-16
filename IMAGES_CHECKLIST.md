@@ -35,7 +35,7 @@ Track progress on adding images to documentation. See individual `images/README.
 | Main Power (2U) | `main-power-render.png` | `main-power-pcb.png` | ✅ CAD done |
 | Sound (2U) | `sound-render.png` | `sound-pcb.png` | ✅ CAD done |
 | Troops (4U) | `troops-render.png` | `troops-pcb.png` | ✅ CAD done |
-| Alert (4U) | `alert-render.png` | `alert-pcb.png` | 📸 Ready to export |
+| Alert (4U) | `alert-render.png` | `alert-pcb.png` | ✅ CAD done |
 | Nuke (4U) | `nuke-render.png` | `nuke-pcb.png` | 📸 Ready to export |
 | Keypad (4U) | `keypad-render.png` | `keypad-pcb.png` | ✅ CAD done |
 

@@ -7,7 +7,6 @@
 - **Game State Domain**: Inbound threat alerts
 - **Hardware Interface**: Direct I2C via MCP23017 I/O Expander (Board 1)
 
-<!-- TODO: Add Alert module 3D render -->
 ![Alert Module Render](../cad/images/alert-render.png)
 
 ## Description
