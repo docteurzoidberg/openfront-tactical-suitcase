@@ -38,10 +38,11 @@ Documentation for OTS device owners and players.
 ### Hardware Modules
 Detailed guides for each physical module:
 
-- **[Nuke Control Panel](modules/nuke-module.md)** - Launch nuclear weapons
-- **[Alert Module](modules/alert-module.md)** - Incoming threat indicators
-- **[Troops Module](modules/troops-module.md)** - Troop counter and deployment slider
-- **[Main Power Module](modules/main-power.md)** - Connection status and power
+- **[Main Power Module](modules/main-power.md)** - Connection status and power (2U)
+- **[Nuke Control Panel](modules/nuke-module.md)** - Launch nuclear weapons (4U)
+- **[Alert Module](modules/alert-module.md)** - Incoming threat indicators (4U)
+- **[Troops Module](modules/troops-module.md)** - Troop counter and deployment slider (4U)
+- **[Keypad Module](modules/keypad-module.md)** - Programmable RGB mechanical keyboard (4U)
 
 ## 🔧 Support
 

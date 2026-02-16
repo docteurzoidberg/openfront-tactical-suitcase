@@ -28,10 +28,11 @@ doc/
 │   │
 │   ├── modules/                           # Hardware module guides
 │   │   ├── README.md                      # Modules overview
-│   │   ├── nuke-module.md                 # Nuke Control Panel guide
-│   │   ├── alert-module.md                # Alert indicators guide
-│   │   ├── troops-module.md               # Troops counter/slider guide
-│   │   └── main-power.md                  # Connection status LED
+│   │   ├── main-power.md                  # Main Power Module (2U)
+│   │   ├── nuke-module.md                 # Nuke Control Panel (4U)
+│   │   ├── alert-module.md                # Alert indicators (4U)
+│   │   ├── troops-module.md               # Troops counter/slider (4U)
+│   │   └── keypad-module.md               # Keypad RGB mechanical keyboard (4U)
 │   │
 │   └── advanced/                          # Advanced user topics
 │       ├── firmware-updates.md            # OTA update procedure

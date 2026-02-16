@@ -59,25 +59,38 @@ bun run dev
 
 Currently implemented modules:
 
-### Main Power Module
+### Main Power Module (2U)
 - POWER LED (always on when powered)
 - LINK LED (shows userscript connection status)
 - Component: `app/components/hardware/MainPowerModule.vue`
 - Spec: `/ots-hardware/modules/main-power-module.md`
 
-### Alert Module
+### Alert Module (4U)
 - WARNING LED (active when any threat detected)
 - 5 threat LEDs: ATOM, HYDRO, MIRV, LAND, NAVAL
 - Receives alert events and blinks LEDs for 10s (nukes) or 15s (invasions)
 - Component: `app/components/hardware/AlertModule.vue`
 - Spec: `/ots-hardware/modules/alert-module.md`
 
-### Nuke Control Panel
+### Nuke Control Panel (4U)
 - Three buttons: Atom, Hydro, MIRV
 - Sends `send-nuke` commands to userscript
 - Receives `NUKE_LAUNCHED` events (with nukeType data field) and blinks LEDs for 4 seconds
 - Component: `app/components/hardware/NukeModule.vue`
 - Spec: `/ots-hardware/modules/nuke-module.md`
+
+### Troops Module (4U)
+- 16x2 LCD display showing troop count
+- Slider for deployment percentage control
+- Component: `app/components/hardware/TroopsModule.vue`
+- Spec: `/ots-hardware/modules/troops-module.md`
+
+### Keypad Module (4U)
+- 15-key RGB mechanical keyboard (3x7 matrix)
+- Dual-mode: CAN bus (suitcase) or USB HID (standalone)
+- Programmable key bindings and RGB feedback
+- Component: _To be implemented_
+- Spec: `/ots-hardware/modules/keypad-module.md`
 
 ## Event Types
 

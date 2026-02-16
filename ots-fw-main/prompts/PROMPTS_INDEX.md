@@ -19,11 +19,13 @@ This folder contains **AI prompt files** used when working on the firmware.
 
 Each hardware module has a dedicated prompt file with implementation details:
 
-- **Main Power**: `MAIN_POWER_MODULE_PROMPT.md` - LINK LED and connection status
-- **Nuke Control**: `NUKE_MODULE_PROMPT.md` - Nuke launch buttons and LEDs
-- **Alert System**: `ALERT_MODULE_PROMPT.md` - Incoming threat indicators
-- **Troops Display**: `TROOPS_MODULE_PROMPT.md` - LCD + slider + ADC
-- **Sound System**: `SOUND_MODULE_PROMPT.md` - Audio feedback and alerts
+- **Main Power**: `MAIN_POWER_MODULE_PROMPT.md` - LINK LED and connection status (2U)
+- **Sound System**: `SOUND_MODULE_PROMPT.md` - Audio feedback via CAN bus (2U)
+- **Troops Display**: `TROOPS_MODULE_PROMPT.md` - LCD + slider + ADC (4U)
+- **Alert System**: `ALERT_MODULE_PROMPT.md` - Incoming threat indicators (4U)
+- **Nuke Control**: `NUKE_MODULE_PROMPT.md` - Nuke launch buttons and LEDs (4U)
+- **Keypad**: _To be created_ - 15-key RGB mechanical keyboard, CAN/USB dual-mode (4U)
+  - Spec: `/ots-hardware/modules/keypad-module.md`
 
 ## System Component Prompts
 

@@ -77,7 +77,7 @@ The OTS suitcase uses a **10U rack system with 2 columns**:
 - Troops Module (4U): `modules/troops-module.md`
 - Alert Module (4U): `modules/alert-module.md`
 - Nuke Module (4U): `modules/nuke-module.md`
-- Keypad Module (4U): _To be documented_
+- Keypad Module (4U): `modules/keypad-module.md` (KiCAD: `kicad/keyboard_rev1.zip`)
 
 Modules will be documented as they are designed. Each module specification will include:
 - Physical dimensions and mounting

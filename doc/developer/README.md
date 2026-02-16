@@ -104,10 +104,12 @@ Documentation for developers and makers working on OTS.
   - Power distribution
 
 - **[Hardware Modules](hardware/modules.md)** - Individual module specs
-  - Nuke module
-  - Alert module
-  - Troops module
-  - Audio module
+  - Main Power module (2U)
+  - Sound module (2U)
+  - Troops module (4U)
+  - Alert module (4U)
+  - Nuke module (4U)
+  - Keypad module (4U)
 
 - **[PCB Designs](hardware/pcb-designs.md)** - Circuit board layouts
   - Schematics

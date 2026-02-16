@@ -62,9 +62,25 @@ The device uses a modular design where functionality is split across separate da
 
 ## Current Modules
 
+### Implemented Modules
+- **Main Power Module** (`modules/main-power-module.md`) - 2U, Column 1, Position 1
+  - Power distribution and WebSocket connection status
+- **Sound Module** (`modules/sound-module.md`) - 2U, Column 2, Position 1
+  - ESP32-A1S audio playback via CAN bus
+- **Troops Module** (`modules/troops-module.md`) - 4U, Column 1, Position 2
+  - I2C LCD display + ADC slider for troop deployment
+- **Alert Module** (`modules/alert-module.md`) - 4U, Column 2, Position 2
+  - LED indicators for incoming threats (nukes, invasions)
+- **Nuke Module** (`modules/nuke-module.md`) - 4U, Column 2, Position 3
+  - Launch buttons + LEDs for nuclear weapons
+- **Keypad Module** (`modules/keypad-module.md`) - 4U, Column 1, Position 3
+  - 15-key RGB mechanical keyboard (CAN/USB dual-mode)
+  - PCB: `kicad/keyboard_rev1.zip`
+
+### Module Naming Conventions
+
 - **Spec file**: `modules/module-name.md` (kebab-case)
-- **Firmware class**: `ModuleNameModule` (PascalCase)
-- **Firmware files**: `module_name.h` / `module_name.cpp` (snake_case)
+- **Firmware files**: `module_name.h` / `module_name.c` (snake_case)
 - **Vue component**: `ModuleName.vue` (PascalCase)
 - **TypeScript types**: `ModuleNameCommand`, `ModuleNameEvent` (PascalCase)
 

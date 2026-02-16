@@ -22,6 +22,7 @@ At a high level:
 - **Nuke control panel**: 3 buttons + LEDs (atom/hydro/MIRV)
 - **Alert module**: LED indicators for incoming threats
 - **Troops module**: 16×2 LCD troop display + slider (ADC)
+- **Keypad module**: 15-key RGB mechanical keyboard (CAN/USB dual-mode)
 - **Audio module**: ESP32-A1S playback over CAN
 - **Dashboard**: real-time hardware emulator + event log
 
