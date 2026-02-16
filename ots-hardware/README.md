@@ -12,6 +12,14 @@ Hardware controller for Openfront - a modular, ruggedized game controller system
 
 The Openfront Tactical Suitcase is a physical hardware device that provides tactile controls and visual feedback for the Openfront game. It features a modular design where different functional modules can be added or removed based on needs.
 
+## Documentation Structure
+
+- **[modules/](modules/)** - Hardware module specifications (functionality, interfaces, behavior)
+- **[pcbs/](pcbs/)** - PCB electrical designs (schematics, BOMs, layout)
+- **[cad/](cad/)** - Mechanical CAD files (enclosures, panels, assemblies)
+- **[kicad/](kicad/)** - KiCAD PCB project files (ZIP archives)
+- **[hardware-spec.md](hardware-spec.md)** - System-level architecture and bus specification
+
 ## Architecture
 
 ### Main Controller

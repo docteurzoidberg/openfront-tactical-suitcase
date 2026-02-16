@@ -2,7 +2,14 @@
 
 Main controller and bus specification for the Openfront Tactical Suitcase.
 
+**Related Documentation:**
+- **PCB Designs**: [/ots-hardware/pcbs/](pcbs/) - Detailed controller and module board schematics
+- **Module Specifications**: [/ots-hardware/modules/](modules/) - Individual module designs
+- **CAD Files**: [/ots-hardware/cad/](cad/) - Mechanical enclosures
+
 ## Main Controller Board
+
+**Detailed PCB documentation**: See [pcbs/controller.md](pcbs/controller.md)
 
 ### Microcontroller
 - **Model**: ESP32-S3
