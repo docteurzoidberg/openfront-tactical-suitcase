@@ -33,7 +33,7 @@ Track progress on adding images to documentation. See individual `images/README.
 | Module | CAD Render | PCB Image | Status |
 |--------|------------|-----------|--------|
 | Main Power (2U) | `main-power-render.png` | `main-power-pcb.png` | ✅ CAD done |
-| Sound (2U) | `sound-render.png` | `sound-pcb.png` | 📸 Ready to export |
+| Sound (2U) | `sound-render.png` | `sound-pcb.png` | ✅ CAD done |
 | Troops (4U) | `troops-render.png` | `troops-pcb.png` | ✅ CAD done |
 | Alert (4U) | `alert-render.png` | `alert-pcb.png` | 📸 Ready to export |
 | Nuke (4U) | `nuke-render.png` | `nuke-pcb.png` | 📸 Ready to export |

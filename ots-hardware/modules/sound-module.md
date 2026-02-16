@@ -6,6 +6,8 @@ The Sound Module provides **audio feedback** for important game events (alerts, 
 
 Unlike other OTS modules, it contains a **dedicated ESP32** with its own firmware and audio circuitry. The main controller (ESP32-S3 running `ots-fw-main`) communicates with the Sound Module over **CAN bus** to request playback of sound assets stored on an SD card.
 
+![Sound Module Render](../cad/images/sound-render.png)
+
 ## Module Specifications
 
 - **Size**: 2U
