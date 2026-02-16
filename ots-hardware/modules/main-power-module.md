@@ -7,6 +7,8 @@
 - **Game State Domain**: System status indication
 - **Hardware Interface**: Direct I2C via MCP23017 I/O Expander (Board 0) + Hardware power switch
 
+![Main Power Module Render](../cad/images/main-power-render.png)
+
 ## Description
 The **Main Power Module** is the central power distribution and status module for the OpenFront Tactical Suitcase (OTS). It provides power switching, visual power indication, and real-time WebSocket connection status feedback.
 

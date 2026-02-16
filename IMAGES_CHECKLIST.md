@@ -29,10 +29,10 @@ Track progress on adding images to documentation. See individual `images/README.
 | Controller render | 📸 | `controller-render.png` | Export from KiCAD |
 | Controller PCB | 📸 | `controller-pcb.png` | Export from KiCAD |
 
-### Module 3D Renders (Table in ots-hardware/README.md)
-| Module | Render | PCB | Status |
-|--------|--------|-----|--------|
-| Main Power (2U) | `main-power-render.png` | `main-power-pcb.png` | 📸 Ready to export |
+### Module CAD Renders (`/ots-hardware/cad/images/`) & PCB Images (`/ots-hardware/kicad/images/`)
+| Module | CAD Render | PCB Image | Status |
+|--------|------------|-----------|--------|
+| Main Power (2U) | `main-power-render.png` | `main-power-pcb.png` | ✅ CAD done |
 | Sound (2U) | `sound-render.png` | `sound-pcb.png` | 📸 Ready to export |
 | Troops (4U) | `troops-render.png` | `troops-pcb.png` | 📸 Ready to export |
 | Alert (4U) | `alert-render.png` | `alert-pcb.png` | 📸 Ready to export |

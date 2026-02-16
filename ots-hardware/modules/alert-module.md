@@ -7,6 +7,9 @@
 - **Game State Domain**: Inbound threat alerts
 - **Hardware Interface**: Direct I2C via MCP23017 I/O Expander (Board 1)
 
+<!-- TODO: Add Alert module 3D render -->
+![Alert Module Render](../cad/images/alert-render.png)
+
 ## Description
 The **Alert Module** is an output-only hardware module for the OpenFront Tactical Suitcase (OTS) that provides visual feedback for incoming threats and warnings. It displays threat alerts through 6 LEDs controlled via MCP23017 I/O expander boards.
 

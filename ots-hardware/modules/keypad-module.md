@@ -4,6 +4,12 @@
 
 The Keypad Module is a versatile 15-key RGB mechanical keyboard that can operate in two modes: as an integrated OTS module communicating via CAN bus, or as a standalone USB HID device.
 
+<!-- TODO: Add keypad module 3D render -->
+![Keypad Module Render](../cad/images/keypad-render.png)
+
+<!-- TODO: Add keypad PCB layout -->
+![Keypad PCB](../kicad/images/keypad-pcb.png)
+
 ## Module Specifications
 
 - **Size**: 4U

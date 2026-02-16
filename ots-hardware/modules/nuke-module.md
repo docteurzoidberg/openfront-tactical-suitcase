@@ -7,6 +7,9 @@
 - **Game State Domain**: Outbound nuke launch commands
 - **Hardware Interface**: Direct I2C via MCP23017 I/O Expander (Board 0)
 
+<!-- TODO: Add Nuke module 3D render -->
+![Nuke Control Panel Render](../cad/images/nuke-render.png)
+
 ## Description
 The **Nuke Module** is an input/output hardware module for the OpenFront Tactical Suitcase (OTS) that allows players to launch nuclear weapons. It provides three launch buttons (ATOM, HYDRO, MIRV) with corresponding LED feedback to indicate launch status.
 

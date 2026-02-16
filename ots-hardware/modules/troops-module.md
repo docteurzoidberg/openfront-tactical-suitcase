@@ -4,6 +4,9 @@
 
 The Troops Module provides real-time visualization of available troops and control over deployment percentages. It features a 2x16 character LCD display showing current troop counts and a potentiometer slider for setting the deployment percentage, which directly controls the in-game troop slider.
 
+<!-- TODO: Add Troops module 3D render -->
+![Troops Module Render](../cad/images/troops-render.png)
+
 ## Module Specifications
 
 - **Size**: 4U
