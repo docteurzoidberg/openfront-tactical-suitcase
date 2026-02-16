@@ -37,7 +37,7 @@ Track progress on adding images to documentation. See individual `images/README.
 | Troops (4U) | `troops-render.png` | `troops-pcb.png` | ✅ CAD done |
 | Alert (4U) | `alert-render.png` | `alert-pcb.png` | 📸 Ready to export |
 | Nuke (4U) | `nuke-render.png` | `nuke-pcb.png` | 📸 Ready to export |
-| Keypad (4U) | `keypad-render.png` | `keypad-pcb.png` | 📸 Ready to export |
+| Keypad (4U) | `keypad-render.png` | `keypad-pcb.png` | ✅ CAD done |
 
 ### Individual Module Specs
 All module specs in `/ots-hardware/modules/*.md` now have image placeholders.
