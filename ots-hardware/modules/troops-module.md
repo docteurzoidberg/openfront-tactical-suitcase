@@ -1,4 +1,4 @@
-# Troops Module (16U)
+# Troops Module (4U)
 
 ## Overview
 
@@ -6,7 +6,8 @@ The Troops Module provides real-time visualization of available troops and contr
 
 ## Module Specifications
 
-- **Size**: 16U (full-height, 160mm × 25.4mm front panel)
+- **Size**: 4U
+- **Rack Position**: Column 1, Position 2
 - **Module Type**: Input/Output (Display + Control)
 - **I2C Bus**: Shared main bus via 2×05 IDC header
 - **Power**: 5V from main bus
@@ -220,10 +221,10 @@ uint8_t readSliderPercent();
 
 ## Mounting
 
-- Standard 16U front panel mounting
+- Standard 4U front panel mounting
 - LCD centered in upper half
 - Slider centered in lower half
-- Recommended vertical spacing: 40mm between LCD and slider
+- Recommended vertical spacing: adjustable based on 4U form factor
 
 ## PCB Requirements
 

@@ -2,7 +2,8 @@
 
 ## Overview
 - **Module Name**: Alert Module
-- **Size**: 16U (Standard height)
+- **Size**: 4U
+- **Rack Position**: Column 2, Position 2
 - **Game State Domain**: Inbound threat alerts
 - **Hardware Interface**: Direct I2C via MCP23017 I/O Expander (Board 1)
 

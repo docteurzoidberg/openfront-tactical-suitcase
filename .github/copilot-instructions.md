@@ -49,6 +49,22 @@ Critical implementation detail: Nukes are tracked by `unitID` (not timeouts):
 - Alert module tracks incoming (NUKE_DIR_INCOMING), nuke module tracks outgoing (NUKE_DIR_OUTGOING)
 - Events MUST include `nukeUnitID` in data payload for proper tracking
 
+### Hardware Module Configuration
+
+The OTS suitcase uses a **10U rack system with 2 columns**:
+
+**Column 1** (10U total):
+1. **Main Power Module** (2U) - Power distribution, connection status, system control
+2. **Troops Module** (4U) - LCD display + slider for troop deployment
+3. **Keypad Module** (4U) - Numeric input and control interface
+
+**Column 2** (10U total):
+1. **Sound Module** (2U) - ESP32-A1S audio playback (CAN bus)
+2. **Alert Module** (4U) - Incoming threat LED indicators
+3. **Nuke Module** (4U) - Launch buttons + LEDs (ATOM, HYDRO, MIRV)
+
+See `ots-hardware/modules/` for detailed specifications of each module.
+
 ## Component-Specific Conventions
 
 ### ots-simulator (Nuxt 4)

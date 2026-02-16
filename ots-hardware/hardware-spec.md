@@ -70,12 +70,24 @@ The bus connecting main controller to daughter boards contains:
 ## Module Standard
 
 ### Physical Form Factor
-- **Unit Sizes**: TBD (examples):
+- **Rack Configuration**: 10U total height, 2 columns
+- **Unit Sizes**:
   - 1U: 50mm x 50mm
-  - 2U: 100mm x 50mm
-  - 4U: 100mm x 100mm
+  - 2U: 100mm x 50mm (or equivalent height)
+  - 4U: 200mm x 50mm (or equivalent height)
 - **Mounting**: Standard holes/slots for suitcase foam cutouts
 - **Enclosure**: Individual module enclosures or exposed PCBs in suitcase
+
+### Rack Layout
+**Column 1** (10U total):
+1. Main Power Module (2U) - Position 1
+2. Troops Module (4U) - Position 2
+3. Keypad Module (4U) - Position 3
+
+**Column 2** (10U total):
+1. Sound Module (2U) - Position 1
+2. Alert Module (4U) - Position 2
+3. Nuke Module (4U) - Position 3
 
 ### Module Capabilities
 Each module can:

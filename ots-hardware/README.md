@@ -57,13 +57,27 @@ Modules (daughter boards)
 
 ## Modules
 
-Current module specifications:
+### Rack Configuration
+The OTS suitcase uses a **10U rack system with 2 columns**:
 
-- Main Power Module: `modules/main-power-module.md`
-- Nuke Module: `modules/nuke-module.md`
-- Alert Module: `modules/alert-module.md`
-- Troops Module: `modules/troops-module.md`
-- Sound Module: `modules/sound-module.md`
+**Column 1** (10U total):
+1. Main Power Module (2U) - Power distribution and status
+2. Troops Module (4U) - Troop display and deployment control
+3. Keypad Module (4U) - Numeric input and control
+
+**Column 2** (10U total):
+1. Sound Module (2U) - Audio feedback
+2. Alert Module (4U) - Incoming threat indicators
+3. Nuke Module (4U) - Nuclear weapon launch controls
+
+### Module Specifications
+
+- Main Power Module (2U): `modules/main-power-module.md`
+- Sound Module (2U): `modules/sound-module.md`
+- Troops Module (4U): `modules/troops-module.md`
+- Alert Module (4U): `modules/alert-module.md`
+- Nuke Module (4U): `modules/nuke-module.md`
+- Keypad Module (4U): _To be documented_
 
 Modules will be documented as they are designed. Each module specification will include:
 - Physical dimensions and mounting

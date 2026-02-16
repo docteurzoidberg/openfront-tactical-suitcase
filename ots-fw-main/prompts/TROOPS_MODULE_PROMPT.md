@@ -6,7 +6,8 @@ You are implementing the **Troops Module** for the OTS (OpenFront Tactical Stati
 
 ## Module Overview
 
-- **Size**: 16U (full-height module)
+- **Size**: 4U
+- **Rack Position**: Column 1, Position 2
 - **Display**: 2×16 character I2C LCD (HD44780 via PCF8574 backpack)
 - **Input**: Potentiometer slider via I2C ADC (**ADS1015** 12-bit)
 - **I2C Bus**: Shared with MCP23017 expanders (GPIO8 SDA, GPIO9 SCL)

@@ -2,7 +2,8 @@
 
 ## Overview
 - **Module Name**: Nuke Control Panel
-- **Size**: 16U 
+- **Size**: 4U
+- **Rack Position**: Column 2, Position 3
 - **Game State Domain**: Outbound nuke launch commands
 - **Hardware Interface**: Direct I2C via MCP23017 I/O Expander (Board 0)
 

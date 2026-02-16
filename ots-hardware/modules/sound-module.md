@@ -1,4 +1,4 @@
-# Sound Module (8U)
+# Sound Module (2U)
 
 ## Overview
 
@@ -8,7 +8,8 @@ Unlike other OTS modules, it contains a **dedicated ESP32** with its own firmwar
 
 ## Module Specifications
 
-- **Size**: 8U (Standard height - Half module)
+- **Size**: 2U
+- **Rack Position**: Column 2, Position 1
 - **Module Type**: Output-only (sound)
 - **Bus**: CAN (module is not an MCP23017/I2C GPIO expander)
 - **Power**: From suitcase bus (12V + 5V)

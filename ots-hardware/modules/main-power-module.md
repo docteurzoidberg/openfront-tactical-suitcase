@@ -2,7 +2,8 @@
 
 ## Overview
 - **Module Name**: Main Power Module
-- **Size**: 8U (Standard height - Half module)
+- **Size**: 2U
+- **Rack Position**: Column 1, Position 1
 - **Game State Domain**: System status indication
 - **Hardware Interface**: Direct I2C via MCP23017 I/O Expander (Board 0) + Hardware power switch
 

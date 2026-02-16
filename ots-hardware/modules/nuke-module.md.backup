@@ -4,7 +4,8 @@ Tactical nuclear weapon launch control interface with three distinct bomb types.
 
 ## Overview
 - **Module Name**: Nuke Control Panel
-- **Size**: 16U 
+- **Size**: 4U
+- **Rack Position**: Column 2, Position 3
 - **Game State Domain**: outbound nukes status and launch commands
 - **Hardware Interface**: direct I2C via MCP23017 I/O Expander
 
