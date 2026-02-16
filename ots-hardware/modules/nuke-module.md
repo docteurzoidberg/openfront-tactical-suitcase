@@ -7,7 +7,6 @@
 - **Game State Domain**: Outbound nuke launch commands
 - **Hardware Interface**: Direct I2C via MCP23017 I/O Expander (Board 0)
 
-<!-- TODO: Add Nuke module 3D render -->
 ![Nuke Control Panel Render](../cad/images/nuke-render.png)
 
 ## Description
