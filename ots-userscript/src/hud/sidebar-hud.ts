@@ -8,6 +8,7 @@ import {
   LogsTab,
   HardwareTab,
   SoundTab,
+  KeypadTab,
   tryCaptureHardwareDiagnostic,
   DEFAULT_LOG_FILTERS,
   DEFAULT_SOUND_TOGGLES,
@@ -48,6 +49,7 @@ export class Hud {
   private logsTab: LogsTab | null = null
   private hardwareTab: HardwareTab | null = null
   private soundTab: SoundTab | null = null
+  private keypadTab: KeypadTab | null = null
   private hardwareDiagnostic: CapturedHardwareDiagnostic | null = null
   private soundToggles: Record<string, boolean> = DEFAULT_SOUND_TOGGLES
 
@@ -94,7 +96,8 @@ export class Hud {
       tabs: [
         { id: 'logs', label: 'Logs', contentId: 'ots-tab-logs' },
         { id: 'hardware', label: 'Hardware', contentId: 'ots-tab-hardware' },
-        { id: 'sound', label: 'Sound', contentId: 'ots-tab-sound' }
+        { id: 'sound', label: 'Sound', contentId: 'ots-tab-sound' },
+        { id: 'keypad', label: 'Keypad', contentId: 'ots-tab-keypad' }
       ],
       defaultTab: 'logs',
       onTabChange: (tabId) => this.handleTabChange(tabId)
@@ -232,6 +235,11 @@ export class Hud {
         this.soundToggles,
         (t) => this.logInfo(t),
         this.onSoundTest
+      )
+
+      this.keypadTab = new KeypadTab(
+        this.root,
+        (t) => this.logInfo(t)
       )
     }
   }

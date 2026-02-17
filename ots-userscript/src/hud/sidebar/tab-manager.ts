@@ -2,7 +2,7 @@
  * Tab navigation component for the sidebar HUD
  */
 
-export type TabId = 'logs' | 'hardware' | 'sound'
+export type TabId = 'logs' | 'hardware' | 'sound' | 'keypad'
 
 export type TabConfig = {
   id: TabId

@@ -21,6 +21,7 @@ export {
   type CapturedHardwareDiagnostic
 } from './tabs/hardware-tab'
 export { SoundTab } from './tabs/sound-tab'
+export { KeypadTab } from './tabs/keypad-tab'
 
 // Utilities
 export { FloatingPanel } from './window'

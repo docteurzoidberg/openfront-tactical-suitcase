@@ -1,4 +1,5 @@
 import { LogsTab } from './tabs/logs-tab'
+import { KeypadTab } from './tabs/keypad-tab'
 import { TabManager } from './tab-manager'
 
 /**
@@ -109,6 +110,7 @@ export class HudTemplate {
         <div id="ots-tab-sound" class="ots-tab-content" style="flex:1;display:none;overflow-y:auto;padding:12px;background:rgba(10,10,15,0.8);">
           <div style="font-size:11px;color:#e5e7eb;"><div style="font-size:10px;font-weight:600;color:#9ca3af;margin-bottom:8px;letter-spacing:0.05em;">SOUND EVENT TOGGLES</div><div id="ots-sound-toggles"></div></div>
         </div>
+        ${KeypadTab.createHTML()}
       </div>
       <div id="ots-hud-resize-handle" style="position:absolute;width:20px;height:20px;cursor:nwse-resize;display:none;opacity:0.5;transition:opacity 0.2s;">
         <svg width="20" height="20" viewBox="0 0 20 20" style="width:100%;height:100%;">
