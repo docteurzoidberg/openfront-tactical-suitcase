@@ -32,6 +32,7 @@
 #include "system_status_module.h"
 #include "troops_module.h"
 #include "sound_module.h"
+#include "keypad_module.h"
 #include "rgb_handler.h"
 #include "nvs_storage.h"
 #include "wifi_credentials.h"
@@ -283,6 +284,8 @@ void app_main(void) {
     module_manager_register((hardware_module_t *)troops_module_get());
     // Sound module uses CAN bus (not MCP23017), register independently
     module_manager_register(sound_module_get());
+    // Keypad module uses CAN bus (external M5Stack Stamp S3), register independently
+    module_manager_register(&keypad_module);
 
     // These modules primarily drive MCP23017 I/O, but we still register them
     // even when the I/O boards are absent so game events are handled and logged

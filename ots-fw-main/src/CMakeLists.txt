@@ -202,6 +202,7 @@ else()
         "system_status_module.c"
         "troops_module.c"
         "sound_module.c"
+        "keypad_module.c"
         "rgb_handler.c"
         "ots_logging.c"
         "nvs_storage.c"
@@ -226,6 +227,7 @@ else()
         can_driver
         can_protocol_discovery
         can_protocol_audiomodule
+        can_protocol_keypad
         can_bus_manager
     )
 endif()
