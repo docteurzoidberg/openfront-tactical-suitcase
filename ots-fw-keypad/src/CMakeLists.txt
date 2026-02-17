@@ -1,9 +1,18 @@
 idf_component_register(
     SRCS
         "main.c"
+        "matrix_scanner.c"
+        "led_controller.c"
+        "can_handler.c"
     INCLUDE_DIRS
         "."
+        "../include"
     REQUIRES
         nvs_flash
         driver
+        esp_timer
+        ws2812_rmt
+        can_bus_manager
+        can_protocol_keypad
+        can_protocol_discovery
 )

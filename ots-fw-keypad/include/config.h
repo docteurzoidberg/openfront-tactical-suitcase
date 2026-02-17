@@ -77,13 +77,13 @@
 #define CAN_TX_QUEUE_SIZE       10
 #define CAN_RX_QUEUE_SIZE       10
 
-/* CAN Module ID (to be assigned during discovery) */
+/* Module type (from can_protocol_discovery) */
 #define CAN_MODULE_TYPE_KEYPAD  0x02    // Module type identifier
 
-/* CAN Message IDs (0x430-0x43F range) */
-#define CAN_ID_KEY_EVENT_BASE   0x430   // 0x430 + key_id (0x431-0x43F)
-#define CAN_ID_LED_SET          0x430   // Single key LED control
-#define CAN_ID_LED_BULK         0x440   // Bulk LED control (bitmask)
+/* Note: CAN message IDs and formats are defined in shared components:
+ * - can_protocol_keypad: KEY_EVENT, LED_SET, LED_BULK message formats
+ * - can_protocol_discovery: MODULE_QUERY, MODULE_ANNOUNCE
+ */
 
 /* ============================================================================
  * USB HID CONFIGURATION
