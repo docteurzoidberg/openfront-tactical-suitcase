@@ -7,6 +7,10 @@ This document outlines how the userscript handles keypad key mapping, configurat
 - ✅ Keypad event handling integrated in userscript runtime
 - ✅ Key mapping manager implemented with persistent storage
 - ✅ Keypad configuration UI integrated into existing sidebar tab architecture
+- ✅ Action-based bindings (stores game action, resolves hotkeys at runtime)
+- ✅ Dynamic action list sourced from current game keybind settings
+- ✅ Immediate per-key persistence on Set action/reset defaults
+- ✅ Live key press/release visualization in keypad tab
 - ✅ Userscript build succeeds with keypad integration changes
 - ⏳ Pending: End-to-end validation with physical keypad hardware
 
@@ -15,15 +19,15 @@ This document outlines how the userscript handles keypad key mapping, configurat
 The **userscript** is responsible for ALL key mapping logic:
 - Receives raw key events from WebSocket (K1-K15)
 - Maps key IDs to game actions (stored in localStorage)
-- Triggers game actions by simulating DOM clicks
-- Provides configuration UI in new browser tab
+- Triggers game actions by dispatching keyboard events using runtime game keybinds
+- Provides configuration UI in the existing OTS sidebar keypad tab
 
 **What userscript does:**
 ✅ Receives `KEYPAD_KEY_PRESSED/RELEASED` WebSocket events  
 ✅ Stores key bindings in browser localStorage  
-✅ Provides configuration UI (Tampermonkey menu → new tab)  
-✅ Triggers game actions by finding and clicking DOM elements  
-✅ Handles export/import of configuration JSON  
+✅ Provides configuration UI in the OTS sidebar keypad tab  
+✅ Triggers game actions via keyboard-event path using current game keybinds  
+✅ Renders live key press animation from OTS keypad WS events  
 
 **What userscript does NOT do:**
 ❌ No hardware control (firmware handles that)  

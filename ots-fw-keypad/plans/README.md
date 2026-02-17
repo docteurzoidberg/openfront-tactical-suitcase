@@ -72,12 +72,14 @@ This directory contains all planning documents for integrating the keypad module
 - [x] Implement WebSocket event forwarding (Plan #4)
 - [ ] Test: Physical key → CAN → WebSocket → Dashboard
 
-**🔨 Stage 4: UI & Userscript** (Week 4) - **IN PROGRESS**
-- [ ] Implement dashboard visualization (Plan #5)
+**✅ Stage 4: UI & Userscript** (Week 4) - **COMPLETE**
+- [x] Implement dashboard visualization (Plan #5)
 - [x] Implement userscript key mapping (Plan #7)
 - [x] Create configuration UI in userscript (Plan #7)
+- [x] Add live keypad press animation in userscript keypad layout
+- [x] Use dynamic game keybind action list from current OpenFront settings
 
-**Stage 5: Documentation & Testing** (Week 5)
+**⏳ Stage 5: Documentation & Testing** (Week 5) - **PENDING**
 - Write user guides (Plan #6)
 - Update developer documentation (Plan #6)
 - End-to-end testing
@@ -142,12 +144,24 @@ The userscript provides these default bindings (customizable via config UI):
   - [x] Consolidated ws2812_rmt to shared components
   - [x] Optimized LED driver with change detection
   - [x] Both firmwares verified building
-- [ ] **Stage 3 (Main Controller Integration)** - **IN PROGRESS**
+- [x] **Stage 3 (Main Controller Integration)** - **COMPLETE**
    - [x] CAN handlers for keypad events
    - [x] WebSocket event forwarding
-  - [ ] End-to-end testing (key → CAN → WebSocket → Dashboard)
-- [ ] Dashboard UI implemented (Stage 4)
-- [x] Userscript integration (Stage 4)
-- [ ] Documentation written (Stage 5)
-- [ ] End-to-end testing (Stage 5)
-- [ ] Release ready
+  - [ ] End-to-end testing (key → CAN → WebSocket → Dashboard) - pending hardware
+- [x] **Stage 4 (Dashboard UI & Userscript)** - **COMPLETE**
+  - [x] Dashboard keypad visualization component (Plan #5)
+    - [x] KeypadModule.vue - Main 4U module container
+    - [x] KeypadVisualizer.vue - 15-key grid layout
+    - [x] KeypadKeyButton.vue - Individual key with press animation
+    - [x] useKeypad composable - State management
+    - [x] Integrated into dashboard (index.vue)
+  - [x] Userscript integration (Plan #7)
+    - [x] Runtime key event handling (`KEYPAD_KEY_PRESSED/RELEASED`)
+    - [x] Sidebar keypad config UI (action-based, immediate save)
+    - [x] Live key press visualization in keypad tab
+    - [x] Dynamic action list from game keybind source
+- [ ] **Stage 5 (Documentation & Testing)** - **PENDING**
+  - [ ] User guides (keypad configuration, usage)
+  - [ ] Developer documentation (architecture, components)
+  - [ ] End-to-end testing with physical hardware
+  - [ ] Release preparation

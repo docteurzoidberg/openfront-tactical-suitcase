@@ -2,6 +2,18 @@
 
 Firmware for the 15-key RGB mechanical keyboard module with dual-mode operation.
 
+## Current Status (Feb 2026)
+
+- ✅ Keypad firmware core implemented (`matrix_scanner`, `led_controller`, `can_handler`)
+- ✅ Main controller integration implemented (`ots-fw-main/src/keypad_module.c`) with WebSocket forwarding
+- ✅ Dashboard UI implemented (keypad visualization with live key press animation)
+- ✅ Userscript integration implemented (action mapping + keypad tab configuration + live key visualization)
+- ⏳ Remaining: physical end-to-end validation with real keypad hardware
+- ⏳ Remaining: documentation completion (user guides, developer guides)
+- ⏳ Remaining: release preparation
+
+> Note: The phased checklist below is historical roadmap content and not fully synchronized with the current implementation status.
+
 ## Hardware Platform
 
 - **MCU**: M5Stack Stamp S3 (ESP32-S3)
@@ -48,7 +60,7 @@ The keypad firmware follows a simple, layered architecture:
 - **LED follower**: Display LED states commanded by main controller
 - **USB-ready**: Matrix scanner is generic, output layer swappable (CAN/USB HID)
 
-**Key mapping & game logic**: Handled by main controller (see `MAIN_CONTROLLER_UPDATE_PLAN.md`)
+**Key mapping & game logic**: Handled by userscript (main controller forwards raw key events only)
 
 **Module Structure:**
 ```

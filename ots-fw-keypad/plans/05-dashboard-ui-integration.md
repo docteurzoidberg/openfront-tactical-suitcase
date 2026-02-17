@@ -2,6 +2,14 @@
 
 This document outlines the UI components and features needed in the OTS dashboard to support keypad configuration and visualization.
 
+## Current Status (Feb 2026)
+
+- ⏳ Dashboard keypad UI implementation is still pending
+- ⏳ No dedicated keypad module component exists yet in `ots-simulator`
+- ✅ Firmware/main-controller/userscript event path is implemented
+- ✅ Userscript now provides live keypad visualization and action configuration
+- ⏳ Remaining: implement Plan #5 components in simulator dashboard
+
 ## Overview
 
 The dashboard provides:
