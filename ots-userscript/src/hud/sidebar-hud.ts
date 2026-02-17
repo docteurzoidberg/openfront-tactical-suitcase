@@ -20,6 +20,7 @@ import {
   type TabId,
   type CapturedHardwareDiagnostic
 } from './sidebar'
+import type { KeypadKeyEventData } from '../types/keypad-types'
 
 export type { LogDirection } from './sidebar'
 
@@ -396,5 +397,9 @@ export class Hud {
       }
     }
     this.logsTab?.pushLog(direction, text, eventType, jsonData)
+  }
+
+  handleKeypadLiveEvent(data: unknown) {
+    this.keypadTab?.handleLiveKeyEvent(data as KeypadKeyEventData)
   }
 }
