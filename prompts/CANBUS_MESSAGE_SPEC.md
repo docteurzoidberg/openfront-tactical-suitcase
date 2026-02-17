@@ -1,8 +1,8 @@
 # CAN Bus Protocol Specification
 
-**Version**: 1.1  
-**Date**: January 11, 2026  
-**Status**: Implemented (Audio Module + Discovery + Audio Status)
+**Version**: 1.2  
+**Date**: February 17, 2026  
+**Status**: Implemented (Audio Module + Discovery + Audio Status), Planned (Keypad Module)
 
 ## Purpose
 
@@ -73,10 +73,11 @@ Standard Frame (used by OTS):
 
 ## CAN ID Allocation
 
-### Current Allocation (v1.0)
+### Current Allocation (v1.1)
 
 | CAN ID Range | Module | Usage | Status |
 |--------------|--------|-------|--------|
+| **0x200-0x21F** | Keypad Module | Key events, LED control | 📋 Planned |
 | **0x410-0x411** | Discovery | Module enumeration | ✅ Implemented |
 | **0x420-0x42F** | Audio Module | Sound control | ✅ Implemented |
 | **0x430-0x43F** | Reserved | Future any module | 📋 Planned |
@@ -191,7 +192,8 @@ Data: [01 01 00 01 42 00 00 00]
 ```c
 #define MODULE_TYPE_NONE        0x00  // Reserved
 #define MODULE_TYPE_AUDIO       0x01  // ✅ Audio playback module
-// 0x02-0x7F: Future module types
+#define MODULE_TYPE_KEYPAD      0x02  // 📋 15-key keyboard module
+// 0x03-0x7F: Future module types
 // 0x80-0xFF: Custom/experimental modules
 ```
 
@@ -226,6 +228,243 @@ Main Controller                          Audio Module
      ▼                                        ▼
    Ready                                   Ready
 ```
+
+---
+
+## Keypad Module Protocol
+
+### Overview
+
+The keypad module provides a 15-key mechanical keyboard interface with RGB LED indicators. It communicates key press/release events to the main controller and receives LED control commands.
+
+**Hardware**: M5Stack Stamp S3 (ESP32-S3)  
+**Keys**: 15 mechanical switches (Cherry MX compatible) in 7+7+1 layout  
+**LEDs**: SK6812-MINI-E RGB LEDs (one per key)  
+**CAN Range**: 0x200-0x21F
+
+**Key Features**:
+- 20ms debouncing on all keys
+- Per-key press/release events (no key matrix ambiguity)
+- Low-latency: <5ms from physical press to CAN transmission
+- LED control: Individual or bulk RGB setting
+
+### Prerequisites
+
+Before using keypad protocol:
+1. Keypad module must be discovered via MODULE_ANNOUNCE
+2. Module type must be `MODULE_TYPE_KEYPAD` (0x02)
+3. CAN block must be allocated (0x20 = 0x200-0x21F)
+
+If no keypad module discovered at boot:
+- Main controller disables keypad features
+- Key events are not expected
+
+### CAN IDs
+
+| CAN ID | Direction | Message | Description |
+|--------|-----------|---------|-------------|
+| **0x201-0x20F** | Keypad → Main | KEY_EVENT | Key press/release (per key) |
+| **0x210** | Main → Keypad | LED_SET | Set single key LED color |
+| **0x211** | Main → Keypad | LED_BULK | Set multiple key LEDs |
+
+**Note**: Key event CAN IDs are dynamic: `0x200 + key_id` (1-15), resulting in 0x201-0x20F.
+
+### KEY_EVENT (0x201-0x20F)
+
+**Direction**: Keypad module → Main controller  
+**Purpose**: Report key press or release event  
+**DLC**: 4 bytes
+
+```
+┌─────┬─────┬─────┬─────┐
+│ KeyID│State│ Timestamp │
+│  (1) │ (1) │   (2)     │
+└─────┴─────┴─────┴─────┘
+  0     1     2   3
+
+Byte 0: Key ID (1-15)
+Byte 1: State (0x00 = released, 0x01 = pressed)
+Byte 2-3: Timestamp (uint16_t, ms since boot, little-endian)
+```
+
+**Key ID Mapping** (physical layout):
+```
+Row 1: [K1] [K2] [K3] [K4] [K5] [K6] [K7]
+Row 2: [K8] [K9] [K10][K11][K12][K13][K14]
+Row 3:      [      K15 (Spacebar)    ]
+```
+
+**State Values**:
+- `0x00`: Key released
+- `0x01`: Key pressed
+
+**Timing**:
+- Sent immediately after 20ms debounce period
+- Timestamp is ms elapsed since module boot (wraps at 65535ms)
+- Maximum event rate: ~50 events/second per key (human typing limit)
+
+**Example**: Key 1 pressed at 1234ms (Build City)
+```
+CAN ID: 0x201
+DLC: 4
+Data: [01 01 D2 04]
+      └─┘ └┘ └──┴─┘
+       |  |    └─ 0x04D2 = 1234ms
+       |  └─ Pressed (1)
+       └─ Key 1
+```
+
+**Example**: Key 15 released at 5678ms (Toggle View)
+```
+CAN ID: 0x20F
+DLC: 4
+Data: [0F 00 2E 16]
+      └─┘ └┘ └──┴─┘
+       |  |    └─ 0x162E = 5678ms
+       |  └─ Released (0)
+       └─ Key 15
+```
+
+**C Structure**:
+```c
+typedef struct {
+    uint8_t key_id;      // 1-15
+    uint8_t state;       // 0=released, 1=pressed
+    uint16_t timestamp;  // ms since boot (little-endian)
+} __attribute__((packed)) can_keypad_event_t;
+```
+
+### LED_SET (0x210)
+
+**Direction**: Main controller → Keypad module  
+**Purpose**: Set RGB color and on/off state for a single key LED  
+**DLC**: 5 bytes
+
+```
+┌─────┬─────┬─────┬─────┬─────┐
+│ KeyID│State│  R  │  G  │  B  │
+│  (1) │ (1) │ (1) │ (1) │ (1) │
+└─────┴─────┴─────┴─────┴─────┘
+  0     1     2     3     4
+
+Byte 0: Key ID (1-15, or 0xFF for all keys)
+Byte 1: State (0x00=off, 0x01=on)
+Byte 2: Red component (0-255)
+Byte 3: Green component (0-255)
+Byte 4: Blue component (0-255)
+```
+
+**Special Values**:
+- Key ID `0xFF`: Apply to all 15 keys simultaneously
+- State `0x00`: Turn LED off (RGB values ignored)
+- State `0x01`: Turn LED on with specified RGB color
+
+**Example**: Set Key 1 to green
+```
+CAN ID: 0x210
+DLC: 5
+Data: [01 01 00 FF 00]
+      └─┘ └┘ └┘ └┘ └┘
+       |  |  |  |  └─ Blue = 0
+       |  |  |  └─ Green = 255
+       |  |  └─ Red = 0
+       |  └─ On
+       └─ Key 1
+```
+
+**Example**: Turn off all LEDs
+```
+CAN ID: 0x210
+DLC: 5
+Data: [FF 00 00 00 00]
+      └─┘ └┘ └──────┘
+       |  |     └─ RGB ignored (off)
+       |  └─ Off
+       └─ All keys (0xFF)
+```
+
+**C Structure**:
+```c
+typedef struct {
+    uint8_t key_id;  // 1-15, or 0xFF for all
+    uint8_t state;   // 0=off, 1=on
+    uint8_t r;       // Red (0-255)
+    uint8_t g;       // Green (0-255)
+    uint8_t b;       // Blue (0-255)
+} __attribute__((packed)) can_keypad_led_set_t;
+```
+
+### LED_BULK (0x211)
+
+**Direction**: Main controller → Keypad module  
+**Purpose**: Set multiple key LEDs efficiently (batch update)  
+**DLC**: 8 bytes
+
+```
+┌─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┐
+│Mask │Mask │  R  │  G  │  B  │State│Rsvd │Rsvd │
+│ Low │High │ (1) │ (1) │ (1) │ (1) │ (1) │ (1) │
+└─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘
+  0     1     2     3     4     5     6     7
+
+Byte 0-1: Key mask (uint16_t, little-endian, bits 0-14 = keys 1-15)
+Byte 2: Red component (0-255)
+Byte 3: Green component (0-255)
+Byte 4: Blue component (0-255)
+Byte 5: State (0x00=off, 0x01=on)
+Byte 6-7: Reserved (0x00)
+```
+
+**Key Mask**:
+- 16-bit bitmask indicating which keys to update
+- Bit 0 = Key 1, Bit 1 = Key 2, ..., Bit 14 = Key 15
+- Bit 15 is unused (key IDs are 1-15, not 0-15)
+- All masked keys receive the same RGB color and state
+
+**Use Cases**:
+- Setting all building keys (K1-K7) to green: `0x007F`
+- Setting all control keys (K8-K14) to blue: `0x7F80`
+- Setting spacebar (K15) to white: `0x4000`
+
+**Example**: Set keys 1, 2, 3 to red
+```
+CAN ID: 0x211
+DLC: 8
+Data: [07 00 FF 00 00 01 00 00]
+      └──┴─┘ └┘ └┘ └┘ └┘ └──┴─┘
+        |   |  |  |  |      └─ Reserved
+        |   |  |  |  └─ On
+        |   |  |  └─ Blue = 0
+        |   |  └─ Green = 0
+        |   └─ Red = 255
+        └─ Mask = 0x0007 (bits 0,1,2 = keys 1,2,3)
+```
+
+**Example**: Set all keys to off
+```
+CAN ID: 0x211
+DLC: 8
+Data: [FF 7F 00 00 00 00 00 00]
+      └──┴─┘ └──────┴─┘ └──┴─┘
+        |       |      |    └─ Reserved
+        |       |      └─ Off
+        |       └─ RGB ignored
+        └─ Mask = 0x7FFF (all 15 keys)
+```
+
+**C Structure**:
+```c
+typedef struct {
+    uint16_t key_mask;  // Bitmask: bit N = key N+1 (little-endian)
+    uint8_t r;          // Red (0-255)
+    uint8_t g;          // Green (0-255)
+    uint8_t b;          // Blue (0-255)
+    uint8_t state;      // 0=off, 1=on
+    uint8_t reserved[2]; // Padding to 8 bytes
+} __attribute__((packed)) can_keypad_led_bulk_t;
+```
+
+**Performance Note**: LED_BULK is more efficient than sending 15 individual LED_SET messages when updating multiple keys with the same color.
 
 ---
 
