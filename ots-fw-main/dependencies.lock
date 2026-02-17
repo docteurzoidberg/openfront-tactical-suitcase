@@ -23,6 +23,6 @@ direct_dependencies:
 - espressif/can_driver
 - espressif/mdns
 - idf
-manifest_hash: 15f603eb3ccc4727d05e1bc6adfc19ce46dea70ccfd628923aa9f8128794d83e
+manifest_hash: b39794f85000843154421f6aa0d79a58b3753700ffa1adb7c704aad5b9369bfd
 target: esp32s3
 version: 2.0.0

@@ -54,15 +54,23 @@ This directory contains all planning documents for integrating the keypad module
 - ✅ TypeScript types (ots-shared/src/game.ts)
 - ✅ Firmware protocol types (protocol.h/c)
 
-**Stage 2: Firmware Implementation** (Week 1-2)
-- Implement keypad firmware (Plan #1)
-- Matrix scanner, LED controller, CAN handler
-- Uses can_bus_manager and can_protocol_keypad
+**✅ Stage 2: Firmware Implementation (COMPLETE)** (Week 1-2)
+- ✅ Implemented keypad firmware (Plan #1)
+  - ✅ Matrix scanner (270 lines): 200Hz GPIO scanning, 20ms debounce, FreeRTOS task
+  - ✅ LED controller (200 lines): RMT-based SK6812-MINI-E control, brightness management
+  - ✅ CAN handler (200 lines): can_bus_manager integration, MODULE_ANNOUNCE, LED commands
+- ✅ Code quality improvements
+  - ✅ Removed duplicate CAN protocol definitions
+  - ✅ Consolidated ws2812_rmt to ots-fw-shared (now used by both fw-main and fw-keypad)
+  - ✅ Optimized ws2812_rmt with change detection (skip transmit when no changes)
+- ✅ Verification:
+  - ✅ Keypad firmware compiles (15.3KB RAM, 253KB Flash)
+  - ✅ Main controller firmware compiles (41.7KB RAM, 1.07MB Flash)
 
-**Stage 3: Controller Integration** (Week 3)
-- Implement main controller CAN handlers (Plan #2)
-- Implement WebSocket event forwarding (Plan #4)
-- Test: Physical key → CAN → WebSocket → Dashboard
+**🔨 Stage 3: Controller Integration** (Week 3) - **NEXT**
+- [ ] Implement main controller CAN handlers (Plan #2)
+- [ ] Implement WebSocket event forwarding (Plan #4)
+- [ ] Test: Physical key → CAN → WebSocket → Dashboard
 
 **Stage 4: UI & Userscript** (Week 4)
 - Implement dashboard visualization (Plan #5)
@@ -126,8 +134,18 @@ The userscript provides these default bindings (customizable via config UI):
   - [x] WEBSOCKET_MESSAGE_SPEC.md updated with keypad events
   - [x] TypeScript types updated (ots-shared)
   - [x] Firmware protocol updated (protocol.h/c)
-- [ ] Keypad firmware implementation (Stage 2)
-- [ ] Main controller integration (Stage 3)
+- [x] **Stage 2 (Keypad Firmware) complete**
+  - [x] Matrix scanner module (matrix_scanner.c/h)
+  - [x] LED controller module (led_controller.c/h)
+  - [x] CAN handler module (can_handler.c/h)
+  - [x] Main integration (main.c)
+  - [x] Consolidated ws2812_rmt to shared components
+  - [x] Optimized LED driver with change detection
+  - [x] Both firmwares verified building
+- [ ] **Stage 3 (Main Controller Integration)** - **IN PROGRESS**
+  - [ ] CAN handlers for keypad events
+  - [ ] WebSocket event forwarding
+  - [ ] End-to-end testing (key → CAN → WebSocket → Dashboard)
 - [ ] Dashboard UI implemented (Stage 4)
 - [ ] Userscript integration (Stage 4)
 - [ ] Documentation written (Stage 5)

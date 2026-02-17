@@ -18,6 +18,7 @@ static rmt_encoder_handle_t s_led_encoder = NULL;
 static bool s_initialized = false;
 static uint8_t *s_led_buffer = NULL;
 static uint32_t s_led_count = 0;
+static bool s_dirty = false;  // Track if buffer has changed since last update
 
 // WS2812 encoder structure
 typedef struct {
@@ -155,6 +156,7 @@ esp_err_t ws2812_init(const ws2812_config_t *config) {
     }
     
     s_initialized = true;
+    s_dirty = false;
     
     // Clear all LEDs
     memset(s_led_buffer, 0, s_led_count * 3);
@@ -175,9 +177,19 @@ esp_err_t ws2812_set_pixel(uint32_t index, ws2812_color_t color) {
     
     // WS2812 expects GRB format
     uint32_t offset = index * 3;
-    s_led_buffer[offset + 0] = color.g;
-    s_led_buffer[offset + 1] = color.r;
-    s_led_buffer[offset + 2] = color.b;
+    uint8_t new_g = color.g;
+    uint8_t new_r = color.r;
+    uint8_t new_b = color.b;
+    
+    // Only mark dirty if color actually changed
+    if (s_led_buffer[offset + 0] != new_g ||
+        s_led_buffer[offset + 1] != new_r ||
+        s_led_buffer[offset + 2] != new_b) {
+        s_led_buffer[offset + 0] = new_g;
+        s_led_buffer[offset + 1] = new_r;
+        s_led_buffer[offset + 2] = new_b;
+        s_dirty = true;
+    }
     
     return ESP_OK;
 }
@@ -187,14 +199,59 @@ esp_err_t ws2812_set_all(ws2812_color_t color) {
         return ESP_ERR_INVALID_STATE;
     }
     
+    // Efficiently set all LEDs to same color
+    uint8_t grb[3] = {color.g, color.r, color.b};
+    bool changed = false;
+    
     for (uint32_t i = 0; i < s_led_count; i++) {
-        ws2812_set_pixel(i, color);
+        uint32_t offset = i * 3;
+        if (s_led_buffer[offset + 0] != grb[0] ||
+            s_led_buffer[offset + 1] != grb[1] ||
+            s_led_buffer[offset + 2] != grb[2]) {
+            s_led_buffer[offset + 0] = grb[0];
+            s_led_buffer[offset + 1] = grb[1];
+            s_led_buffer[offset + 2] = grb[2];
+            changed = true;
+        }
+    }
+    
+    if (changed) {
+        s_dirty = true;
     }
     
     return ESP_OK;
 }
 
+esp_err_t ws2812_clear(void) {
+    ws2812_color_t off = {0, 0, 0};
+    return ws2812_set_all(off);
+}
+
 esp_err_t ws2812_update(void) {
+    if (!s_initialized || !s_led_chan || !s_led_encoder) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Skip transmission if no changes since last update
+    if (!s_dirty) {
+        return ESP_OK;
+    }
+    
+    rmt_transmit_config_t tx_config = {
+        .loop_count = 0,
+    };
+    
+    esp_err_t ret = rmt_transmit(s_led_chan, s_led_encoder, s_led_buffer, s_led_count * 3, &tx_config);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to transmit: %s", esp_err_to_name(ret));
+    } else {
+        s_dirty = false;  // Clear dirty flag after successful transmission
+    }
+    
+    return ret;
+}
+
+esp_err_t ws2812_force_update(void) {
     if (!s_initialized || !s_led_chan || !s_led_encoder) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -206,9 +263,15 @@ esp_err_t ws2812_update(void) {
     esp_err_t ret = rmt_transmit(s_led_chan, s_led_encoder, s_led_buffer, s_led_count * 3, &tx_config);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to transmit: %s", esp_err_to_name(ret));
+    } else {
+        s_dirty = false;  // Clear dirty flag after successful transmission
     }
     
     return ret;
+}
+
+bool ws2812_is_dirty(void) {
+    return s_dirty;
 }
 
 bool ws2812_is_initialized(void) {
@@ -222,6 +285,7 @@ esp_err_t ws2812_deinit(void) {
     
     // Turn off all LEDs
     memset(s_led_buffer, 0, s_led_count * 3);
+    s_dirty = true;  // Force final update
     ws2812_update();
     
     // Cleanup resources

@@ -1,29 +1,30 @@
 # WS2812 RGB LED Driver Component (via RMT)
 
 **Component**: `ws2812_rmt`  
-**Location**: `ots-fw-main/components/ws2812_rmt/`  
-**Status**: ✅ Active (Used by main firmware for RGB LED status indicators)
+**Location**: `ots-fw-shared/components/ws2812_rmt/`  
+**Status**: ✅ Active (Shared component used by fw-main and fw-keypad)
 
 ## Overview
 
-ESP-IDF component for controlling WS2812/WS2812B/SK6812 RGB LED strips using the ESP32 RMT (Remote Control) peripheral. Provides precise timing for WS2812 protocol without CPU overhead.
+ESP-IDF component for controlling WS2812/WS2812B/SK6812 RGB LED strips using the ESP32 RMT (Remote Control) peripheral. Provides precise timing for WS2812 protocol without CPU overhead, with optimized change detection to minimize bus traffic.
 
 ## Hardware
 
 **LED Type**: WS2812B / WS2812 / SK6812 (individually addressable RGB LEDs)  
 **Interface**: Single-wire serial (timing-critical)  
 **Voltage**: 5V data logic (3.3V compatible with level shifter)  
-**Protocol**: 800kHz data rate, 24-bit color (8-bit RGB)  
+**Protocol**: 800kHz data rate, 24-bit color (GRB byte order)  
 **Driver**: ESP32 RMT peripheral (hardware-based timing)
 
 ## Features
 
 - ✅ Hardware-based timing via RMT peripheral (no CPU blocking)
+- ✅ **Change detection**: Only transmits when pixel colors actually changed
 - ✅ Supports any number of LEDs (limited by memory)
-- ✅ 24-bit RGB color (8 bits per channel)
-- ✅ Simple API: `ws2812_set_pixel()`, `ws2812_refresh()`
-- ✅ Efficient batch updates (update buffer, then refresh once)
-- ✅ Automatic timing calculation (no manual bit-banging)
+- ✅ 24-bit RGB color (8 bits per channel, GRB wire format)
+- ✅ Simple API: `ws2812_set_pixel()`, `ws2812_update()`
+- ✅ Efficient batch updates (update buffer, then transmit once)
+- ✅ Automatic timing calculation for WS2812 protocol
 
 ## API Reference
 
@@ -42,38 +43,64 @@ ws2812_config_t config = {
 // Initialize driver
 esp_err_t ret = ws2812_init(&config);
 
+// Check if initialized
+bool initialized = ws2812_is_initialized();
+
 // Cleanup
-void ws2812_deinit(void);
+esp_err_t ws2812_deinit(void);
 ```
 
 ### LED Control
 
 ```c
+// Color structure
+typedef struct {
+    uint8_t r;  // Red (0-255)
+    uint8_t g;  // Green (0-255)
+    uint8_t b;  // Blue (0-255)
+} ws2812_color_t;
+
 // Set single pixel color (0-indexed)
-void ws2812_set_pixel(uint32_t index, uint8_t r, uint8_t g, uint8_t b);
+ws2812_color_t red = {.r = 255, .g = 0, .b = 0};
+esp_err_t ws2812_set_pixel(uint32_t index, ws2812_color_t color);
 
-// Set pixel using color struct
-ws2812_color_t color = {.r = 255, .g = 0, .b = 0};  // Red
-ws2812_set_pixel_color(uint32_t index, ws2812_color_t color);
+// Set all LEDs to same color
+ws2812_color_t blue = {.r = 0, .g = 0, .b = 255};
+esp_err_t ws2812_set_all(ws2812_color_t color);
 
-// Clear all LEDs (set to black)
-void ws2812_clear(void);
+// Clear all LEDs (convenience function)
+esp_err_t ws2812_clear(void);  // Equivalent to ws2812_set_all({0, 0, 0})
 
-// Update LED strip (send buffer to hardware)
-esp_err_t ws2812_refresh(void);
+// Update LED strip (transmit to hardware)
+// Only sends data if colors changed since last update (optimized)
+esp_err_t ws2812_update(void);
+
+// Force update even if no changes detected
+esp_err_t ws2812_force_update(void);
+
+// Check if update is pending
+bool has_changes = ws2812_is_dirty();
 ```
 
-### Color Helpers
+## Optimization: Change Detection
 
+The driver tracks which pixels have changed and only transmits data when `ws2812_update()` is called **and** the buffer has been modified since the last transmission. This significantly reduces:
+
+- RMT peripheral usage
+- Power consumption  
+- Bus traffic
+
+**Example:**
 ```c
-// Create color from RGB values
-ws2812_color_t ws2812_rgb(uint8_t r, uint8_t g, uint8_t b);
+ws2812_set_pixel(0, (ws2812_color_t){255, 0, 0});  // Set LED 0 to red
+ws2812_set_pixel(0, (ws2812_color_t){255, 0, 0});  // Same color - no change marked
+ws2812_update();  // Transmits once (only first set_pixel marked dirty)
 
-// Create color from HSV (hue, saturation, value)
-ws2812_color_t ws2812_hsv(uint16_t h, uint8_t s, uint8_t v);
+ws2812_update();  // No-op (no changes since last update)
+ws2812_update();  // No-op (still no changes)
 
-// Dim color by factor (0-255)
-ws2812_color_t ws2812_dim(ws2812_color_t color, uint8_t brightness);
+ws2812_set_pixel(1, (ws2812_color_t){0, 255, 0});  // LED 1 to green - marks dirty
+ws2812_update();  // Transmits (buffer changed)
 ```
 
 ## Usage Example
@@ -95,31 +122,33 @@ void rgb_led_init(void) {
     }
     
     // Set all LEDs to blue on startup
-    for (int i = 0; i < 8; i++) {
-        ws2812_set_pixel(i, 0, 0, 255);
-    }
-    ws2812_refresh();
+    ws2812_color_t blue = {.r = 0, .g = 0, .b = 255};
+    ws2812_set_all(blue);
+    ws2812_update();
 }
 
 void show_connection_status(bool connected) {
     if (connected) {
         // Green: connected
-        ws2812_set_pixel(0, 0, 255, 0);
+        ws2812_set_pixel(0, (ws2812_color_t){.r = 0, .g = 255, .b = 0});
     } else {
         // Red: disconnected
-        ws2812_set_pixel(0, 255, 0, 0);
+        ws2812_set_pixel(0, (ws2812_color_t){.r = 255, .g = 0, .b = 0});
     }
-    ws2812_refresh();
+    ws2812_update();
 }
 
 void rainbow_effect(void) {
     for (int i = 0; i < 8; i++) {
-        uint16_t hue = (i * 360) / 8;  // Spread across color wheel
-        ws2812_color_t color = ws2812_hsv(hue, 255, 128);
-        ws2812_set_pixel_color(i, color);
+        // Simple rainbow using RGB (not HSV)
+        uint8_t r = (i & 1) ? 255 : 0;
+        uint8_t g = (i & 2) ? 255 : 0;
+        uint8_t b = (i & 4) ? 255 : 0;
+        ws2812_set_pixel(i, (ws2812_color_t){r, g, b});
     }
-    ws2812_refresh();
+    ws2812_update();
 }
+```
 ```
 
 ## Configuration

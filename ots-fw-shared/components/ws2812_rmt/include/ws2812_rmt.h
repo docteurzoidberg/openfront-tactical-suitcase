@@ -49,13 +49,39 @@ esp_err_t ws2812_set_pixel(uint32_t index, ws2812_color_t color);
 esp_err_t ws2812_set_all(ws2812_color_t color);
 
 /**
+ * @brief Clear all LEDs (turn off)
+ * 
+ * Convenience function equivalent to ws2812_set_all({0, 0, 0})
+ * 
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t ws2812_clear(void);
+
+/**
  * @brief Update LED strip (send data to hardware)
  * 
- * Call this after setting pixel colors to actually update the LEDs
+ * Optimized: Only transmits if pixel colors have changed since last update.
+ * Call this after setting pixel colors to actually update the LEDs.
  * 
  * @return ESP_OK on success, error code otherwise
  */
 esp_err_t ws2812_update(void);
+
+/**
+ * @brief Force update LED strip even if no changes detected
+ * 
+ * Useful for recovery or when buffer was modified externally.
+ * 
+ * @return ESP_OK on success, error code otherwise
+ */
+esp_err_t ws2812_force_update(void);
+
+/**
+ * @brief Check if update is pending (changes since last update)
+ * 
+ * @return true if ws2812_update() will transmit data, false otherwise
+ */
+bool ws2812_is_dirty(void);
 
 /**
  * @brief Check if WS2812 driver is initialized
