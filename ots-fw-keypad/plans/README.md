@@ -1,0 +1,122 @@
+# Keypad Module Integration Plans
+
+This directory contains all planning documents for integrating the keypad module into the OTS system.
+
+## Plan Files
+
+### Core Implementation
+1. **[01-keypad-firmware-architecture.md](01-keypad-firmware-architecture.md)** - Keypad firmware architecture
+   - Matrix scanner module
+   - LED controller module
+   - CAN handler module
+   - Implementation phases
+
+2. **[02-main-controller-integration.md](02-main-controller-integration.md)** - Main controller firmware updates
+   - CAN message handling (key events)
+   - WebSocket event forwarding (raw key presses)
+   - No key mapping (userscript handles this)
+
+3. **[03-can-protocol-specification.md](03-can-protocol-specification.md)** - CAN bus protocol updates
+   - Message format definitions
+   - CAN ID allocation (0x200-0x21F)
+   - C implementation examples
+   - Updates to `/prompts/CANBUS_MESSAGE_SPEC.md`
+
+### Integration Plans
+4. **[04-websocket-protocol-integration.md](04-websocket-protocol-integration.md)** - WebSocket protocol updates
+   - New event types for keypad (KEY_PRESSED/RELEASED, CONNECTED/DISCONNECTED)
+   - Broadcast-only (no binding configuration)
+   - Updates to `/prompts/WEBSOCKET_MESSAGE_SPEC.md`
+
+5. **[05-dashboard-ui-integration.md](05-dashboard-ui-integration.md)** - Dashboard/simulator UI updates
+   - Visual keypad component (visualization only)
+   - Real-time key press animation
+   - Connection status display
+   - Vue component implementation
+
+6. **[06-documentation-plan.md](06-documentation-plan.md)** - Documentation updates
+   - User guides (userscript configuration focus)
+   - Developer guides (architecture, API)
+   - VitePress site updates
+
+7. **[07-userscript-integration.md](07-userscript-integration.md)** - Userscript key mapping
+   - localStorage schema for key bindings
+   - Key event handling and game action triggering
+   - Configuration UI (Tampermonkey menu → new tab)
+   - Export/import functionality
+
+## Implementation Order
+
+**Phase 1: Hardware Foundation** (Week 1-2)
+- Implement keypad firmware (Plan #1)
+- Create CAN protocol shared component (Plan #3)
+
+**Phase 2: Controller Integration** (Week 3)
+- Implement main controller CAN handlers (Plan #2)
+- Implement WebSocket event forwarding (Plan #4)
+- Update CAN protocol documentation (Plan #3)
+
+**Phase 3: UI & Userscript** (Week 4)
+- Implement dashboard visualization (Plan #5)
+- Implement userscript key mapping (Plan #7)
+- Create configuration UI in userscript (Plan #7)
+
+**Phase 4: Documentation & Testing** (Week 5)
+- Write user guides (Plan #6)
+- Update developer documentation (Plan #6)
+- End-to-end testing
+- Release preparation
+
+## Architecture Summary
+
+**Key Decision**: Key mapping is handled entirely by the **userscript**, not firmware or dashboard.
+
+```
+Physical Key → Firmware → CAN → Main Controller → WebSocket → Userscript
+                                                                  ↓
+                                                        localStorage lookup
+                                                                  ↓
+                                                         Trigger Game Action
+```
+
+**Responsibilities:**
+- **Keypad Firmware**: Matrix scanning, key events, CAN transmission
+- **Main Controller**: CAN → WebSocket forwarding only
+- **Dashboard**: Visualization only (no configuration)
+- **Userscript**: ALL key mapping logic + configuration UI
+
+## Default Key Bindings
+
+The userscript provides these default bindings (customizable via config UI):
+
+**Row 1 - Building Actions:**
+- K1: Build City (1) | K2: Build Factory (2) | K3: Build Port (3) | K4: Build Defense Post (4)
+- K5: Build Missile Launcher (5) | K6: Build SAM (6) | K7: Build Warship (7)
+
+**Row 2 - Game Controls:**
+- K8: Zoom In (E) | K9: Zoom Out (Q) | K10: Decrease Attack Ratio (T) | K11: Switch Missile Direction (U)
+- K12: Increase Attack Ratio (Y) | K13: Boat Attack (B) | K14: Land Attack (G)
+
+**Row 3 - View Control:**
+- K15: Toggle View (Space)
+
+**Note**: Nuke launches (8/9/0) are NOT mapped - use dedicated Nuke Module hardware buttons.
+
+## Quick Links
+
+- **Hardware Specs**: `../ots-hardware/modules/keypad-module.md`
+- **PCB Documentation**: `../ots-hardware/pcbs/keypad.md`
+- **Firmware Config**: `../include/config.h`
+- **Project Overview**: `../PROJECT_PROMPT.md`
+
+## Status Tracking
+
+- [x] Planning complete
+- [ ] Keypad firmware implementation
+- [ ] CAN protocol component created
+- [ ] Main controller integration
+- [ ] WebSocket protocol defined
+- [ ] Dashboard UI implemented
+- [ ] Documentation written
+- [ ] End-to-end testing
+- [ ] Release ready
