@@ -62,7 +62,7 @@ The keypad module requires bidirectional CAN communication:
 |-------|---------|-------------|
 | 0x000-0x0FF | Reserved | Standard CAN IDs |
 | 0x100-0x1FF | Audio Module | Sound commands and status |
-| 0x200-0x21F | Keypad Module | Key events and LED control (NEW) |
+| 0x430-0x43F | Keypad Module | Key events and LED control (NEW) |
 | 0x300-0x7EF | Reserved | Future modules |
 | 0x7F0-0x7FF | System | Discovery, diagnostics, broadcast |
 ```
@@ -71,11 +71,10 @@ The keypad module requires bidirectional CAN communication:
 ```markdown
 | CAN ID | Direction | Purpose |
 |--------|-----------|---------|
-| 0x200 | Reserved | Module base ID |
-| 0x201-0x20F | Keypad → Controller | Key events (0x200 + key_id) |
-| 0x210 | Controller → Keypad | LED set (single key) |
-| 0x211 | Controller → Keypad | LED set (bulk/bitmask) |
-| 0x212-0x21F | Reserved | Future keypad features |
+| 0x430 | Reserved | Module base ID (also LED_SET) |
+| 0x431-0x43F | Keypad → Controller | Key events (0x430 + key_id) |
+| 0x440 | Controller → Keypad | LED set (bulk/bitmask) |
+| 0x441-0x44F | Reserved | Future keypad features |
 ```
 
 ---
@@ -91,11 +90,11 @@ The keypad module requires bidirectional CAN communication:
 
 **Purpose**: Report key press/release events
 
-**CAN ID**: `0x201` to `0x20F` (0x200 + key_id)
-- Key 1: 0x201
-- Key 2: 0x202
+**CAN ID**: `0x431` to `0x43F` (0x430 + key_id)
+- Key 1: 0x431
+- Key 2: 0x432
 - ...
-- Key 15: 0x20F
+- Key 15: 0x43F
 
 **DLC**: 4 bytes
 
@@ -118,7 +117,7 @@ typedef struct {
 
 **Example**: Key 1 pressed at 1234ms (Build City)
 ```
-CAN ID: 0x201
+CAN ID: 0x431
 DLC: 4
 Data: [01 01 D2 04]
       └─┘ └┘ └──┴─┘
@@ -129,7 +128,7 @@ Data: [01 01 D2 04]
 
 **Example**: Key 8 pressed at 5678ms (Zoom In)
 ```
-CAN ID: 0x208
+CAN ID: 0x438
 DLC: 4
 Data: [08 01 2E 16]
       └─┘ └┘ └──┴─┘
@@ -140,7 +139,7 @@ Data: [08 01 2E 16]
 
 **Example**: Key 15 pressed at 9012ms (Toggle View / Spacebar)
 ```
-CAN ID: 0x20F
+CAN ID: 0x43F
 DLC: 4
 Data: [0F 01 34 23]
       └─┘ └┘ └──┴─┘
@@ -166,7 +165,7 @@ Data: [0F 01 34 23]
 
 **Purpose**: Set RGB color and state for a single key LED
 
-**CAN ID**: `0x210`
+**CAN ID**: `0x430`
 
 **DLC**: 5 bytes
 
@@ -190,7 +189,7 @@ typedef struct {
 
 **Example 1**: Set Key 5 to green, ON
 ```
-CAN ID: 0x210
+CAN ID: 0x430
 DLC: 5
 Data: [05 01 00 FF 00]
       └─┘ └┘ └──┴──┴─┘
@@ -201,7 +200,7 @@ Data: [05 01 00 FF 00]
 
 **Example 2**: Turn off all keys
 ```
-CAN ID: 0x210
+CAN ID: 0x430
 DLC: 5
 Data: [FF 00 00 00 00]
       └─┘ └┘ └──┴──┴─┘
@@ -227,7 +226,7 @@ Data: [FF 00 00 00 00]
 
 **Purpose**: Set RGB color and state for multiple keys using bitmask
 
-**CAN ID**: `0x211`
+**CAN ID**: `0x440`
 
 **DLC**: 6 bytes
 
@@ -259,24 +258,24 @@ typedef struct {
 **Example 1**: Set Keys 1, 2, 3 to red, ON
 ```
 Bitmask: 0b0000000000000111 = 0x0007
-CAN ID: 0x211
-DLC: 6
-Data: [07 00 01 FF 00 00]
-      └──┴─┘ └┘ └──┴──┴─┘
-        |   |    └─ RGB: (255, 0, 0) = Red
-        |   └─ On
+CAN ID: 0x440
+DLC: 8
+Data: [07 00 FF 00 00 01 00 00]
+      └──┴─┘ └──┴──┴──┴─┘ └┘ └──┴─┘
+        |    |         └─ On    Reserved
+        |    └─ RGB: (255, 0, 0) = Red
         └─ Keys 1,2,3 (bits 0,1,2 set)
 ```
 
 **Example 2**: Turn off all keys
 ```
 Bitmask: 0x7FFF (all 15 bits set)
-CAN ID: 0x211
-DLC: 6
-Data: [FF 7F 00 00 00 00]
-      └──┴─┘ └┘ └──┴──┴─┘
-        |   |    └─ RGB doesn't matter
-        |   └─ Off
+CAN ID: 0x440
+DLC: 8
+Data: [FF 7F 00 00 00 00 00 00]
+      └──┴─┘ └──┴──┴──┴─┘ └┘ └──┴─┘
+        |    |         └─ Off   Reserved
+        |    └─ RGB doesn't matter
         └─ All keys
 ```
 
@@ -438,7 +437,7 @@ void handle_led_set(const twai_message_t *msg) {
 - Check physical key matrix (ground col pin manually)
 - Verify debounce timing (should be ~20ms)
 - Monitor CAN bus with logic analyzer or cantest tool
-- Check CAN ID range (0x201-0x20F)
+- Check CAN ID range (0x431-0x43F)
 
 **LED updates laggy:**
 - Measure LED update latency (<10ms target)

@@ -207,7 +207,7 @@ static void send_module_announce(void);
 
 **Outgoing - Key Event**:
 ```c
-// CAN ID: 0x200 + key_id (0x201-0x20F)
+// CAN ID: 0x430 + key_id (0x431-0x43F)
 typedef struct {
     uint8_t key_id;      // 1-15
     uint8_t state;       // 0=released, 1=pressed
@@ -217,7 +217,7 @@ typedef struct {
 
 **Incoming - LED Set (Single)**:
 ```c
-// CAN ID: 0x210
+// CAN ID: 0x430
 typedef struct {
     uint8_t key_id;      // 1-15 (0xFF = all)
     uint8_t state;       // 0=off, 1=on
@@ -227,7 +227,7 @@ typedef struct {
 
 **Incoming - LED Set (Bulk)**:
 ```c
-// CAN ID: 0x211
+// CAN ID: 0x440
 typedef struct {
     uint16_t key_bitmask;  // Bit 0=K1, Bit 14=K15
     uint8_t state;         // 0=off, 1=on
@@ -342,7 +342,7 @@ main.c: on_key_event(key_id=5, state=PRESSED)
     ↓
 can_handler.c: can_handler_send_key_event(5, PRESSED)
     ↓
-can_handler.c: Build CAN message (ID=0x205, data=[5, 1, timestamp_lo, timestamp_hi])
+can_handler.c: Build CAN message (ID=0x435, data=[5, 1, timestamp_lo, timestamp_hi])
     ↓
 can_driver: Send to CAN bus
     ↓
@@ -354,7 +354,7 @@ can_driver: Send to CAN bus
 ```
 [Main controller decides K5 LED = Green]
     ↓
-Main controller: Send CAN message (ID=0x210, data=[5, 1, 0, 255, 0])
+Main controller: Send CAN message (ID=0x430, data=[5, 1, 0, 255, 0])
     ↓
 can_driver: Receive message in RX task
     ↓
@@ -428,9 +428,9 @@ All configuration in `include/config.h`:
 // ... etc
 
 // CAN IDs (from can_protocol_keypad)
-#define CAN_ID_KEY_EVENT_BASE   0x200   // 0x200 + key_id
-#define CAN_ID_LED_SET          0x210
-#define CAN_ID_LED_BULK         0x211
+#define CAN_ID_KEY_EVENT_BASE   0x430   // 0x430 + key_id
+#define CAN_ID_LED_SET          0x430
+#define CAN_ID_LED_BULK         0x440
 
 // LED defaults
 #define LED_BRIGHTNESS_DEFAULT  128     // 50%
@@ -485,10 +485,10 @@ All configuration in `include/config.h`:
 **Test: Key Press → CAN Message**
 1. Ground Col4 GPIO (simulate K5 press)
 2. Monitor CAN bus with logic analyzer
-3. Verify CAN message (ID=0x205, data=[5, 1, ...])
+3. Verify CAN message (ID=0x435, data=[5, 1, ...])
 
 **Test: CAN Message → LED ON**
-1. Send CAN message (ID=0x210, data=[5, 1, 0, 255, 0])
+1. Send CAN message (ID=0x430, data=[5, 1, 0, 255, 0])
 2. Verify K5 LED lights green
 3. Measure latency (<10ms)
 

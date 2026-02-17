@@ -10,6 +10,9 @@ This file documents the `ots-userscript` subproject. It is a TypeScript-based Ta
 
 ## Purpose
 
+<!-- TODO: Add userscript HUD screenshot -->
+![Userscript HUD Interface](images/userscript-hud.png)
+
 - Inject a userscript into the game page (OpenFront.io at `https://openfront.io/*`).
 - Connect to the local OTS server over WebSocket and stream game state and events.
 - Monitor and report real-time troop data (current/max/ratio) to hardware modules.

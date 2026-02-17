@@ -1,0 +1,4 @@
+dependencies:
+  can_driver:
+    version: "*"
+    # CAN driver component for can_frame_t and basic TX/RX

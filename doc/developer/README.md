@@ -32,7 +32,7 @@ Documentation for developers and makers working on OTS.
 5. **[CAN Bus Protocol](canbus-protocol.md)**
    - CAN message format reference
    - Discovery protocol implementation
-   - Audio module protocol patterns
+   - Audio and keypad module protocol patterns
    - Testing and debugging strategies
 
 6. **[Release Process](releases.md)**

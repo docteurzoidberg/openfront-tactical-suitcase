@@ -78,12 +78,12 @@
 #define CAN_RX_QUEUE_SIZE       10
 
 /* CAN Module ID (to be assigned during discovery) */
-#define CAN_MODULE_TYPE_KEYPAD  0x05    // Module type identifier
+#define CAN_MODULE_TYPE_KEYPAD  0x02    // Module type identifier
 
-/* CAN Message IDs */
-#define CAN_ID_KEY_EVENT_BASE   0x200   // 0x200 + key_id (0x201-0x20F)
-#define CAN_ID_LED_SET          0x210   // Single key LED control
-#define CAN_ID_LED_BULK         0x211   // Bulk LED control (bitmask)
+/* CAN Message IDs (0x430-0x43F range) */
+#define CAN_ID_KEY_EVENT_BASE   0x430   // 0x430 + key_id (0x431-0x43F)
+#define CAN_ID_LED_SET          0x430   // Single key LED control
+#define CAN_ID_LED_BULK         0x440   // Bulk LED control (bitmask)
 
 /* ============================================================================
  * USB HID CONFIGURATION

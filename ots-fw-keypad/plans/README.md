@@ -18,7 +18,7 @@ This directory contains all planning documents for integrating the keypad module
 
 3. **[03-can-protocol-specification.md](03-can-protocol-specification.md)** - CAN bus protocol updates
    - Message format definitions
-   - CAN ID allocation (0x200-0x21F)
+   - CAN ID allocation (0x430-0x43F)
    - C implementation examples
    - Updates to `/prompts/CANBUS_MESSAGE_SPEC.md`
 

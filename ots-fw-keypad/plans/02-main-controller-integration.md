@@ -139,8 +139,8 @@ can_protocol_keypad/
 ### CAN Message Definitions:
 
 ```c
-// CAN IDs (0x200-0x21F range for keypad)
-#define CAN_ID_KEYPAD_EVENT_BASE    0x200  // 0x200 + key_id (1-15)
+// CAN IDs (0x430-0x43F range for keypad)
+#define CAN_ID_KEYPAD_EVENT_BASE    0x430  // 0x430 + key_id (1-15)
 
 // Key event message (keypad → controller)
 typedef struct {
@@ -150,7 +150,7 @@ typedef struct {
 } __attribute__((packed)) can_keypad_event_t;
 ```
 
-**Note**: LED messages (0x210, 0x211) are reserved for future features.
+**Note**: LED messages (0x430, 0x440) are reserved for future features.
 
 ---
 

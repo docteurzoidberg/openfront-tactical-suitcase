@@ -2,6 +2,9 @@
 
 Dashboard and WebSocket server for the Openfront Tactical Suitcase project.
 
+<!-- TODO: Add full dashboard screenshot -->
+![Dashboard Overview](images/dashboard-overview.png)
+
 ## Overview
 
 This Nuxt 4 application provides:
@@ -65,12 +68,18 @@ Currently implemented modules:
 - Component: `app/components/hardware/MainPowerModule.vue`
 - Spec: `/ots-hardware/modules/main-power-module.md`
 
+<!-- TODO: Add Main Power module screenshot -->
+![Main Power Module UI](images/main-power-module.png)
+
 ### Alert Module (4U)
 - WARNING LED (active when any threat detected)
 - 5 threat LEDs: ATOM, HYDRO, MIRV, LAND, NAVAL
 - Receives alert events and blinks LEDs for 10s (nukes) or 15s (invasions)
 - Component: `app/components/hardware/AlertModule.vue`
 - Spec: `/ots-hardware/modules/alert-module.md`
+
+<!-- TODO: Add Alert module screenshot -->
+![Alert Module UI](images/alert-module.png)
 
 ### Nuke Control Panel (4U)
 - Three buttons: Atom, Hydro, MIRV
@@ -79,11 +88,17 @@ Currently implemented modules:
 - Component: `app/components/hardware/NukeModule.vue`
 - Spec: `/ots-hardware/modules/nuke-module.md`
 
+<!-- TODO: Add Nuke module screenshot -->
+![Nuke Control Panel UI](images/nuke-module.png)
+
 ### Troops Module (4U)
 - 16x2 LCD display showing troop count
 - Slider for deployment percentage control
 - Component: `app/components/hardware/TroopsModule.vue`
 - Spec: `/ots-hardware/modules/troops-module.md`
+
+<!-- TODO: Add Troops module screenshot -->
+![Troops Module UI](images/troops-module.png)
 
 ### Keypad Module (4U)
 - 15-key RGB mechanical keyboard (3x7 matrix)

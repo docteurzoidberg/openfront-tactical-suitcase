@@ -207,58 +207,50 @@ When used as USB keyboard:
 
 Follows standard OTS CAN discovery protocol:
 
-- **CAN ID**: 0x200 (keypad module base ID, TBD)
-- **Module Type**: `MODULE_TYPE_KEYPAD`
+- **CAN ID**: 0x430 (keypad module base ID)
+- **Module Type**: `MODULE_TYPE_KEYPAD` (0x02)
 - **Capabilities**: 15 keys, 15 RGB LEDs
 
-### Key Event Messages (To Be Defined)
+### Key Event Messages
 
-Proposed format:
-
-```
-CAN ID: 0x200 (base) + key_id (1-15)
-DLC: 2 bytes
-Data:
-  Byte 0: Event type (0x00=release, 0x01=press, 0x02=hold)
-  Byte 1: Timestamp LSB (for debouncing/tracking)
-```
-
-Or unified message:
+Final format (see `/prompts/CANBUS_MESSAGE_SPEC.md`):
 
 ```
-CAN ID: 0x200
-DLC: 3 bytes
+CAN ID: 0x430 + key_id (0x431-0x43F)
+DLC: 4 bytes
 Data:
   Byte 0: Key ID (1-15)
-  Byte 1: Event type (0x00=release, 0x01=press, 0x02=hold)
-  Byte 2: Reserved/timestamp
+  Byte 1: State (0x00=released, 0x01=pressed)
+  Byte 2-3: Timestamp (16-bit, little-endian, milliseconds)
 ```
 
-### LED Control Messages (To Be Defined)
+### LED Control Messages
 
-Proposed format:
+Final format (see `/prompts/CANBUS_MESSAGE_SPEC.md`):
 
 **Set individual key LED:**
 ```
-CAN ID: 0x210
+CAN ID: 0x430
 DLC: 5 bytes
 Data:
   Byte 0: Key ID (1-15, or 0xFF for all keys)
-  Byte 1: Red (0-255)
-  Byte 2: Green (0-255)
-  Byte 3: Blue (0-255)
-  Byte 4: Effect flags (0x00=solid, 0x01=flash, 0x02=pulse, etc.)
+  Byte 1: State (0=off, 1=on)
+  Byte 2: Red (0-255)
+  Byte 3: Green (0-255)
+  Byte 4: Blue (0-255)
 ```
 
-**Set multiple keys (packed format):**
-- TBD based on performance requirements
-
-**Set brightness:**
+**Set multiple keys (bulk/bitmask):**
 ```
-CAN ID: 0x211
-DLC: 1 byte
+CAN ID: 0x440
+DLC: 8 bytes
 Data:
-  Byte 0: Brightness (0-255)
+  Byte 0-1: Key bitmask (15 bits, little-endian)
+  Byte 2: Red (0-255)
+  Byte 3: Green (0-255)
+  Byte 4: Blue (0-255)
+  Byte 5: State (0=off, 1=on)
+  Byte 6-7: Reserved
 ```
 
 ## USB HID Protocol (Standalone Mode)

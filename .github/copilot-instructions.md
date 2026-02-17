@@ -7,8 +7,9 @@ OpenFront Tactical Suitcase (OTS) is a multi-component system bridging OpenFront
 - **ots-userscript**: TypeScript Tampermonkey script polling game state every 100ms
 - **ots-fw-main**: ESP32-S3 firmware (PlatformIO/ESP-IDF) with hardware modules
 - **ots-fw-audiomodule**: ESP32-A1S audio playback module with CAN bus integration
+- **ots-fw-keypad**: M5Stack Stamp S3 15-key RGB keyboard (CAN/USB dual-mode)
 - **ots-fw-cantest**: ESP32-S3 CAN bus testing/debugging tool (⚠️ WIP/Untested)
-- **ots-fw-shared**: Shared ESP-IDF components (CAN driver, discovery, audio protocol)
+- **ots-fw-shared**: Shared ESP-IDF components (CAN driver, discovery, audio/keypad protocols)
 - **ots-shared**: Shared TypeScript protocol types
 - **ots-hardware**: Hardware module specifications
 - **ots-website**: VitePress documentation site (auto-deployed to GitHub Pages)

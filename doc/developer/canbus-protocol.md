@@ -1,7 +1,7 @@
 # CAN Bus Protocol - Developer Guide
 
-**Last Updated**: January 11, 2026  
-**Protocol Version**: 1.1 (Audio Module + Discovery + Audio Status)
+**Last Updated**: February 17, 2026  
+**Protocol Version**: 1.2 (Audio Module + Keypad Module + Discovery + Audio Status)
 
 ## Purpose
 
@@ -14,10 +14,11 @@ This guide provides implementation patterns, code examples, and debugging strate
 1. [Getting Started](#getting-started)
 2. [Discovery Protocol Implementation](#discovery-protocol-implementation)
 3. [Audio Protocol Implementation](#audio-protocol-implementation)
-4. [Common Patterns](#common-patterns)
-5. [Testing Strategies](#testing-strategies)
-6. [Debugging](#debugging)
-7. [Performance Considerations](#performance-considerations)
+4. [Keypad Protocol Implementation](#keypad-protocol-implementation)
+5. [Common Patterns](#common-patterns)
+6. [Testing Strategies](#testing-strategies)
+7. [Debugging](#debugging)
+8. [Performance Considerations](#performance-considerations)
 
 ---
 
@@ -554,6 +555,407 @@ void audio_mixer_on_sound_complete(uint8_t queue_id, uint16_t sound_index) {
 
 ---
 
+## Keypad Protocol Implementation
+
+**CAN ID Range**: 0x430-0x43F  
+**Module Type**: `MODULE_TYPE_KEYPAD` (0x02)  
+**Protocol Version**: 1.2
+
+The keypad module implements a 15-key mechanical keyboard with per-key RGB LEDs. It reports raw key press/release events to the main controller and receives LED control commands.
+
+### Overview
+
+**Hardware**: M5Stack Stamp S3 (ESP32-S3)  
+**Keys**: 15 mechanical switches in 3×7 matrix (7+7+1 layout)  
+**LEDs**: SK6812-MINI-E RGB (one per key)
+
+**Key Responsibilities**:
+- Keypad firmware: Matrix scanning, debouncing, CAN event transmission
+- Main controller: Receives key events, forwards to WebSocket, manages LED state
+- Userscript: Key mapping, game action triggering, LED configuration
+
+### Module Side (Keypad Firmware)
+
+#### Initialization and Discovery
+
+```c
+#include "can_driver.h"
+#include "can_protocol_discovery.h"
+#include "can_protocol_keypad.h"
+
+#define MODULE_TYPE_KEYPAD  0x02
+#define CAN_ID_KEYPAD_BASE  0x430
+
+void keypad_can_init(void) {
+    // Initialize CAN driver
+    can_config_t config = {
+        .tx_pin = GPIO_NUM_5,
+        .rx_pin = GPIO_NUM_4,
+        .bitrate = 500000,
+        .use_mock = false,
+    };
+    
+    esp_err_t ret = can_driver_init(&config);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "CAN init failed");
+        return;
+    }
+    
+    // Start discovery responder
+    can_discovery_config_t disc_config = {
+        .module_type = MODULE_TYPE_KEYPAD,
+        .firmware_version = 0x0100,  // v1.0
+        .capabilities = 0x000F,       // 15 keys
+        .can_block = 0x43,            // 0x430-0x43F
+    };
+    
+    can_discovery_init(&disc_config);
+    
+    ESP_LOGI(TAG, "✓ Keypad CAN initialized (0x430-0x43F)");
+}
+```
+
+#### Sending Key Events
+
+**Key pressed:**
+
+```c
+#include "can_protocol_keypad.h"
+
+void keypad_on_key_pressed(uint8_t key_id) {
+    // key_id: 1-15
+    can_frame_t frame;
+    uint16_t timestamp = (uint16_t)(esp_timer_get_time() / 1000);  // ms
+    
+    // Build KEY_EVENT frame
+    // CAN ID = 0x430 + key_id (0x431-0x43F)
+    frame.id = CAN_ID_KEYPAD_BASE + key_id;
+    frame.dlc = 4;
+    frame.data[0] = key_id;
+    frame.data[1] = 0x01;  // Pressed
+    frame.data[2] = timestamp & 0xFF;         // LSB
+    frame.data[3] = (timestamp >> 8) & 0xFF;  // MSB
+    
+    esp_err_t ret = can_driver_send(&frame, 100);
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "KEY_PRESSED: K%d (CAN ID 0x%03X)", key_id, frame.id);
+    }
+}
+```
+
+**Key released:**
+
+```c
+void keypad_on_key_released(uint8_t key_id) {
+    can_frame_t frame;
+    uint16_t timestamp = (uint16_t)(esp_timer_get_time() / 1000);
+    
+    frame.id = CAN_ID_KEYPAD_BASE + key_id;
+    frame.dlc = 4;
+    frame.data[0] = key_id;
+    frame.data[1] = 0x00;  // Released
+    frame.data[2] = timestamp & 0xFF;
+    frame.data[3] = (timestamp >> 8) & 0xFF;
+    
+    esp_err_t ret = can_driver_send(&frame, 100);
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "KEY_RELEASED: K%d", key_id);
+    }
+}
+```
+
+#### Receiving LED Commands
+
+```c
+#define CAN_ID_KEYPAD_LED_SET   0x430
+#define CAN_ID_KEYPAD_LED_BULK  0x440
+
+void keypad_can_rx_task(void *arg) {
+    can_frame_t frame;
+    
+    while (1) {
+        esp_err_t ret = can_driver_receive(&frame, portMAX_DELAY);
+        if (ret != ESP_OK) continue;
+        
+        // LED_SET: Single key LED control
+        if (frame.id == CAN_ID_KEYPAD_LED_SET && frame.dlc == 5) {
+            uint8_t key_id = frame.data[0];  // 1-15 or 0xFF for all
+            uint8_t state = frame.data[1];   // 0=off, 1=on
+            uint8_t r = frame.data[2];
+            uint8_t g = frame.data[3];
+            uint8_t b = frame.data[4];
+            
+            if (key_id == 0xFF) {
+                // Set all LEDs
+                for (int i = 1; i <= 15; i++) {
+                    keypad_led_set(i, state, r, g, b);
+                }
+                ESP_LOGI(TAG, "LED_SET: ALL keys -> RGB(%d,%d,%d) %s", 
+                         r, g, b, state ? "ON" : "OFF");
+            } else if (key_id >= 1 && key_id <= 15) {
+                keypad_led_set(key_id, state, r, g, b);
+                ESP_LOGI(TAG, "LED_SET: K%d -> RGB(%d,%d,%d) %s", 
+                         key_id, r, g, b, state ? "ON" : "OFF");
+            }
+        }
+        
+        // LED_BULK: Multiple keys with bitmask
+        else if (frame.id == CAN_ID_KEYPAD_LED_BULK && frame.dlc == 8) {
+            uint16_t mask = frame.data[0] | (frame.data[1] << 8);
+            uint8_t r = frame.data[2];
+            uint8_t g = frame.data[3];
+            uint8_t b = frame.data[4];
+            uint8_t state = frame.data[5];
+            
+            // Apply to all keys in bitmask
+            for (int i = 0; i < 15; i++) {
+                if (mask & (1 << i)) {
+                    keypad_led_set(i + 1, state, r, g, b);
+                }
+            }
+            ESP_LOGI(TAG, "LED_BULK: mask=0x%04X -> RGB(%d,%d,%d) %s", 
+                     mask, r, g, b, state ? "ON" : "OFF");
+        }
+    }
+}
+```
+
+### Main Controller Side (Receiving Keys, Sending LEDs)
+
+#### Discovering Keypad Module
+
+```c
+#include "can_protocol_discovery.h"
+
+static bool s_keypad_discovered = false;
+static uint8_t s_keypad_can_block = 0;
+
+void discover_keypad(void) {
+    // Send MODULE_QUERY
+    can_frame_t query;
+    can_discovery_build_module_query(&query);
+    can_driver_send(&query, 100);
+    
+    ESP_LOGI(TAG, "Querying for keypad module...");
+    
+    // Wait for MODULE_ANNOUNCE
+    can_frame_t frame;
+    uint64_t start = esp_timer_get_time();
+    
+    while ((esp_timer_get_time() - start) < 2000000) {  // 2s timeout
+        if (can_driver_receive(&frame, 100) == ESP_OK) {
+            if (can_discovery_is_module_announce(&frame)) {
+                can_module_info_t info;
+                can_discovery_parse_module_announce(&frame, &info);
+                
+                // Check if keypad module
+                if (info.module_type == MODULE_TYPE_KEYPAD) {
+                    s_keypad_discovered = true;
+                    s_keypad_can_block = info.can_block;
+                    
+                    ESP_LOGI(TAG, "✓ Keypad module detected (CAN block 0x%02X, FW v%d.%d)",
+                             info.can_block, 
+                             (info.firmware_version >> 8) & 0xFF, 
+                             info.firmware_version & 0xFF);
+                    return;
+                }
+            }
+        }
+    }
+    
+    if (!s_keypad_discovered) {
+        ESP_LOGW(TAG, "✗ No keypad module detected - keyboard features disabled");
+    }
+}
+```
+
+#### Handling Key Events
+
+```c
+void main_controller_can_rx_task(void *arg) {
+    can_frame_t frame;
+    
+    while (1) {
+        esp_err_t ret = can_driver_receive(&frame, portMAX_DELAY);
+        if (ret != ESP_OK) continue;
+        
+        // Check if key event (0x431-0x43F)
+        if (frame.id >= 0x431 && frame.id <= 0x43F && frame.dlc == 4) {
+            uint8_t key_id = frame.data[0];
+            uint8_t state = frame.data[1];   // 0=released, 1=pressed
+            uint16_t timestamp = frame.data[2] | (frame.data[3] << 8);
+            
+            ESP_LOGI(TAG, "KEY_%s: K%d @%ums", 
+                     state ? "PRESSED" : "RELEASED", key_id, timestamp);
+            
+            // Forward to WebSocket clients
+            if (state == 0x01) {
+                broadcast_keypad_event("KEYPAD_KEY_PRESSED", key_id);
+            } else {
+                broadcast_keypad_event("KEYPAD_KEY_RELEASED", key_id);
+            }
+        }
+    }
+}
+```
+
+#### Sending LED Commands
+
+**Set single key LED:**
+
+```c
+void keypad_set_led(uint8_t key_id, bool on, uint8_t r, uint8_t g, uint8_t b) {
+    if (!s_keypad_discovered) return;
+    
+    can_frame_t frame;
+    frame.id = 0x430;  // LED_SET
+    frame.dlc = 5;
+    frame.data[0] = key_id;  // 1-15 or 0xFF for all
+    frame.data[1] = on ? 0x01 : 0x00;
+    frame.data[2] = r;
+    frame.data[3] = g;
+    frame.data[4] = b;
+    
+    can_driver_send(&frame, 100);
+    ESP_LOGI(TAG, "Set K%d LED: RGB(%d,%d,%d) %s", key_id, r, g, b, on ? "ON" : "OFF");
+}
+
+void keypad_set_all_leds_off(void) {
+    keypad_set_led(0xFF, false, 0, 0, 0);  // All keys, OFF
+}
+```
+
+**Set multiple keys (bulk):**
+
+```c
+void keypad_set_led_bulk(uint16_t key_mask, bool on, uint8_t r, uint8_t g, uint8_t b) {
+    if (!s_keypad_discovered) return;
+    
+    can_frame_t frame;
+    frame.id = 0x440;  // LED_BULK
+    frame.dlc = 8;
+    frame.data[0] = key_mask & 0xFF;
+    frame.data[1] = (key_mask >> 8) & 0xFF;
+    frame.data[2] = r;
+    frame.data[3] = g;
+    frame.data[4] = b;
+    frame.data[5] = on ? 0x01 : 0x00;
+    frame.data[6] = 0x00;  // Reserved
+    frame.data[7] = 0x00;  // Reserved
+    
+    can_driver_send(&frame, 100);
+    ESP_LOGI(TAG, "Set LED bulk: mask=0x%04X RGB(%d,%d,%d) %s", 
+             key_mask, r, g, b, on ? "ON" : "OFF");
+}
+
+// Example: Set keys 1, 2, 3 to green
+void example_highlight_build_keys(void) {
+    uint16_t mask = 0x0007;  // Bits 0,1,2 = Keys 1,2,3
+    keypad_set_led_bulk(mask, true, 0, 255, 0);  // Green, ON
+}
+```
+
+### Integration Example
+
+**Complete flow:**
+
+```c
+void app_main(void) {
+    // 1. Initialize CAN
+    can_config_t config = {.tx_pin = 5, .rx_pin = 4, .bitrate = 500000};
+    can_driver_init(&config);
+    
+    // 2. Discover keypad
+    discover_keypad();
+    
+    if (!s_keypad_discovered) {
+        ESP_LOGW(TAG, "Keypad not available");
+        return;
+    }
+    
+    // 3. Start RX task
+    xTaskCreate(main_controller_can_rx_task, "can_rx", 4096, NULL, 5, NULL);
+    
+    // 4. Example: Turn off all LEDs at startup
+    vTaskDelay(pdMS_TO_TICKS(100));
+    keypad_set_all_leds_off();
+    
+    // 5. Example: Indicate key 1 is available (green LED)
+    keypad_set_led(1, true, 0, 255, 0);
+}
+```
+
+### Testing
+
+**Test key event transmission:**
+
+```bash
+# Terminal 1: Keypad module
+cd ots-fw-keypad
+pio run -e m5stack-stamps3-espidf -t upload && pio device monitor
+
+# Terminal 2: Main controller
+cd ots-fw-main
+pio run -e esp32-s3-dev -t upload && pio device monitor
+
+# Expected logs when key 1 pressed:
+# [keypad] KEY_PRESSED: K1 (CAN ID 0x431)
+# [main_controller] KEY_PRESSED: K1 @1234ms
+```
+
+**Test LED control:**
+
+```bash
+# Use cantest to send LED command
+cd ots-fw-cantest
+pio device monitor
+
+# In cantest interactive mode:
+> c  # Controller simulator mode
+> Enter CAN ID (hex): 430
+> Enter DLC: 5
+> Enter data (hex): 01 01 00 FF 00
+# Sends: Set Key 1 to green, ON
+
+# Check keypad logs:
+# [keypad] LED_SET: K1 -> RGB(0,255,0) ON
+```
+
+### Common Use Cases
+
+**1. Key press feedback:**
+```c
+// When key pressed, briefly flash LED white
+void on_key_pressed(uint8_t key_id) {
+    keypad_set_led(key_id, true, 255, 255, 255);  // White flash
+    vTaskDelay(pdMS_TO_TICKS(100));
+    keypad_set_led(key_id, false, 0, 0, 0);       // Off
+}
+```
+
+**2. Indicate available actions:**
+```c
+// Show which game actions are available (green LEDs)
+void update_available_actions(bool can_build_city, bool can_build_factory) {
+    keypad_set_led(1, can_build_city, 0, 255, 0);     // K1 = City
+    keypad_set_led(2, can_build_factory, 0, 255, 0);  // K2 = Factory
+}
+```
+
+**3. Show cooldowns:**
+```c
+// Red LED during cooldown, green when ready
+void update_nuke_cooldown(uint8_t key_id, bool ready) {
+    if (ready) {
+        keypad_set_led(key_id, true, 0, 255, 0);  // Green
+    } else {
+        keypad_set_led(key_id, true, 255, 0, 0);  // Red
+    }
+}
+```
+
+---
+
 ## Common Patterns
 
 ### Pattern 1: Request-ACK-Timeout
@@ -1051,6 +1453,7 @@ See [`/ots-fw-cantest/`](../../ots-fw-cantest/) for CAN bus testing and debuggin
 - [`/ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md`](../../ots-fw-shared/components/can_driver/COMPONENT_PROMPT.md)
 - [`/ots-fw-shared/components/can_protocol_discovery/COMPONENT_PROMPT.md`](../../ots-fw-shared/components/can_protocol_discovery/COMPONENT_PROMPT.md)
 - [`/ots-fw-shared/components/can_protocol_audiomodule/COMPONENT_PROMPT.md`](../../ots-fw-shared/components/can_protocol_audiomodule/COMPONENT_PROMPT.md)
+- [`/ots-fw-shared/components/can_protocol_keypad/COMPONENT_PROMPT.md`](../../ots-fw-shared/components/can_protocol_keypad/COMPONENT_PROMPT.md) (to be created in Stage 1)
 
 **ESP-IDF Resources**:
 - [TWAI Driver Documentation](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/twai.html)

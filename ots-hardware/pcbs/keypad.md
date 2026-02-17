@@ -31,9 +31,9 @@ Custom PCB for the Keypad Module featuring:
 
 ```
         Col0  Col1  Col2  Col3  Col4  Col5  Col6
-Row0:    K1    K2    K3    K4    K5    --    --
-Row1:    K6    K7    K8    K9    K10   --    --
-Row2:    K11   K12   K13   K14   K15   --    --
+Row0:    K1    K2    K3    K4    K5    K6    K7
+Row1:    K8    K9    K10   K11   K12   K13   K14
+Row2:    --    --    --    K15   --    --    --
 ```
 
 - **Row pins**: 3 GPIO (scanned outputs)

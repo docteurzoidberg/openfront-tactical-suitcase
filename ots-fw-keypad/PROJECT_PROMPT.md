@@ -171,7 +171,7 @@ Row2:    --    --    --    K15   --    --    --
 
 **Key Event:**
 ```
-CAN ID: 0x200 + key_id (1-15)
+CAN ID: 0x430 + key_id (1-15)
 DLC: 4
 Data[0]: Key ID (1-15)
 Data[1]: State (0x01=pressed, 0x00=released)
@@ -182,14 +182,14 @@ Data[2-3]: Timestamp (uint16_t, milliseconds since boot, for debounce verificati
 Uses `can_protocol_discovery` component:
 ```
 CAN ID: 0x7FD (MODULE_ANNOUNCE)
-Data: Module type = 0x05 (keypad), firmware version, capabilities
+Data: Module type = 0x02 (keypad), firmware version, capabilities
 ```
 
 ### Incoming (Main Controller → Keypad)
 
 **Set LED State (Single Key):**
 ```
-CAN ID: 0x210
+CAN ID: 0x430
 DLC: 5
 Data[0]: Key ID (1-15, or 0xFF for all)
 Data[1]: State (0=off, 1=on)
@@ -200,13 +200,14 @@ Data[4]: Blue (0-255)
 
 **Set LED State (Bulk):**
 ```
-CAN ID: 0x211
-DLC: 6
-Data[0-1]: Key bitmask (uint16_t, bit 0=K1, bit 14=K15)
-Data[2]: State (0=off, 1=on)
-Data[3]: Red (0-255)
-Data[4]: Green (0-255)
-Data[5]: Blue (0-255)
+CAN ID: 0x440
+DLC: 8
+Data[0-1]: Key bitmask (uint16_t, bit 0=K1, bit 14=K15, little-endian)
+Data[2]: Red (0-255)
+Data[3]: Green (0-255)
+Data[4]: Blue (0-255)
+Data[5]: State (0=off, 1=on)
+Data[6-7]: Reserved
 ```
 
 ## Directory Structure

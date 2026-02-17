@@ -77,12 +77,12 @@ Standard Frame (used by OTS):
 
 | CAN ID Range | Module | Usage | Status |
 |--------------|--------|-------|--------|
-| **0x200-0x21F** | Keypad Module | Key events, LED control | 📋 Planned |
 | **0x410-0x411** | Discovery | Module enumeration | ✅ Implemented |
 | **0x420-0x42F** | Audio Module | Sound control | ✅ Implemented |
-| **0x430-0x43F** | Reserved | Future any module | 📋 Planned |
+| **0x430-0x43F** | Keypad Module | Key events, LED control | 📋 Planned |
 | **0x440-0x44F** | Reserved | Future any module | 📋 Planned |
 | **0x450-0x45F** | Reserved | Future any module | 📋 Planned |
+| **0x460-0x46F** | Reserved | Future any module | 📋 Planned |
 
 ### Reserved Ranges
 
@@ -240,7 +240,7 @@ The keypad module provides a 15-key mechanical keyboard interface with RGB LED i
 **Hardware**: M5Stack Stamp S3 (ESP32-S3)  
 **Keys**: 15 mechanical switches (Cherry MX compatible) in 7+7+1 layout  
 **LEDs**: SK6812-MINI-E RGB LEDs (one per key)  
-**CAN Range**: 0x200-0x21F
+**CAN Range**: 0x430-0x43F
 
 **Key Features**:
 - 20ms debouncing on all keys
@@ -253,7 +253,7 @@ The keypad module provides a 15-key mechanical keyboard interface with RGB LED i
 Before using keypad protocol:
 1. Keypad module must be discovered via MODULE_ANNOUNCE
 2. Module type must be `MODULE_TYPE_KEYPAD` (0x02)
-3. CAN block must be allocated (0x20 = 0x200-0x21F)
+3. CAN block must be allocated (0x43 = 0x430-0x43F)
 
 If no keypad module discovered at boot:
 - Main controller disables keypad features
@@ -263,13 +263,13 @@ If no keypad module discovered at boot:
 
 | CAN ID | Direction | Message | Description |
 |--------|-----------|---------|-------------|
-| **0x201-0x20F** | Keypad → Main | KEY_EVENT | Key press/release (per key) |
-| **0x210** | Main → Keypad | LED_SET | Set single key LED color |
-| **0x211** | Main → Keypad | LED_BULK | Set multiple key LEDs |
+| **0x431-0x43F** | Keypad → Main | KEY_EVENT | Key press/release (per key) |
+| **0x430** | Main → Keypad | LED_SET | Set single key LED color |
+| **0x440** | Main → Keypad | LED_BULK | Set multiple key LEDs |
 
-**Note**: Key event CAN IDs are dynamic: `0x200 + key_id` (1-15), resulting in 0x201-0x20F.
+**Note**: Key event CAN IDs are dynamic: `0x430 + key_id` (1-15), resulting in 0x431-0x43F.
 
-### KEY_EVENT (0x201-0x20F)
+### KEY_EVENT (0x431-0x43F)
 
 **Direction**: Keypad module → Main controller  
 **Purpose**: Report key press or release event  
@@ -305,7 +305,7 @@ Row 3:      [      K15 (Spacebar)    ]
 
 **Example**: Key 1 pressed at 1234ms (Build City)
 ```
-CAN ID: 0x201
+CAN ID: 0x431
 DLC: 4
 Data: [01 01 D2 04]
       └─┘ └┘ └──┴─┘
@@ -316,7 +316,7 @@ Data: [01 01 D2 04]
 
 **Example**: Key 15 released at 5678ms (Toggle View)
 ```
-CAN ID: 0x20F
+CAN ID: 0x43F
 DLC: 4
 Data: [0F 00 2E 16]
       └─┘ └┘ └──┴─┘
@@ -334,7 +334,7 @@ typedef struct {
 } __attribute__((packed)) can_keypad_event_t;
 ```
 
-### LED_SET (0x210)
+### LED_SET (0x430)
 
 **Direction**: Main controller → Keypad module  
 **Purpose**: Set RGB color and on/off state for a single key LED  
@@ -361,7 +361,7 @@ Byte 4: Blue component (0-255)
 
 **Example**: Set Key 1 to green
 ```
-CAN ID: 0x210
+CAN ID: 0x430
 DLC: 5
 Data: [01 01 00 FF 00]
       └─┘ └┘ └┘ └┘ └┘
@@ -374,7 +374,7 @@ Data: [01 01 00 FF 00]
 
 **Example**: Turn off all LEDs
 ```
-CAN ID: 0x210
+CAN ID: 0x430
 DLC: 5
 Data: [FF 00 00 00 00]
       └─┘ └┘ └──────┘
@@ -394,7 +394,7 @@ typedef struct {
 } __attribute__((packed)) can_keypad_led_set_t;
 ```
 
-### LED_BULK (0x211)
+### LED_BULK (0x440)
 
 **Direction**: Main controller → Keypad module  
 **Purpose**: Set multiple key LEDs efficiently (batch update)  
@@ -428,7 +428,7 @@ Byte 6-7: Reserved (0x00)
 
 **Example**: Set keys 1, 2, 3 to red
 ```
-CAN ID: 0x211
+CAN ID: 0x440
 DLC: 8
 Data: [07 00 FF 00 00 01 00 00]
       └──┴─┘ └┘ └┘ └┘ └┘ └──┴─┘
@@ -442,7 +442,7 @@ Data: [07 00 FF 00 00 01 00 00]
 
 **Example**: Set all keys to off
 ```
-CAN ID: 0x211
+CAN ID: 0x440
 DLC: 8
 Data: [FF 7F 00 00 00 00 00 00]
       └──┴─┘ └──────┴─┘ └──┴─┘
