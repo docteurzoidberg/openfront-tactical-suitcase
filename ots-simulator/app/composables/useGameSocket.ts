@@ -76,6 +76,16 @@ const lastSound = ref<SoundPlaybackState | null>(null)
 const soundModulePowerOn = ref(true)
 const soundVolume = ref(80) // 0-100
 
+// Keypad state
+const keypadConnected = ref(false)
+const keypadFirmwareVersion = ref('')
+const keypadKeyStates = ref<Map<number, boolean>>(new Map())
+
+// Initialize keypad states
+for (let i = 1; i <= 15; i++) {
+  keypadKeyStates.value.set(i, false)
+}
+
 const localSoundCandidatesForId = (soundId: string): string[] => {
   // Minimal catalog (keep in sync with prompts/WEBSOCKET_MESSAGE_SPEC.md Sound Catalog)
   if (soundId === 'game_start') {
@@ -410,6 +420,30 @@ export function useGameSocket() {
             }
           }
         }
+
+        // Handle keypad events
+        if (msg.payload.type === 'KEYPAD_KEY_PRESSED') {
+          const data = msg.payload.data as any
+          if (data?.keyId && typeof data.keyId === 'number') {
+            keypadKeyStates.value.set(data.keyId, true)
+            // Auto-release after animation (200ms)
+            setTimeout(() => {
+              keypadKeyStates.value.set(data.keyId, false)
+            }, 200)
+          }
+        } else if (msg.payload.type === 'KEYPAD_KEY_RELEASED') {
+          const data = msg.payload.data as any
+          if (data?.keyId && typeof data.keyId === 'number') {
+            keypadKeyStates.value.set(data.keyId, false)
+          }
+        } else if (msg.payload.type === 'KEYPAD_CONNECTED') {
+          keypadConnected.value = true
+          const data = msg.payload.data as any
+          keypadFirmwareVersion.value = data?.firmwareVersion || 'Unknown'
+        } else if (msg.payload.type === 'KEYPAD_DISCONNECTED') {
+          keypadConnected.value = false
+          keypadFirmwareVersion.value = ''
+        }
       }
     } catch {
       // ignore malformed messages
@@ -606,6 +640,9 @@ export function useGameSocket() {
     lastSound,
     soundModulePowerOn,
     soundVolume,
+    keypadConnected,
+    keypadFirmwareVersion,
+    keypadKeyStates,
     send: sendMessage,
     sendNukeCommand,
     sendSetTroopsPercent,
