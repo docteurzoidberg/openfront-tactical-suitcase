@@ -1,6 +1,7 @@
 import type { WsClient } from '../websocket/client'
 import type { Hud } from '../hud/sidebar-hud'
 import type { GameEvent, KnownCommandPayload, NukeType } from '../../../ots-shared/src/game'
+import type { KeypadAction } from '../types/keypad-types'
 import { waitForElement, createLogger } from '../utils'
 import { createGameAPI, getGameView } from './game-api'
 import { NukeTracker, BoatTracker, LandAttackTracker } from './trackers'
@@ -25,6 +26,83 @@ function isSetAttackRatioParams(params: unknown): params is KnownCommandPayload<
 
 function isSendNukeParams(params: unknown): params is KnownCommandPayload<'send-nuke'>['params'] {
   return isRecord(params) && (params.nukeType === 'atom' || params.nukeType === 'hydro' || params.nukeType === 'mirv')
+}
+
+function normalizeKeybindStorageValue(value: unknown): string | null {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (isRecord(value) && typeof value.value === 'string') {
+    return value.value
+  }
+
+  return null
+}
+
+function keyCodeToHotkey(code: string): string | null {
+  if (!code) return null
+  if (code === 'Space' || code === 'Spacebar') return ' '
+
+  const digitMatch = /^Digit([0-9])$/.exec(code)
+  if (digitMatch) {
+    return digitMatch[1]
+  }
+
+  const keyMatch = /^Key([A-Z])$/.exec(code)
+  if (keyMatch) {
+    return keyMatch[1].toLowerCase()
+  }
+
+  if (code.length === 1) {
+    return code.toLowerCase()
+  }
+
+  return null
+}
+
+const LEGACY_KEYPAD_ACTION_TO_GAME_KEYBIND: Record<string, string> = {
+  BUILD_CITY: 'buildCity',
+  BUILD_FACTORY: 'buildFactory',
+  BUILD_PORT: 'buildPort',
+  BUILD_DEFENSE: 'buildDefensePost',
+  BUILD_MISSILE: 'buildMissileSilo',
+  BUILD_SAM: 'buildSamLauncher',
+  BUILD_WARSHIP: 'buildWarship',
+  ZOOM_IN: 'zoomIn',
+  ZOOM_OUT: 'zoomOut',
+  ATTACK_DECREASE: 'attackRatioDown',
+  MISSILE_SWITCH: 'swapDirection',
+  ATTACK_INCREASE: 'attackRatioUp',
+  BOAT_ATTACK: 'boatAttack',
+  LAND_ATTACK: 'groundAttack',
+  TOGGLE_VIEW: 'toggleView'
+}
+
+const DEFAULT_GAME_KEYBIND_CODES: Record<string, string> = {
+  toggleView: 'Space',
+  centerCamera: 'KeyC',
+  moveUp: 'KeyW',
+  moveDown: 'KeyS',
+  moveLeft: 'KeyA',
+  moveRight: 'KeyD',
+  zoomOut: 'KeyQ',
+  zoomIn: 'KeyE',
+  attackRatioDown: 'KeyT',
+  attackRatioUp: 'KeyY',
+  boatAttack: 'KeyB',
+  groundAttack: 'KeyG',
+  swapDirection: 'KeyU',
+  buildCity: 'Digit1',
+  buildFactory: 'Digit2',
+  buildPort: 'Digit3',
+  buildDefensePost: 'Digit4',
+  buildMissileSilo: 'Digit5',
+  buildSamLauncher: 'Digit6',
+  buildWarship: 'Digit7',
+  buildAtomBomb: 'Digit8',
+  buildHydrogenBomb: 'Digit9',
+  buildMIRV: 'Digit0'
 }
 
 export class GameBridge {
@@ -565,5 +643,67 @@ export class GameBridge {
     this.clearTrackers()
     this.gameConnected = false
     this.hud.setGameStatus(false)
+  }
+
+  getCurrentKeybinds(): Record<string, string> {
+    const raw = localStorage.getItem('settings.keybinds')
+    if (!raw) {
+      return { ...DEFAULT_GAME_KEYBIND_CODES }
+    }
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      return { ...DEFAULT_GAME_KEYBIND_CODES }
+    }
+
+    if (!isRecord(parsed)) {
+      return { ...DEFAULT_GAME_KEYBIND_CODES }
+    }
+
+    const result: Record<string, string> = { ...DEFAULT_GAME_KEYBIND_CODES }
+    Object.entries(parsed).forEach(([action, value]) => {
+      const normalized = normalizeKeybindStorageValue(value)
+      if (normalized === 'Null') {
+        result[action] = ''
+      } else if (normalized) {
+        result[action] = normalized
+      }
+    })
+
+    return result
+  }
+
+  getCurrentKeybindHotkeys(): Record<string, string> {
+    const keybindCodes = this.getCurrentKeybinds()
+    const hotkeys: Record<string, string> = {}
+
+    Object.entries(keybindCodes).forEach(([action, code]) => {
+      const hotkey = keyCodeToHotkey(code)
+      if (hotkey) {
+        hotkeys[action] = hotkey
+      }
+    })
+
+    return hotkeys
+  }
+
+  resolveHotkeyForKeypadAction(action: KeypadAction): string | null {
+    const gameAction = LEGACY_KEYPAD_ACTION_TO_GAME_KEYBIND[action] ?? action
+    const hotkeys = this.getCurrentKeybindHotkeys()
+    return hotkeys[gameAction] ?? null
+  }
+
+  resolveKeypadActionForHotkey(hotkey: string): KeypadAction | null {
+    const hotkeys = this.getCurrentKeybindHotkeys()
+
+    for (const [action, value] of Object.entries(hotkeys)) {
+      if (value === hotkey) {
+        return action
+      }
+    }
+
+    return null
   }
 }

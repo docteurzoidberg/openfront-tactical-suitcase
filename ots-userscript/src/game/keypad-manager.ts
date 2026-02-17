@@ -33,7 +33,7 @@ function dispatchKey(key: string, type: 'keydown' | 'keyup') {
     bubbles: true,
     cancelable: true
   })
-  document.dispatchEvent(event)
+  window.dispatchEvent(event)
 }
 
 export class KeypadManager {
@@ -61,25 +61,25 @@ export class KeypadManager {
   }
 
   private triggerPressed(binding: KeyBinding): void {
-    const element = binding.selector ? (document.querySelector(binding.selector) as HTMLElement | null) : null
-
-    if (element) {
-      element.click()
+    const runtimeHotkey = this.getRuntimeHotkey(binding)
+    if (runtimeHotkey) {
+      dispatchKey(runtimeHotkey, 'keydown')
       return
     }
 
-    if (binding.hotkey) {
-      dispatchKey(binding.hotkey, 'keydown')
-      dispatchKey(binding.hotkey, 'keyup')
-      return
-    }
-
-    this.hud.pushLog('info', `[KEYPAD] No selector/hotkey configured for K${binding.keyId}`)
+    this.hud.pushLog('info', `[KEYPAD] No runtime hotkey configured for K${binding.keyId}`)
   }
 
   private triggerReleased(binding: KeyBinding): void {
-    if (binding.hotkey) {
-      dispatchKey(binding.hotkey, 'keyup')
+    const runtimeHotkey = this.getRuntimeHotkey(binding)
+    if (runtimeHotkey) {
+      dispatchKey(runtimeHotkey, 'keyup')
     }
+  }
+
+  private getRuntimeHotkey(binding: KeyBinding): string | null {
+    const bridge = (window as any).otsGameBridge as { resolveHotkeyForKeypadAction?: (action: KeyBinding['action']) => string | null } | undefined
+    const bridgeHotkey = bridge?.resolveHotkeyForKeypadAction?.(binding.action)
+    return bridgeHotkey ?? null
   }
 }

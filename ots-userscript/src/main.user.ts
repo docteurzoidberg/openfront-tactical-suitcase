@@ -57,6 +57,10 @@ const VERSION = '2026-01-10.2-dev'
       },
       (type, data) => {
         if (type === 'KEYPAD_KEY_PRESSED' || type === 'KEYPAD_KEY_RELEASED') {
+          hud.handleKeypadLiveEvent({
+            ...(typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {}),
+            state: type === 'KEYPAD_KEY_PRESSED' ? 'pressed' : 'released'
+          })
           keypad.handleKeyEvent(data)
         }
       }
