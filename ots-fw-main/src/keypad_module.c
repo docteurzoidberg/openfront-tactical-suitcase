@@ -12,12 +12,64 @@
 #include "ws_handlers.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include <stdio.h>
 #include <string.h>
 
 static const char *TAG = "OTS_KEYPAD";
 
 static module_status_t status = {0};
 static bool keypad_connected = false;
+static uint64_t last_discovery_check_ms = 0;
+
+#define KEYPAD_MODULE_TYPE 0x02
+#define KEYPAD_DISCOVERY_CHECK_INTERVAL_MS 1000
+#define KEYPAD_PRESENT_MAX_AGE_MS 3000
+
+static void publish_keypad_connection_event(bool connected, const can_bus_module_info_t *module_info) {
+    game_event_t game_event = {0};
+    game_event.timestamp = esp_timer_get_time() / 1000;
+    game_event.type = connected ? GAME_EVENT_KEYPAD_CONNECTED : GAME_EVENT_KEYPAD_DISCONNECTED;
+
+    if (connected) {
+        strncpy(game_event.message, "Keypad module connected", sizeof(game_event.message) - 1);
+        if (module_info) {
+            snprintf(game_event.data, sizeof(game_event.data),
+                     "{\"firmwareVersion\":\"%u.%u.0\",\"moduleType\":\"keypad\",\"timestamp\":%llu}",
+                     module_info->version_major,
+                     module_info->version_minor,
+                     (unsigned long long)(esp_timer_get_time() / 1000ULL));
+        } else {
+            snprintf(game_event.data, sizeof(game_event.data),
+                     "{\"moduleType\":\"keypad\",\"timestamp\":%llu}",
+                     (unsigned long long)(esp_timer_get_time() / 1000ULL));
+        }
+    } else {
+        strncpy(game_event.message, "Keypad module disconnected", sizeof(game_event.message) - 1);
+        snprintf(game_event.data, sizeof(game_event.data),
+                 "{\"moduleType\":\"keypad\",\"timestamp\":%llu}",
+                 (unsigned long long)(esp_timer_get_time() / 1000ULL));
+    }
+
+    ws_handlers_send_event(&game_event);
+}
+
+static bool detect_keypad_module(can_bus_module_info_t *out_info) {
+    can_bus_module_info_t modules[CAN_BUS_MANAGER_MAX_MODULES] = {0};
+    size_t count = can_bus_manager_list_modules(modules, CAN_BUS_MANAGER_MAX_MODULES);
+
+    for (size_t i = 0; i < count; i++) {
+        if (modules[i].valid &&
+            modules[i].module_type == KEYPAD_MODULE_TYPE &&
+            can_bus_manager_is_module_present(modules[i].module_type, modules[i].node_id, KEYPAD_PRESENT_MAX_AGE_MS)) {
+            if (out_info) {
+                *out_info = modules[i];
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
 
 // CAN RX handlers
 
@@ -25,6 +77,8 @@ static bool keypad_connected = false;
  * @brief Handle KEY_EVENT messages from keypad (0x431-0x43F)
  */
 static void on_keypad_key_event(const can_frame_t *frame, void *ctx) {
+    (void)ctx;
+
     if (frame->dlc < 4) {
         ESP_LOGW(TAG, "Invalid KEY_EVENT DLC: %d", frame->dlc);
         return;
@@ -53,27 +107,22 @@ static void on_keypad_key_event(const can_frame_t *frame, void *ctx) {
     if (event.state == CAN_KEYPAD_STATE_PRESSED) {
         game_event.type = GAME_EVENT_KEYPAD_KEY_PRESSED;
         snprintf(game_event.message, sizeof(game_event.message), 
-                 "Key K%d pressed", event.key_id);
+                 "Key %d pressed", event.key_id);
     } else {
         game_event.type = GAME_EVENT_KEYPAD_KEY_RELEASED;
         snprintf(game_event.message, sizeof(game_event.message), 
-                 "Key K%d released", event.key_id);
+                 "Key %d released", event.key_id);
     }
     
-    // Add key_id to data payload
+    // Spec-compliant keypad payload: keyId, state, timestamp
     snprintf(game_event.data, sizeof(game_event.data), 
-             "{\"keyId\":%d}", event.key_id);
+             "{\"keyId\":%d,\"state\":\"%s\",\"timestamp\":%u}",
+             event.key_id,
+             event.state == CAN_KEYPAD_STATE_PRESSED ? "pressed" : "released",
+             event.timestamp);
     
     // Send to WebSocket
     ws_handlers_send_event(&game_event);
-    
-    // Post to event dispatcher for local handling
-    internal_event_t internal_event = {
-        .type = event.state == CAN_KEYPAD_STATE_PRESSED ? 
-                GAME_EVENT_KEYPAD_KEY_PRESSED : GAME_EVENT_KEYPAD_KEY_RELEASED,
-        .data = {event.key_id, 0, 0, 0}
-    };
-    event_dispatcher_post(&internal_event);
 }
 
 /**
@@ -125,52 +174,49 @@ static esp_err_t keypad_module_init(void) {
     status.initialized = true;
     status.operational = true;
     status.error_count = 0;
+    last_discovery_check_ms = 0;
+
+    // Trigger initial discovery query so presence can be detected quickly.
+    (void)can_bus_manager_discovery_query_all();
     
     ESP_LOGI(TAG, "Keypad module initialized (15 keys, CAN-connected)");
     return ESP_OK;
 }
 
 static esp_err_t keypad_module_update(void) {
-    // Nothing to do here - CAN events are async
+    uint64_t now_ms = esp_timer_get_time() / 1000ULL;
+
+    if ((now_ms - last_discovery_check_ms) < KEYPAD_DISCOVERY_CHECK_INTERVAL_MS) {
+        return ESP_OK;
+    }
+
+    last_discovery_check_ms = now_ms;
+
+    // Keep discovery registry fresh and detect connect/disconnect transitions.
+    (void)can_bus_manager_discovery_query_all();
+
+    can_bus_module_info_t module_info = {0};
+    bool present = detect_keypad_module(&module_info);
+
+    if (present != keypad_connected) {
+        keypad_connected = present;
+        if (present) {
+            ESP_LOGI(TAG, "Keypad discovered (node=%u, v%u.%u)",
+                     module_info.node_id,
+                     module_info.version_major,
+                     module_info.version_minor);
+            publish_keypad_connection_event(true, &module_info);
+        } else {
+            ESP_LOGW(TAG, "Keypad module not present (timeout)");
+            publish_keypad_connection_event(false, NULL);
+        }
+    }
+
     return ESP_OK;
 }
 
 static bool keypad_module_handle_event(const internal_event_t *event) {
-    // Handle LED command events from dashboard/userscript
-    // Example: INTERNAL_EVENT_KEYPAD_LED_SET
-    // For now, only handle keypad connection status
-    
-    if (event->type == GAME_EVENT_KEYPAD_CONNECTED) {
-        ESP_LOGI(TAG, "Keypad connected");
-        keypad_connected = true;
-        
-        // Send connection event to WebSocket
-        game_event_t game_event = {0};
-        game_event.timestamp = esp_timer_get_time() / 1000;
-        game_event.type = GAME_EVENT_KEYPAD_CONNECTED;
-        strncpy(game_event.message, "Keypad connected", sizeof(game_event.message) - 1);
-        ws_handlers_send_event(&game_event);
-        
-        return true;
-    }
-    
-    if (event->type == GAME_EVENT_KEYPAD_DISCONNECTED) {
-        ESP_LOGI(TAG, "Keypad disconnected");
-        keypad_connected = false;
-        
-        // Send disconnection event to WebSocket
-        game_event_t game_event = {0};
-        game_event.timestamp = esp_timer_get_time() / 1000;
-        game_event.type = GAME_EVENT_KEYPAD_DISCONNECTED;
-        strncpy(game_event.message, "Keypad disconnected", sizeof(game_event.message) - 1);
-        ws_handlers_send_event(&game_event);
-        
-        return true;
-    }
-    
-    // Future: Handle LED command events from dashboard
-    // if (event->type == INTERNAL_EVENT_KEYPAD_LED_COMMAND) { ... }
-    
+    (void)event;
     return false;
 }
 
