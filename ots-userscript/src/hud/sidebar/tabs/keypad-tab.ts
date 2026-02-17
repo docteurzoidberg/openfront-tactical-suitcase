@@ -72,19 +72,25 @@ export class KeypadTab {
       .join('')
 
     return `
-      <div data-key-id="${binding.keyId}" style="display:grid;grid-template-columns:46px 1fr 84px;gap:6px;align-items:center;padding:6px;background:rgba(255,255,255,0.04);border-radius:4px;">
+      <div data-key-id="${binding.keyId}" style="display:grid;grid-template-columns:46px 1fr 96px;gap:6px;align-items:start;padding:6px;background:rgba(255,255,255,0.04);border-radius:4px;">
         <div style="font-size:11px;font-weight:700;color:#e5e7eb;">K${binding.keyId}</div>
-        <div style="display:grid;grid-template-columns:1fr 96px 56px;gap:6px;">
+        <div>
+          <div style="display:grid;grid-template-columns:1fr 96px 56px;gap:6px;">
           <select data-field="action" style="font-size:10px;padding:4px 6px;border-radius:4px;border:1px solid rgba(148,163,184,0.35);background:rgba(15,23,42,0.8);color:#e5e7eb;outline:none;">
             ${options}
           </select>
           <input data-field="selector" type="text" value="${binding.selector.replace(/"/g, '&quot;')}" placeholder="selector" style="font-size:10px;padding:4px 6px;border-radius:4px;border:1px solid rgba(148,163,184,0.35);background:rgba(15,23,42,0.8);color:#e5e7eb;outline:none;" />
           <input data-field="hotkey" type="text" value="${binding.hotkey === ' ' ? 'Space' : binding.hotkey}" placeholder="key" style="font-size:10px;padding:4px 6px;border-radius:4px;border:1px solid rgba(148,163,184,0.35);background:rgba(15,23,42,0.8);color:#e5e7eb;outline:none;" />
+          </div>
+          <div data-role="warning" style="display:none;margin-top:4px;font-size:9px;color:#fbbf24;"></div>
         </div>
-        <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:#e5e7eb;cursor:pointer;justify-self:start;">
-          <input data-field="enabled" type="checkbox" ${binding.enabled ? 'checked' : ''} />
-          <span>On</span>
-        </label>
+        <div style="display:flex;align-items:center;gap:8px;padding-top:2px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:#e5e7eb;cursor:pointer;justify-self:start;">
+            <input data-field="enabled" type="checkbox" ${binding.enabled ? 'checked' : ''} />
+            <span>On</span>
+          </label>
+          <button data-field="test" style="all:unset;cursor:pointer;font-size:10px;padding:4px 8px;border-radius:4px;background:rgba(59,130,246,0.28);color:#bfdbfe;font-weight:700;">Test</button>
+        </div>
       </div>
     `
   }
@@ -92,6 +98,27 @@ export class KeypadTab {
   private attachListeners(): void {
     const saveBtn = this.container.querySelector('#ots-keypad-save') as HTMLButtonElement | null
     const resetBtn = this.container.querySelector('#ots-keypad-reset') as HTMLButtonElement | null
+
+    const rows = this.container.querySelectorAll('[data-key-id]')
+    rows.forEach((rowEl) => {
+      const row = rowEl as HTMLElement
+      const selectorInput = row.querySelector('[data-field="selector"]') as HTMLInputElement
+      const hotkeyInput = row.querySelector('[data-field="hotkey"]') as HTMLInputElement
+      const enabledInput = row.querySelector('[data-field="enabled"]') as HTMLInputElement
+      const testBtn = row.querySelector('[data-field="test"]') as HTMLButtonElement
+
+      const validate = () => this.updateRowValidation(row)
+
+      selectorInput.addEventListener('input', validate)
+      hotkeyInput.addEventListener('input', validate)
+      enabledInput.addEventListener('change', validate)
+      validate()
+
+      testBtn.addEventListener('click', () => {
+        const binding = this.readRow(row)
+        this.triggerBinding(binding)
+      })
+    })
 
     saveBtn?.addEventListener('click', () => {
       const updated = this.readRows()
@@ -111,29 +138,85 @@ export class KeypadTab {
     })
   }
 
+  private updateRowValidation(row: HTMLElement): void {
+    const binding = this.readRow(row)
+    const warning = row.querySelector('[data-role="warning"]') as HTMLElement | null
+    if (!warning) return
+
+    if (!binding.enabled) {
+      warning.style.display = 'none'
+      return
+    }
+
+    if (!binding.selector && !binding.hotkey) {
+      warning.textContent = 'Enabled but no selector/hotkey configured'
+      warning.style.display = 'block'
+      return
+    }
+
+    warning.style.display = 'none'
+  }
+
+  private readRow(row: HTMLElement): KeyBinding {
+    const keyId = Number(row.dataset.keyId)
+    const action = (row.querySelector('[data-field="action"]') as HTMLSelectElement).value as KeypadAction
+    const selector = (row.querySelector('[data-field="selector"]') as HTMLInputElement).value.trim()
+    const hotkeyRaw = (row.querySelector('[data-field="hotkey"]') as HTMLInputElement).value.trim()
+    const enabled = (row.querySelector('[data-field="enabled"]') as HTMLInputElement).checked
+    const hotkey = hotkeyRaw.toLowerCase() === 'space' ? ' ' : hotkeyRaw
+    const selectedAction = ACTION_OPTIONS.find((option) => option.value === action)
+
+    return {
+      keyId,
+      action,
+      selector,
+      hotkey,
+      enabled,
+      label: selectedAction?.label ?? action
+    }
+  }
+
+  private triggerBinding(binding: KeyBinding): void {
+    if (!binding.enabled) {
+      this.logInfo(`K${binding.keyId} is disabled`)
+      return
+    }
+
+    const element = binding.selector ? (document.querySelector(binding.selector) as HTMLElement | null) : null
+    if (element) {
+      element.click()
+      this.logInfo(`Test K${binding.keyId}: clicked selector`)
+      return
+    }
+
+    if (binding.hotkey) {
+      const key = binding.hotkey
+      const code = key === ' '
+        ? 'Space'
+        : key.length === 1 && key >= 'a' && key <= 'z'
+          ? `Key${key.toUpperCase()}`
+          : key.length === 1 && key >= '0' && key <= '9'
+            ? `Digit${key}`
+            : key
+
+      const down = new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true })
+      const up = new KeyboardEvent('keyup', { key, code, bubbles: true, cancelable: true })
+      document.dispatchEvent(down)
+      document.dispatchEvent(up)
+      this.logInfo(`Test K${binding.keyId}: sent hotkey ${key === ' ' ? 'Space' : key}`)
+      return
+    }
+
+    this.logInfo(`Test K${binding.keyId}: no selector/hotkey configured`)
+  }
+
   private readRows(): KeyBinding[] {
     const rows = this.container.querySelectorAll('[data-key-id]')
     const bindings: KeyBinding[] = []
 
     rows.forEach((rowEl) => {
       const row = rowEl as HTMLElement
-      const keyId = Number(row.dataset.keyId)
-      const action = (row.querySelector('[data-field="action"]') as HTMLSelectElement).value as KeypadAction
-      const selector = (row.querySelector('[data-field="selector"]') as HTMLInputElement).value.trim()
-      const hotkeyRaw = (row.querySelector('[data-field="hotkey"]') as HTMLInputElement).value.trim()
-      const enabled = (row.querySelector('[data-field="enabled"]') as HTMLInputElement).checked
-
-      const hotkey = hotkeyRaw.toLowerCase() === 'space' ? ' ' : hotkeyRaw
-      const selectedAction = ACTION_OPTIONS.find((option) => option.value === action)
-
-      bindings.push({
-        keyId,
-        action,
-        selector,
-        hotkey,
-        enabled,
-        label: selectedAction?.label ?? action
-      })
+      bindings.push(this.readRow(row))
     })
 
     return bindings.sort((a, b) => a.keyId - b.keyId)
