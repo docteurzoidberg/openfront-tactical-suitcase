@@ -67,9 +67,9 @@ This directory contains all planning documents for integrating the keypad module
   - ✅ Keypad firmware compiles (15.3KB RAM, 253KB Flash)
   - ✅ Main controller firmware compiles (41.7KB RAM, 1.07MB Flash)
 
-**🔨 Stage 3: Controller Integration** (Week 3) - **NEXT**
-- [ ] Implement main controller CAN handlers (Plan #2)
-- [ ] Implement WebSocket event forwarding (Plan #4)
+**🔨 Stage 3: Controller Integration** (Week 3) - **IN PROGRESS**
+- [x] Implement main controller CAN handlers (Plan #2)
+- [x] Implement WebSocket event forwarding (Plan #4)
 - [ ] Test: Physical key → CAN → WebSocket → Dashboard
 
 **Stage 4: UI & Userscript** (Week 4)
@@ -143,8 +143,8 @@ The userscript provides these default bindings (customizable via config UI):
   - [x] Optimized LED driver with change detection
   - [x] Both firmwares verified building
 - [ ] **Stage 3 (Main Controller Integration)** - **IN PROGRESS**
-  - [ ] CAN handlers for keypad events
-  - [ ] WebSocket event forwarding
+   - [x] CAN handlers for keypad events
+   - [x] WebSocket event forwarding
   - [ ] End-to-end testing (key → CAN → WebSocket → Dashboard)
 - [ ] Dashboard UI implemented (Stage 4)
 - [ ] Userscript integration (Stage 4)

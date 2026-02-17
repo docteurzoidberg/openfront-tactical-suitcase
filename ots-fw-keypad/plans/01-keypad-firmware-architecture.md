@@ -538,39 +538,39 @@ I (336) KEYPAD: Keypad module ready
 ## Implementation Phases
 
 ### Phase 1: Matrix Scanner (Week 1)
-- [ ] Implement `matrix_scanner.c` skeleton
-- [ ] Configure GPIO pins (rows=output, cols=input+pullup)
-- [ ] Implement single matrix scan function
-- [ ] Create FreeRTOS scan task (200Hz loop)
-- [ ] Test: Log raw matrix state every scan
-- [ ] Implement debounce logic
-- [ ] Implement key_id mapping (row/col → 1-15)
-- [ ] Test: Press keys, verify callback triggers
+- [x] Implement `matrix_scanner.c` skeleton
+- [x] Configure GPIO pins (rows=output, cols=input+pullup)
+- [x] Implement single matrix scan function
+- [x] Create FreeRTOS scan task (200Hz loop)
+- [x] Test: Log raw matrix state every scan
+- [x] Implement debounce logic
+- [x] Implement key_id mapping (row/col → 1-15)
+- [x] Test: Press keys, verify callback triggers
 
 ### Phase 2: LED Controller (Week 1)
-- [ ] Implement `led_controller.c` skeleton
-- [ ] Configure RMT peripheral for SK6812
-- [ ] Implement state array (15 LEDs)
-- [ ] Implement `set_key()`, `set_all()` functions
-- [ ] Implement RMT write function
-- [ ] Test: Set K1 red, K2 green, K3 blue
-- [ ] Test: Set all white, then all off
+- [x] Implement `led_controller.c` skeleton
+- [x] Configure RMT peripheral for SK6812
+- [x] Implement state array (15 LEDs)
+- [x] Implement `set_key()`, `set_all()` functions
+- [x] Implement RMT write function
+- [x] Test: Set K1 red, K2 green, K3 blue
+- [x] Test: Set all white, then all off
 - [ ] Test: Measure LED update latency
 
 ### Phase 3: CAN Handler (Week 2)
 - [x] Create `can_protocol_keypad` shared component (COMPLETED)
-- [ ] Implement `can_handler.c` skeleton
-- [ ] Initialize `can_bus_manager` component
-- [ ] Register RX handlers for LED_SET, LED_BULK, MODULE_QUERY
-- [ ] Implement key event sending (using can_keypad_build_key_event)
+- [x] Implement `can_handler.c` skeleton
+- [x] Initialize `can_bus_manager` component
+- [x] Register RX handlers for LED_SET, LED_BULK, MODULE_QUERY
+- [x] Implement key event sending (using can_keypad_build_key_event)
 - [ ] Test: Press key, verify CAN message on bus
-- [ ] Implement LED command handlers (using can_keypad_parse_*)
+- [x] Implement LED command handlers (using can_keypad_parse_*)
 - [ ] Test: Send CAN message, verify LED updates
-- [ ] Send MODULE_ANNOUNCE on startup
-- [ ] Test: Main controller detects keypad in discovery registry
+- [x] Send MODULE_ANNOUNCE on startup
+- [x] Test: Main controller detects keypad in discovery registry
 
 ### Phase 4: Integration (Week 2)
-- [ ] Connect all modules in `main.c`
+- [x] Connect all modules in `main.c`
 - [ ] Test full loop with main controller
 - [ ] Verify LED latency (<10ms)
 - [ ] Stress test: Rapid key presses (all 15 keys)
@@ -600,11 +600,11 @@ I (336) KEYPAD: Keypad module ready
 ## Next Steps
 
 1. ✅ **Create shared component**: `can_protocol_keypad` completed (909 lines, 5 files)
-2. **Implement Phase 1**: Matrix scanner with GPIO and debouncing
-3. **Test matrix scanner**: Verify key detection before moving to LEDs
-4. **Implement Phase 2**: LED controller with RMT
-5. **Implement Phase 3**: CAN handler with can_bus_manager integration
-6. **Test end-to-end**: Full keypad + main controller integration
+2. ✅ **Implement Phase 1**: Matrix scanner with GPIO and debouncing
+3. ✅ **Implement Phase 2**: LED controller with RMT
+4. ✅ **Implement Phase 3**: CAN handler with can_bus_manager integration
+5. 🔨 **Stage 3 ongoing**: Main controller forwarding (CAN → WebSocket) completed
+6. ⏳ **Next validation**: Physical end-to-end test (key → CAN → WebSocket → dashboard/userscript)
 
 ---
 

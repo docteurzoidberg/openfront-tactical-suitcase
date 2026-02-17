@@ -2,6 +2,14 @@
 
 This document outlines the changes needed in **ots-fw-main** firmware to support the keypad module.
 
+## Current Status (Feb 2026)
+
+- ✅ Implemented in fw-main as `keypad_module` (module architecture)
+- ✅ CAN key events (0x431-0x43F) forwarded to WebSocket as keypad events
+- ✅ WebSocket payload aligned with spec: `keyId`, `state`, `timestamp`
+- ✅ CAN discovery integration emits `KEYPAD_CONNECTED` / `KEYPAD_DISCONNECTED`
+- ⏳ Remaining: physical end-to-end validation with real keypad hardware
+
 ## Overview
 
 The main controller must:
@@ -13,9 +21,9 @@ The main controller must:
 
 ---
 
-## 1. Keypad CAN Handler (`keypad_can_handler.c/h`)
+## 1. Keypad Module (`keypad_module.c/h`)
 
-**Location**: `ots-fw-main/src/keypad_can_handler.c`
+**Location**: `ots-fw-main/src/keypad_module.c`
 
 ### Responsibilities:
 - Listen for keypad key events via CAN bus
@@ -33,19 +41,18 @@ typedef struct {
 } keypad_event_t;
 ```
 
-### API:
+### API / Module Interface:
 
 ```c
-esp_err_t keypad_can_handler_init(void);
-void keypad_can_handler_process_event(const can_msg_key_event_t *event);
-// Forward to WebSocket - no mapping logic
+extern hardware_module_t keypad_module;
+// Registered by module_manager and updated in periodic module task
 ```
 
 ### Event Flow:
 
 ```
 CAN: KEY_EVENT (K5, PRESSED) 
-  → keypad_can_handler_process_event()
+  → keypad_module CAN RX handler
   → websocket_broadcast(KEYPAD_KEY_PRESSED, {keyId: 5, state: "pressed"})
   → Userscript receives event
   → Userscript maps K5 → game action
@@ -56,9 +63,9 @@ CAN: KEY_EVENT (K5, PRESSED)
 
 Uses `can_protocol_keypad` shared component and `can_bus_manager` for RX dispatch.
 
-**Pattern** (same as sound module):
+**Pattern** (same module architecture as nuke/alert/sound modules):
 ```c
-// In keypad_can_handler_init():
+// In keypad_module_init():
 // Register handlers for keypad CAN IDs
 for (uint8_t key_id = 1; key_id <= 15; key_id++) {
     uint32_t can_id = CAN_ID_KEY_EVENT_BASE + key_id;
@@ -109,11 +116,10 @@ void keypad_broadcast_event(uint8_t key_id, bool pressed, uint16_t timestamp) {
 
 ## 3. Module Manager Integration
 
-Register keypad handlers in `module_manager.c`:
+Register keypad module in `main.c` with other modules:
 
 ```c
-// In module_manager_init():
-keypad_can_handler_init();
+module_manager_register(&keypad_module);
 ```
 
 Subscribe to relevant events:
@@ -125,14 +131,13 @@ Subscribe to relevant events:
 ## 4. Files to Modify/Create
 
 ### New Files (ots-fw-main):
-- `src/keypad_can_handler.c` + `include/keypad_can_handler.h`
+- `src/keypad_module.c` + `include/keypad_module.h`
 
 ### Modified Files (ots-fw-main):
-- `src/module_manager.c` - Register keypad CAN handler
-- `include/protocol.h` - Add KEYPAD_KEY_PRESSED/RELEASED events only
-- `src/protocol.c` - Add string conversions for key events
-- `src/websocket_handler.c` - Broadcast keypad events
-- `src/CMakeLists.txt` - Add keypad_can_handler.c
+- `src/main.c` - Register keypad module
+- `include/protocol.h` - Add keypad events
+- `src/protocol.c` - Add string conversions for keypad events
+- `src/CMakeLists.txt` - Add keypad_module.c + can_protocol_keypad dependency
 
 ### New Shared Component:
 - `ots-fw-shared/components/can_protocol_keypad/` (CAN message definitions)
@@ -185,16 +190,15 @@ typedef struct {
 2. ✅ Define message structures
 
 ### Phase 2: Main Controller - Key Event Forwarding
-1. ✅ Implement `keypad_can_handler.c` (receive key events from CAN)
-2. ✅ Register in module manager
+1. ✅ Implement `keypad_module.c` (receive key events from CAN)
+2. ✅ Register keypad module in module manager flow (`main.c`)
 3. ✅ Add WebSocket broadcast for key events
-4. ✅ Test: Keypad press → WebSocket broadcast
+4. ✅ Add WebSocket broadcast for keypad connected/disconnected from CAN discovery
+5. ⏳ Pending: Test on physical hardware (keypad press → WebSocket client)
 
 ### Phase 3: Userscript Integration
-1. ✅ Userscript receives KEYPAD_KEY_PRESSED/RELEASED events
-2. ✅ Userscript handles key mapping (localStorage)
-3. ✅ Userscript configuration UI (new tab)
-4. ✅ See `07-userscript-integration.md` for details
+1. ⏳ Pending in this stage plan (see `07-userscript-integration.md`)
+2. ⏳ Userscript key mapping and UI verification tracked separately
 
 ---
 

@@ -2,6 +2,14 @@
 
 This document defines the WebSocket protocol updates needed to support keypad configuration and real-time status in the dashboard.
 
+## Current Status (Feb 2026)
+
+- ✅ WebSocket spec includes keypad events in `/prompts/WEBSOCKET_MESSAGE_SPEC.md`
+- ✅ Types include keypad events in `ots-shared/src/game.ts`
+- ✅ Firmware protocol enums include keypad events in `ots-fw-main/include/protocol.h`
+- ✅ fw-main forwards keypad events via `ots-fw-main/src/keypad_module.c`
+- ⏳ Remaining: dashboard visualization and end-to-end hardware verification
+
 ## Overview
 
 The keypad module requires WebSocket communication for:
@@ -119,7 +127,7 @@ interface KeypadConnectionData {
 
 ## Implementation Steps
 
-### Step 1: Update TypeScript Types
+### Step 1: Update TypeScript Types ✅
 
 **File**: `ots-shared/src/game.ts`
 
@@ -158,7 +166,7 @@ export type GameEvent =
 
 ---
 
-### Step 2: Update Firmware Protocol
+### Step 2: Update Firmware Protocol ✅
 
 **File**: `ots-fw-main/include/protocol.h`
 
@@ -181,9 +189,9 @@ Add string conversions for new event types.
 
 ---
 
-### Step 3: Main Controller WebSocket Handler
+### Step 3: Main Controller WebSocket Forwarding ✅
 
-**File**: `ots-fw-main/src/websocket_handler.c`
+**File**: `ots-fw-main/src/keypad_module.c` (uses existing `ws_handlers_send_event`)
 
 Broadcast handlers:
 - On key event received from CAN → Broadcast `KEYPAD_KEY_PRESSED/RELEASED`
