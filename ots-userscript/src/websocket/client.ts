@@ -42,7 +42,8 @@ export class WsClient {
   constructor(
     private hud: Hud,
     private getWsUrl: () => string,
-    private onCommand?: (action: string, params?: unknown) => void
+    private onCommand?: (action: string, params?: unknown) => void,
+    private onEvent?: (type: GameEventType, data?: unknown, message?: string) => void
   ) { }
 
   connect() {
@@ -253,6 +254,12 @@ export class WsClient {
       } else {
         debugLog('No command handler registered for:', action)
       }
+      return
+    }
+
+    if (msg.type === 'event' && msg.payload && typeof msg.payload.type === 'string') {
+      const eventType = msg.payload.type as GameEventType
+      this.onEvent?.(eventType, msg.payload.data, msg.payload.message)
     }
   }
 }

@@ -4,6 +4,7 @@
 
 export const STORAGE_KEYS = {
   WS_URL: 'ots-ws-url',
+  KEYPAD_BINDINGS: 'ots-keypad-bindings',
   HUD_COLLAPSED: 'ots-hud-collapsed',
   HUD_SNAP: 'ots-hud-snap',
   HUD_SIZE: 'ots-hud-size',

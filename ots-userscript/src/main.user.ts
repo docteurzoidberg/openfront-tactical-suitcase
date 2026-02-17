@@ -2,6 +2,7 @@ import { Hud } from './hud/sidebar-hud'
 import { WsClient } from './websocket/client'
 import { GameBridge, WS_CLOSE_CODE_URL_CHANGED } from './game'
 import { loadWsUrl, saveWsUrl } from './storage/config'
+import { KeypadManager } from './game/keypad-manager'
 
 // Version (updated by release.sh)
 const VERSION = '2026-01-10.2-dev'
@@ -43,6 +44,7 @@ const VERSION = '2026-01-10.2-dev'
 
     // Create game bridge first (needed for command handling)
     let game: GameBridge | null = null
+    const keypad = new KeypadManager(hud)
 
     // Create WebSocket client with command handler
     ws = new WsClient(
@@ -51,6 +53,11 @@ const VERSION = '2026-01-10.2-dev'
       (action, params) => {
         if (game) {
           game.handleCommand(action, params)
+        }
+      },
+      (type, data) => {
+        if (type === 'KEYPAD_KEY_PRESSED' || type === 'KEYPAD_KEY_RELEASED') {
+          keypad.handleKeyEvent(data)
         }
       }
     )

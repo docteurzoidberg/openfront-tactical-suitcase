@@ -5,4 +5,5 @@
  */
 
 export { STORAGE_KEYS } from './keys'
-export { getDefaultWsUrl } from './config'
+export { DEFAULT_WS_URL, loadWsUrl, saveWsUrl } from './config'
+export { getDefaultKeypadConfig, loadKeypadConfig, saveKeypadConfig } from './keypad'
