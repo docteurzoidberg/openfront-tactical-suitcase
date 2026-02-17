@@ -1,9 +1,14 @@
 import esbuild from 'esbuild'
-import { readFileSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 
 // Read version from package.json
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'))
 const version = packageJson.version
+
+const keyboardLayoutSvgPath = './images/keyboard-layout.svg'
+const keyboardLayoutSvg = existsSync(keyboardLayoutSvgPath)
+  ? readFileSync(keyboardLayoutSvgPath, 'utf-8')
+  : ''
 
 await esbuild.build({
   entryPoints: ['src/main.user.ts'],
@@ -15,7 +20,8 @@ await esbuild.build({
     js: `// ==UserScript==\n// @name         OTS Game Dashboard Bridge\n// @namespace    http://tampermonkey.net/\n// @version      ${version}\n// @description  Send game state and events to OTS controller\n// @author       [PUSH] DUCKDUCK\n// @author       DeloVan\n// @author       [PUSH] Nono\n// @author       [PUSH] Rime\n// @match        https://openfront.io/*\n// @grant        GM_getValue\n// @grant        GM_setValue\n// ==/UserScript==\n`
   },
   define: {
-    'VERSION': `"${version}"`
+    'VERSION': `"${version}"`,
+    'KEYPAD_LAYOUT_SVG': JSON.stringify(keyboardLayoutSvg)
   }
 })
 

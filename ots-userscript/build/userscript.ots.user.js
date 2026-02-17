@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OTS Game Dashboard Bridge
 // @namespace    http://tampermonkey.net/
-// @version      2026-01-10.1
+// @version      2026-01-10.2-dev
 // @description  Send game state and events to OTS controller
 // @author       [PUSH] DUCKDUCK
 // @author       DeloVan
@@ -1073,6 +1073,1383 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
     }
   };
 
+  // src/storage/keys.ts
+  var STORAGE_KEYS = {
+    WS_URL: "ots-ws-url",
+    KEYPAD_BINDINGS: "ots-keypad-bindings",
+    HUD_COLLAPSED: "ots-hud-collapsed",
+    HUD_SNAP: "ots-hud-snap",
+    HUD_SIZE: "ots-hud-size",
+    LOG_FILTERS: "ots-hud-log-filters",
+    SOUND_TOGGLES: "ots-hud-sound-toggles"
+  };
+
+  // src/storage/keypad.ts
+  var KEYPAD_CONFIG_VERSION = 1;
+  var DEFAULT_BINDINGS = [
+    { keyId: 1, action: "BUILD_CITY", selector: '[data-hotkey="1"]', label: "City", enabled: true, hotkey: "1" },
+    { keyId: 2, action: "BUILD_FACTORY", selector: '[data-hotkey="2"]', label: "Factory", enabled: true, hotkey: "2" },
+    { keyId: 3, action: "BUILD_PORT", selector: '[data-hotkey="3"]', label: "Port", enabled: true, hotkey: "3" },
+    { keyId: 4, action: "BUILD_DEFENSE", selector: '[data-hotkey="4"]', label: "Defense", enabled: true, hotkey: "4" },
+    { keyId: 5, action: "BUILD_MISSILE", selector: '[data-hotkey="5"]', label: "Missile", enabled: true, hotkey: "5" },
+    { keyId: 6, action: "BUILD_SAM", selector: '[data-hotkey="6"]', label: "SAM", enabled: true, hotkey: "6" },
+    { keyId: 7, action: "BUILD_WARSHIP", selector: '[data-hotkey="7"]', label: "Warship", enabled: true, hotkey: "7" },
+    { keyId: 8, action: "ZOOM_IN", selector: '[data-hotkey="e"]', label: "Zoom+", enabled: true, hotkey: "e" },
+    { keyId: 9, action: "ZOOM_OUT", selector: '[data-hotkey="q"]', label: "Zoom-", enabled: true, hotkey: "q" },
+    { keyId: 10, action: "ATTACK_DECREASE", selector: '[data-hotkey="t"]', label: "Atk-", enabled: true, hotkey: "t" },
+    { keyId: 11, action: "MISSILE_SWITCH", selector: '[data-hotkey="u"]', label: "Switch", enabled: true, hotkey: "u" },
+    { keyId: 12, action: "ATTACK_INCREASE", selector: '[data-hotkey="y"]', label: "Atk+", enabled: true, hotkey: "y" },
+    { keyId: 13, action: "BOAT_ATTACK", selector: '[data-hotkey="b"]', label: "Naval", enabled: true, hotkey: "b" },
+    { keyId: 14, action: "LAND_ATTACK", selector: '[data-hotkey="g"]', label: "Land", enabled: true, hotkey: "g" },
+    { keyId: 15, action: "TOGGLE_VIEW", selector: '[data-hotkey=" "]', label: "View", enabled: true, hotkey: " " }
+  ];
+  function isRecord(value) {
+    return typeof value === "object" && value !== null;
+  }
+  function isBinding(value) {
+    if (!isRecord(value)) return false;
+    return typeof value.keyId === "number" && typeof value.action === "string" && typeof value.selector === "string" && typeof value.label === "string" && typeof value.enabled === "boolean" && typeof value.hotkey === "string";
+  }
+  function isConfig(value) {
+    if (!isRecord(value)) return false;
+    if (typeof value.version !== "number" || !Array.isArray(value.bindings)) return false;
+    return value.bindings.every(isBinding);
+  }
+  function getDefaultKeypadConfig() {
+    return {
+      version: KEYPAD_CONFIG_VERSION,
+      bindings: DEFAULT_BINDINGS
+    };
+  }
+  function loadKeypadConfig() {
+    const saved = GM_getValue(STORAGE_KEYS.KEYPAD_BINDINGS, null);
+    if (isConfig(saved) && saved.version === KEYPAD_CONFIG_VERSION) {
+      return saved;
+    }
+    const defaults = getDefaultKeypadConfig();
+    GM_setValue(STORAGE_KEYS.KEYPAD_BINDINGS, defaults);
+    return defaults;
+  }
+  function saveKeypadConfig(config) {
+    GM_setValue(STORAGE_KEYS.KEYPAD_BINDINGS, config);
+  }
+
+  // src/hud/sidebar/tabs/keypad-tab.ts
+  var ACTION_OPTIONS = [
+    { value: "BUILD_CITY", label: "Build City" },
+    { value: "BUILD_FACTORY", label: "Build Factory" },
+    { value: "BUILD_PORT", label: "Build Port" },
+    { value: "BUILD_DEFENSE", label: "Build Defense" },
+    { value: "BUILD_MISSILE", label: "Build Missile Launcher" },
+    { value: "BUILD_SAM", label: "Build SAM" },
+    { value: "BUILD_WARSHIP", label: "Build Warship" },
+    { value: "ZOOM_IN", label: "Zoom In" },
+    { value: "ZOOM_OUT", label: "Zoom Out" },
+    { value: "ATTACK_DECREASE", label: "Decrease Attack Ratio" },
+    { value: "MISSILE_SWITCH", label: "Switch Missile Direction" },
+    { value: "ATTACK_INCREASE", label: "Increase Attack Ratio" },
+    { value: "BOAT_ATTACK", label: "Boat Attack" },
+    { value: "LAND_ATTACK", label: "Land Attack" },
+    { value: "TOGGLE_VIEW", label: "Toggle View" }
+  ];
+  var KeypadTab = class {
+    constructor(root, logInfo) {
+      this.root = root;
+      this.logInfo = logInfo;
+      this.bindings = [];
+      this.selectedKeyId = 1;
+      this.container = root.querySelector("#ots-keypad-content");
+      if (!this.container) {
+        throw new Error("Keypad tab container not found");
+      }
+      this.render();
+    }
+    static createHTML() {
+      return `
+      <div id="ots-tab-keypad" class="ots-tab-content" style="display:none;flex:1;overflow-y:auto;padding:8px;background:rgba(10,10,15,0.8);">
+        <div id="ots-keypad-content"></div>
+      </div>
+    `;
+    }
+    render() {
+      var _a, _b;
+      const config = loadKeypadConfig();
+      this.bindings = [...config.bindings].sort((a, b) => a.keyId - b.keyId);
+      this.selectedKeyId = (_b = (_a = this.bindings.find((binding) => binding.enabled)) == null ? void 0 : _a.keyId) != null ? _b : 1;
+      this.container.innerHTML = `
+      <div style="margin-bottom:12px;padding:10px;background:rgba(59,130,246,0.08);border-left:3px solid #3b82f6;border-radius:4px;">
+        <div style="font-size:11px;font-weight:600;color:#93c5fd;margin-bottom:6px;">\u2328 Keypad Bindings</div>
+        <div style="font-size:10px;color:#9ca3af;line-height:1.5;">Click a key in the layout to edit its mapping used for KEYPAD_KEY_PRESSED/RELEASED events.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(280px,1fr) minmax(220px,300px);gap:10px;align-items:start;">
+        <div style="padding:8px;background:rgba(15,23,42,0.5);border:1px solid rgba(148,163,184,0.25);border-radius:4px;">
+          <div style="font-size:10px;color:#cbd5e1;font-weight:600;margin-bottom:6px;">Interactive keypad layout</div>
+          <div style="font-size:9px;color:#94a3b8;margin-bottom:8px;line-height:1.4;">Select a key to edit. Blue outline = selected, green = enabled, gray = disabled.</div>
+          <div id="ots-keypad-layout" style="display:block;width:100%;max-width:480px;overflow:auto;">${`
+  <svg width='408px'
+       height='205.5px'
+       viewBox='0 0 408 205.5'
+       xmlns='http://www.w3.org/2000/svg'
+       xmlns:xlink="http://www.w3.org/1999/xlink">
+
+    <style type='text/css'>
+    .keycap .border { stroke: black; stroke-width: 2; }
+    .keycap .inner.border { stroke: rgba(0,0,0,.1); }
+    </style>
+    <defs>
+      <linearGradient id="DCS">
+        <stop offset="0%" stop-color="black" stop-opacity="0"/>
+        <stop offset="40%" stop-color="black" stop-opacity="0.1"/>
+        <stop offset="60%" stop-color="black" stop-opacity="0.1"/>
+        <stop offset="100%" stop-color="black" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="SPACE" x1="0%" x2="0%" y1="0%" y2="100%">
+        <stop offset="0%" stop-color="black" stop-opacity="0.1"/>
+        <stop offset="20%" stop-color="black" stop-opacity="0.0"/>
+        <stop offset="40%" stop-color="black" stop-opacity="0.0"/>
+        <stop offset="100%" stop-color="black" stop-opacity="0.1"/>
+      </linearGradient>
+      <radialGradient id="DSA">
+        <stop offset="0%" stop-color="black" stop-opacity="0.1"/>
+        <stop offset="10%" stop-color="black" stop-opacity="0.1"/>
+        <stop offset="100%" stop-color="black" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="SA" xlink:href="#DSA" />
+    </defs>
+
+    <g transform='translate(10,10)'>
+      <rect width="388" height="185.5"
+            stroke="#ddd" stroke-width="1" fill="#eeeeee" rx="6"/>
+      <g transform='translate(5,5)'>
+        
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="109" y="1"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="109" y="1"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="115" y="4"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="115" y="4"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="163" y="1"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="163" y="1"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="169" y="4"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="169" y="4"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="217" y="1"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="217" y="1"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="223" y="4"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="223" y="4"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="1" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="1" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="7" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="7" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="55" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="55" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="61" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="61" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="271" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="271" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="277" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="277" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="325" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="325" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="331" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="331" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="109" y="55"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="109" y="55"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="115" y="58"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="115" y="58"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="163" y="55"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="163" y="55"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="169" y="58"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="169" y="58"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="217" y="55"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="217" y="55"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="223" y="58"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="223" y="58"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="1" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="1" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="7" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="7" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="55" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="55" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="61" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="61" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="271" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="271" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="277" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="277" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="325" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="325" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="331" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="331" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="136" y="122.5"
+          width="106" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="136" y="122.5"
+          width="106" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="142" y="125.5"
+            width="94" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="142" y="125.5"
+            width="94" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+      </g>
+    </g>
+  </svg>
+`}</div>
+          ${`
+  <svg width='408px'
+       height='205.5px'
+       viewBox='0 0 408 205.5'
+       xmlns='http://www.w3.org/2000/svg'
+       xmlns:xlink="http://www.w3.org/1999/xlink">
+
+    <style type='text/css'>
+    .keycap .border { stroke: black; stroke-width: 2; }
+    .keycap .inner.border { stroke: rgba(0,0,0,.1); }
+    </style>
+    <defs>
+      <linearGradient id="DCS">
+        <stop offset="0%" stop-color="black" stop-opacity="0"/>
+        <stop offset="40%" stop-color="black" stop-opacity="0.1"/>
+        <stop offset="60%" stop-color="black" stop-opacity="0.1"/>
+        <stop offset="100%" stop-color="black" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="SPACE" x1="0%" x2="0%" y1="0%" y2="100%">
+        <stop offset="0%" stop-color="black" stop-opacity="0.1"/>
+        <stop offset="20%" stop-color="black" stop-opacity="0.0"/>
+        <stop offset="40%" stop-color="black" stop-opacity="0.0"/>
+        <stop offset="100%" stop-color="black" stop-opacity="0.1"/>
+      </linearGradient>
+      <radialGradient id="DSA">
+        <stop offset="0%" stop-color="black" stop-opacity="0.1"/>
+        <stop offset="10%" stop-color="black" stop-opacity="0.1"/>
+        <stop offset="100%" stop-color="black" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="SA" xlink:href="#DSA" />
+    </defs>
+
+    <g transform='translate(10,10)'>
+      <rect width="388" height="185.5"
+            stroke="#ddd" stroke-width="1" fill="#eeeeee" rx="6"/>
+      <g transform='translate(5,5)'>
+        
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="109" y="1"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="109" y="1"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="115" y="4"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="115" y="4"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="163" y="1"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="163" y="1"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="169" y="4"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="169" y="4"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="217" y="1"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="217" y="1"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="223" y="4"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="223" y="4"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="1" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="1" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="7" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="7" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="55" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="55" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="61" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="61" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="271" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="271" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="277" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="277" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="325" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="325" y="14.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="331" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="331" y="17.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="109" y="55"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="109" y="55"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="115" y="58"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="115" y="58"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="163" y="55"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="163" y="55"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="169" y="58"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="169" y="58"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="217" y="55"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="217" y="55"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="223" y="58"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="223" y="58"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="1" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="1" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="7" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="7" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="55" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="55" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="61" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="61" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="271" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="271" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="277" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="277" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="325" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="325" y="68.5"
+          width="52" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="331" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="331" y="71.5"
+            width="40" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+  <g class='  keycap'
+  >
+
+  
+    <!-- Outer Border -->
+    <rect x="136" y="122.5"
+          width="106" height="52"
+          rx="5" fill="#cccccc" class="outer border"/>
+    
+    <!-- Outer Fill -->
+    <rect x="136" y="122.5"
+          width="106" height="52"
+          rx="5" fill="#cccccc"/>
+    
+
+    
+      <!-- Inner Border -->
+      <rect x="142" y="125.5"
+            width="94" height="40"
+            rx="5" fill="#fcfcfc" class="inner border"/>
+      
+      <!-- Inner Fill -->
+      <rect x="142" y="125.5"
+            width="94" height="40"
+            rx="5" fill="#fcfcfc"/>
+      
+      
+
+     
+   
+  </g>
+
+      </g>
+    </g>
+  </svg>
+` ? "" : `<div style="margin-top:8px;font-size:9px;color:#fbbf24;">Layout SVG not available. Place keyboard-layout.svg in ots-userscript/images and rebuild userscript.</div>`}
+        </div>
+        <div style="padding:8px;background:rgba(2,6,23,0.65);border:1px solid rgba(148,163,184,0.25);border-radius:4px;">
+          <div id="ots-keypad-selected-title" style="font-size:11px;font-weight:700;color:#e5e7eb;margin-bottom:8px;">K1</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <select id="ots-keypad-action" style="font-size:10px;padding:5px 6px;border-radius:4px;border:1px solid rgba(148,163,184,0.35);background:rgba(15,23,42,0.8);color:#e5e7eb;outline:none;">
+              ${ACTION_OPTIONS.map((action) => `<option value="${action.value}">${action.label}</option>`).join("")}
+            </select>
+            <input id="ots-keypad-selector" type="text" placeholder="selector" style="font-size:10px;padding:5px 6px;border-radius:4px;border:1px solid rgba(148,163,184,0.35);background:rgba(15,23,42,0.8);color:#e5e7eb;outline:none;" />
+            <input id="ots-keypad-hotkey" type="text" placeholder="key" style="font-size:10px;padding:5px 6px;border-radius:4px;border:1px solid rgba(148,163,184,0.35);background:rgba(15,23,42,0.8);color:#e5e7eb;outline:none;" />
+            <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:#e5e7eb;cursor:pointer;">
+              <input id="ots-keypad-enabled" type="checkbox" />
+              <span>Enabled</span>
+            </label>
+            <div id="ots-keypad-warning" style="display:none;font-size:9px;color:#fbbf24;"></div>
+            <button id="ots-keypad-test" style="all:unset;cursor:pointer;font-size:10px;padding:5px 8px;border-radius:4px;background:rgba(59,130,246,0.28);color:#bfdbfe;font-weight:700;text-align:center;">Test selected key</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button id="ots-keypad-save" style="all:unset;cursor:pointer;font-size:11px;padding:6px 12px;border-radius:4px;background:#22c55e;color:#052e16;font-weight:700;">Save</button>
+        <button id="ots-keypad-reset" style="all:unset;cursor:pointer;font-size:11px;padding:6px 12px;border-radius:4px;background:#f59e0b;color:#451a03;font-weight:700;">Reset defaults</button>
+      </div>
+    `;
+      this.attachListeners();
+      this.setupInteractiveLayout();
+      this.selectKey(this.selectedKeyId);
+    }
+    attachListeners() {
+      const saveBtn = this.container.querySelector("#ots-keypad-save");
+      const resetBtn = this.container.querySelector("#ots-keypad-reset");
+      const actionInput = this.container.querySelector("#ots-keypad-action");
+      const selectorInput = this.container.querySelector("#ots-keypad-selector");
+      const hotkeyInput = this.container.querySelector("#ots-keypad-hotkey");
+      const enabledInput = this.container.querySelector("#ots-keypad-enabled");
+      const testBtn = this.container.querySelector("#ots-keypad-test");
+      actionInput == null ? void 0 : actionInput.addEventListener("change", () => {
+        var _a;
+        const binding = this.getSelectedBinding();
+        if (!binding) return;
+        binding.action = actionInput.value;
+        const selectedAction = ACTION_OPTIONS.find((option) => option.value === binding.action);
+        binding.label = (_a = selectedAction == null ? void 0 : selectedAction.label) != null ? _a : binding.action;
+      });
+      selectorInput == null ? void 0 : selectorInput.addEventListener("input", () => {
+        const binding = this.getSelectedBinding();
+        if (!binding) return;
+        binding.selector = selectorInput.value.trim();
+        this.updateValidation();
+      });
+      hotkeyInput == null ? void 0 : hotkeyInput.addEventListener("input", () => {
+        const binding = this.getSelectedBinding();
+        if (!binding) return;
+        const hotkeyRaw = hotkeyInput.value.trim();
+        binding.hotkey = hotkeyRaw.toLowerCase() === "space" ? " " : hotkeyRaw;
+        this.updateLayoutVisuals();
+        this.updateValidation();
+      });
+      enabledInput == null ? void 0 : enabledInput.addEventListener("change", () => {
+        const binding = this.getSelectedBinding();
+        if (!binding) return;
+        binding.enabled = enabledInput.checked;
+        this.updateLayoutVisuals();
+        this.updateValidation();
+      });
+      testBtn == null ? void 0 : testBtn.addEventListener("click", () => {
+        const binding = this.getSelectedBinding();
+        if (!binding) return;
+        this.triggerBinding(binding);
+      });
+      saveBtn == null ? void 0 : saveBtn.addEventListener("click", () => {
+        const updated = [...this.bindings].sort((a, b) => a.keyId - b.keyId);
+        if (updated.length !== 15) {
+          this.logInfo("Keypad config save failed: invalid row count");
+          return;
+        }
+        saveKeypadConfig({ version: 1, bindings: updated });
+        this.logInfo("Keypad bindings saved");
+      });
+      resetBtn == null ? void 0 : resetBtn.addEventListener("click", () => {
+        const defaults = getDefaultKeypadConfig();
+        saveKeypadConfig(defaults);
+        this.render();
+        this.logInfo("Keypad bindings reset to defaults");
+      });
+    }
+    setupInteractiveLayout() {
+      const layoutContainer = this.container.querySelector("#ots-keypad-layout");
+      if (!layoutContainer) return;
+      const svg = layoutContainer.querySelector("svg");
+      if (!svg) return;
+      svg.style.width = "100%";
+      svg.style.height = "auto";
+      const groups = Array.from(svg.querySelectorAll("g.keycap"));
+      groups.slice(0, 15).forEach((group, index) => {
+        const keyId = index + 1;
+        group.setAttribute("data-key-id", String(keyId));
+        group.style.cursor = "pointer";
+        group.addEventListener("click", () => this.selectKey(keyId));
+        this.injectKeyLabel(group, keyId);
+      });
+      this.updateLayoutVisuals();
+    }
+    injectKeyLabel(group, keyId) {
+      var _a, _b, _c, _d;
+      const existing = group.querySelector('[data-role="ots-key-label"]');
+      if (existing) return;
+      const rects = group.querySelectorAll("rect");
+      if (rects.length < 4) return;
+      const innerRect = rects[3];
+      const x = Number((_a = innerRect.getAttribute("x")) != null ? _a : 0);
+      const y = Number((_b = innerRect.getAttribute("y")) != null ? _b : 0);
+      const width = Number((_c = innerRect.getAttribute("width")) != null ? _c : 0);
+      const height = Number((_d = innerRect.getAttribute("height")) != null ? _d : 0);
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.setAttribute("x", String(x + width / 2));
+      label.setAttribute("y", String(y + height / 2 + 3));
+      label.setAttribute("text-anchor", "middle");
+      label.setAttribute("font-size", "11");
+      label.setAttribute("font-weight", "700");
+      label.setAttribute("fill", "#0f172a");
+      label.setAttribute("pointer-events", "none");
+      label.setAttribute("data-role", "ots-key-label");
+      label.textContent = `K${keyId}`;
+      group.appendChild(label);
+      const hotkey = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      hotkey.setAttribute("x", String(x + width / 2));
+      hotkey.setAttribute("y", String(y + height - 3));
+      hotkey.setAttribute("text-anchor", "middle");
+      hotkey.setAttribute("font-size", "8");
+      hotkey.setAttribute("font-weight", "600");
+      hotkey.setAttribute("fill", "#334155");
+      hotkey.setAttribute("pointer-events", "none");
+      hotkey.setAttribute("data-role", "ots-hotkey-label");
+      group.appendChild(hotkey);
+    }
+    updateLayoutVisuals() {
+      const groups = this.container.querySelectorAll("g.keycap[data-key-id]");
+      groups.forEach((groupEl) => {
+        var _a;
+        const group = groupEl;
+        const keyId = Number(group.getAttribute("data-key-id"));
+        const binding = this.bindings.find((item) => item.keyId === keyId);
+        const rects = group.querySelectorAll("rect");
+        if (rects.length < 4 || !binding) return;
+        const borderRect = rects[0];
+        const innerFillRect = rects[3];
+        const hotkeyLabel = group.querySelector('[data-role="ots-hotkey-label"]');
+        borderRect.setAttribute("stroke", keyId === this.selectedKeyId ? "#3b82f6" : "#000000");
+        borderRect.setAttribute("stroke-width", keyId === this.selectedKeyId ? "3" : "2");
+        innerFillRect.setAttribute("fill", binding.enabled ? "#bbf7d0" : "#e5e7eb");
+        if (hotkeyLabel) {
+          hotkeyLabel.textContent = binding.hotkey === " " ? "Space" : binding.hotkey || "";
+        }
+        group.setAttribute("title", `K${keyId} \xB7 ${(_a = binding.label) != null ? _a : binding.action}${binding.enabled ? "" : " (disabled)"}`);
+      });
+    }
+    selectKey(keyId) {
+      var _a;
+      this.selectedKeyId = keyId;
+      const binding = this.getSelectedBinding();
+      if (!binding) return;
+      const title = this.container.querySelector("#ots-keypad-selected-title");
+      const actionInput = this.container.querySelector("#ots-keypad-action");
+      const selectorInput = this.container.querySelector("#ots-keypad-selector");
+      const hotkeyInput = this.container.querySelector("#ots-keypad-hotkey");
+      const enabledInput = this.container.querySelector("#ots-keypad-enabled");
+      if (title) {
+        title.textContent = `K${binding.keyId} \xB7 ${(_a = binding.label) != null ? _a : binding.action}`;
+      }
+      if (actionInput) actionInput.value = binding.action;
+      if (selectorInput) selectorInput.value = binding.selector;
+      if (hotkeyInput) hotkeyInput.value = binding.hotkey === " " ? "Space" : binding.hotkey;
+      if (enabledInput) enabledInput.checked = binding.enabled;
+      this.updateLayoutVisuals();
+      this.updateValidation();
+    }
+    getSelectedBinding() {
+      return this.bindings.find((binding) => binding.keyId === this.selectedKeyId);
+    }
+    updateValidation() {
+      const binding = this.getSelectedBinding();
+      const warning = this.container.querySelector("#ots-keypad-warning");
+      if (!warning) return;
+      if (!binding) {
+        warning.style.display = "none";
+        return;
+      }
+      if (!binding.enabled) {
+        warning.style.display = "none";
+        return;
+      }
+      if (!binding.selector && !binding.hotkey) {
+        warning.textContent = "Enabled but no selector/hotkey configured";
+        warning.style.display = "block";
+        return;
+      }
+      warning.style.display = "none";
+    }
+    triggerBinding(binding) {
+      if (!binding.enabled) {
+        this.logInfo(`K${binding.keyId} is disabled`);
+        return;
+      }
+      const element = binding.selector ? document.querySelector(binding.selector) : null;
+      if (element) {
+        element.click();
+        this.logInfo(`Test K${binding.keyId}: clicked selector`);
+        return;
+      }
+      if (binding.hotkey) {
+        const key = binding.hotkey;
+        const code = key === " " ? "Space" : key.length === 1 && key >= "a" && key <= "z" ? `Key${key.toUpperCase()}` : key.length === 1 && key >= "0" && key <= "9" ? `Digit${key}` : key;
+        const down = new KeyboardEvent("keydown", { key, code, bubbles: true, cancelable: true });
+        const up = new KeyboardEvent("keyup", { key, code, bubbles: true, cancelable: true });
+        document.dispatchEvent(down);
+        document.dispatchEvent(up);
+        this.logInfo(`Test K${binding.keyId}: sent hotkey ${key === " " ? "Space" : key}`);
+        return;
+      }
+      this.logInfo(`Test K${binding.keyId}: no selector/hotkey configured`);
+    }
+  };
+
   // src/hud/sidebar/hud-template.ts
   var HudTemplate = class {
     /**
@@ -1168,6 +2545,7 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
         <div id="ots-tab-sound" class="ots-tab-content" style="flex:1;display:none;overflow-y:auto;padding:12px;background:rgba(10,10,15,0.8);">
           <div style="font-size:11px;color:#e5e7eb;"><div style="font-size:10px;font-weight:600;color:#9ca3af;margin-bottom:8px;letter-spacing:0.05em;">SOUND EVENT TOGGLES</div><div id="ots-sound-toggles"></div></div>
         </div>
+        ${KeypadTab.createHTML()}
       </div>
       <div id="ots-hud-resize-handle" style="position:absolute;width:20px;height:20px;cursor:nwse-resize;display:none;opacity:0.5;transition:opacity 0.2s;">
         <svg width="20" height="20" viewBox="0 0 20 20" style="width:100%;height:100%;">
@@ -1273,15 +2651,15 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
   };
 
   // src/hud/sidebar/tabs/hardware-tab.ts
-  function isRecord(value) {
+  function isRecord2(value) {
     return typeof value === "object" && value !== null;
   }
   function tryCaptureHardwareDiagnostic(text) {
     try {
       const parsed = JSON.parse(text);
-      if (!isRecord(parsed)) return null;
-      const payload = isRecord(parsed.payload) ? parsed.payload : null;
-      const data = (payload && isRecord(payload.data) ? payload.data : null) || (isRecord(parsed.data) ? parsed.data : null);
+      if (!isRecord2(parsed)) return null;
+      const payload = isRecord2(parsed.payload) ? parsed.payload : null;
+      const data = (payload && isRecord2(payload.data) ? payload.data : null) || (isRecord2(parsed.data) ? parsed.data : null);
       if (!data) return null;
       const ts = (payload && typeof payload.timestamp === "number" ? payload.timestamp : void 0) || (typeof parsed.timestamp === "number" ? parsed.timestamp : void 0) || Date.now();
       return { ...data, timestamp: ts };
@@ -1348,7 +2726,7 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
     updateDisplay(diagnostic) {
       if (!diagnostic) return;
       const data = diagnostic;
-      const hardware = isRecord(data.hardware) ? data.hardware : {};
+      const hardware = isRecord2(data.hardware) ? data.hardware : {};
       const componentIcons = {
         lcd: "\u{1F4FA}",
         inputBoard: "\u{1F3AE}",
@@ -1494,16 +2872,6 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
     }
   };
 
-  // src/storage/keys.ts
-  var STORAGE_KEYS = {
-    WS_URL: "ots-ws-url",
-    HUD_COLLAPSED: "ots-hud-collapsed",
-    HUD_SNAP: "ots-hud-snap",
-    HUD_SIZE: "ots-hud-size",
-    LOG_FILTERS: "ots-hud-log-filters",
-    SOUND_TOGGLES: "ots-hud-sound-toggles"
-  };
-
   // src/hud/sidebar-hud.ts
   var Hud = class {
     constructor(getWsUrl, setWsUrl, onWsUrlChanged, sendCommand, onSoundTest) {
@@ -1529,6 +2897,7 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
       this.logsTab = null;
       this.hardwareTab = null;
       this.soundTab = null;
+      this.keypadTab = null;
       this.hardwareDiagnostic = null;
       this.soundToggles = DEFAULT_SOUND_TOGGLES;
       this.collapsed = GM_getValue(STORAGE_KEYS.HUD_COLLAPSED, true);
@@ -1553,7 +2922,8 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
         tabs: [
           { id: "logs", label: "Logs", contentId: "ots-tab-logs" },
           { id: "hardware", label: "Hardware", contentId: "ots-tab-hardware" },
-          { id: "sound", label: "Sound", contentId: "ots-tab-sound" }
+          { id: "sound", label: "Sound", contentId: "ots-tab-sound" },
+          { id: "keypad", label: "Keypad", contentId: "ots-tab-keypad" }
         ],
         defaultTab: "logs",
         onTabChange: (tabId) => this.handleTabChange(tabId)
@@ -1668,6 +3038,10 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
           this.soundToggles,
           (t) => this.logInfo(t),
           this.onSoundTest
+        );
+        this.keypadTab = new KeypadTab(
+          this.root,
+          (t) => this.logInfo(t)
         );
       }
     }
@@ -1838,13 +3212,13 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
   var DEFAULT_RECONNECT_DELAY_MS = 2e3;
 
   // src/websocket/client.ts
-  function isRecord2(value) {
+  function isRecord3(value) {
     return typeof value === "object" && value !== null;
   }
   function parseWsMessage(raw) {
     try {
       const parsed = JSON.parse(raw);
-      if (!isRecord2(parsed)) return null;
+      if (!isRecord3(parsed)) return null;
       if (typeof parsed.type !== "string") return null;
       return parsed;
     } catch (e) {
@@ -1855,10 +3229,11 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
     console.log("[OTS Userscript]", ...args);
   }
   var WsClient = class {
-    constructor(hud, getWsUrl, onCommand) {
+    constructor(hud, getWsUrl, onCommand, onEvent) {
       this.hud = hud;
       this.getWsUrl = getWsUrl;
       this.onCommand = onCommand;
+      this.onEvent = onEvent;
       this.socket = null;
       this.reconnectTimeout = null;
       this.reconnectDelay = DEFAULT_RECONNECT_DELAY_MS;
@@ -1970,9 +3345,9 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
       }
       const json = JSON.stringify(msg);
       let eventType;
-      if (isRecord2(msg) && msg.type === "event") {
+      if (isRecord3(msg) && msg.type === "event") {
         const payload = msg.payload;
-        if (isRecord2(payload) && typeof payload.type === "string") {
+        if (isRecord3(payload) && typeof payload.type === "string") {
           eventType = payload.type;
         }
       }
@@ -2015,7 +3390,7 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
       }
     }
     handleServerMessage(raw) {
-      var _a;
+      var _a, _b;
       if (typeof raw !== "string") {
         debugLog("Non-text message from server", raw);
         this.hud.pushLog("info", "Non-text message from server");
@@ -2037,6 +3412,11 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
         } else {
           debugLog("No command handler registered for:", action);
         }
+        return;
+      }
+      if (msg.type === "event" && msg.payload && typeof msg.payload.type === "string") {
+        const eventType = msg.payload.type;
+        (_b = this.onEvent) == null ? void 0 : _b.call(this, eventType, msg.payload.data, msg.payload.message);
       }
     }
   };
@@ -2101,15 +3481,15 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
   function isFn(value) {
     return typeof value === "function";
   }
-  function isRecord3(value) {
+  function isRecord4(value) {
     return typeof value === "object" && value !== null;
   }
   function getGameView() {
     try {
       const eventsDisplay = document.querySelector("events-display");
-      if (eventsDisplay && isRecord3(eventsDisplay) && "game" in eventsDisplay) {
+      if (eventsDisplay && isRecord4(eventsDisplay) && "game" in eventsDisplay) {
         const maybeGame = eventsDisplay.game;
-        if (maybeGame && isRecord3(maybeGame)) {
+        if (maybeGame && isRecord4(maybeGame)) {
           return maybeGame;
         }
       }
@@ -2139,7 +3519,7 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
           const game = getGame();
           if (!game || !isFn(game.myPlayer)) return null;
           const myPlayer = game.myPlayer();
-          return isRecord3(myPlayer) ? myPlayer : null;
+          return isRecord4(myPlayer) ? myPlayer : null;
         } catch (e) {
           return null;
         }
@@ -2207,7 +3587,7 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
           const game = getGame();
           if (!game || !isFn(game.owner)) return null;
           const owner = game.owner(tile);
-          return isRecord3(owner) ? owner : null;
+          return isRecord4(owner) ? owner : null;
         } catch (e) {
           return null;
         }
@@ -2217,7 +3597,7 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
           const game = getGame();
           if (!game || !isFn(game.unit)) return null;
           const unit = game.unit(unitId);
-          return isRecord3(unit) ? unit : null;
+          return isRecord4(unit) ? unit : null;
         } catch (e) {
           return null;
         }
@@ -2227,7 +3607,7 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
           const game = getGame();
           if (!game || !isFn(game.playerBySmallID)) return null;
           const player = game.playerBySmallID(smallID);
-          return isRecord3(player) ? player : null;
+          return isRecord4(player) ? player : null;
         } catch (e) {
           return null;
         }
@@ -2249,7 +3629,7 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
           if (!game || !myPlayer) return null;
           if (!isFn(game.config)) return null;
           const config = game.config();
-          if (!isRecord3(config) || !isFn(config.maxTroops)) return null;
+          if (!isRecord4(config) || !isFn(config.maxTroops)) return null;
           const maxTroops = config.maxTroops(myPlayer);
           return typeof maxTroops === "number" ? maxTroops : null;
         } catch (e) {
@@ -2258,8 +3638,8 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
       },
       getAttackRatio() {
         const controlPanel = document.querySelector("control-panel");
-        const uiState = isRecord3(controlPanel) ? controlPanel.uiState : void 0;
-        const ratio = isRecord3(uiState) ? uiState.attackRatio : void 0;
+        const uiState = isRecord4(controlPanel) ? controlPanel.uiState : void 0;
+        const ratio = isRecord4(uiState) ? uiState.attackRatio : void 0;
         if (typeof ratio === "number") {
           if (ratio >= 0 && ratio <= 1) {
             return ratio;
@@ -2314,7 +3694,7 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
           const game = getGame();
           if (!game || !isFn(game.updatesSinceLastTick)) return null;
           const updates = game.updatesSinceLastTick();
-          return isRecord3(updates) ? updates : null;
+          return isRecord4(updates) ? updates : null;
         } catch (error) {
           console.error("[GameAPI] Error getting updates:", error);
           return null;
@@ -2325,7 +3705,7 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
           const game = getGame();
           if (!game || !isFn(game.myPlayer)) return null;
           const myPlayerUnknown = game.myPlayer();
-          if (!isRecord3(myPlayerUnknown)) return null;
+          if (!isRecord4(myPlayerUnknown)) return null;
           const myPlayer = myPlayerUnknown;
           if (!isFn(game.gameOver)) return null;
           const gameOver = game.gameOver();
@@ -2927,14 +4307,14 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
 
   // src/game/openfront-bridge.ts
   var logger = createLogger("GameBridge");
-  function isRecord4(value) {
+  function isRecord5(value) {
     return typeof value === "object" && value !== null;
   }
   function isSetAttackRatioParams(params) {
-    return isRecord4(params) && typeof params.ratio === "number";
+    return isRecord5(params) && typeof params.ratio === "number";
   }
   function isSendNukeParams(params) {
-    return isRecord4(params) && (params.nukeType === "atom" || params.nukeType === "hydro" || params.nukeType === "mirv");
+    return isRecord5(params) && (params.nukeType === "atom" || params.nukeType === "hydro" || params.nukeType === "mirv");
   }
   var GameBridge = class {
     constructor(ws, hud) {
@@ -3371,8 +4751,72 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
     GM_setValue(STORAGE_KEYS.WS_URL, url);
   }
 
+  // src/game/keypad-manager.ts
+  function isRecord6(value) {
+    return typeof value === "object" && value !== null;
+  }
+  function parseKeypadEventData(data) {
+    if (!isRecord6(data)) return null;
+    if (typeof data.keyId !== "number") return null;
+    if (data.state !== "pressed" && data.state !== "released") return null;
+    return {
+      keyId: data.keyId,
+      state: data.state,
+      timestamp: typeof data.timestamp === "number" ? data.timestamp : void 0
+    };
+  }
+  function dispatchKey(key, type) {
+    const code = key === " " ? "Space" : key.length === 1 && key >= "a" && key <= "z" ? `Key${key.toUpperCase()}` : key.length === 1 && key >= "0" && key <= "9" ? `Digit${key}` : key;
+    const event = new KeyboardEvent(type, {
+      key,
+      code,
+      bubbles: true,
+      cancelable: true
+    });
+    document.dispatchEvent(event);
+  }
+  var KeypadManager = class {
+    constructor(hud) {
+      this.hud = hud;
+      this.pressed = /* @__PURE__ */ new Set();
+    }
+    handleKeyEvent(data) {
+      const parsed = parseKeypadEventData(data);
+      if (!parsed) return;
+      const config = loadKeypadConfig();
+      const binding = config.bindings.find((item) => item.keyId === parsed.keyId);
+      if (!binding || !binding.enabled) return;
+      if (parsed.state === "pressed") {
+        if (this.pressed.has(parsed.keyId)) return;
+        this.pressed.add(parsed.keyId);
+        this.triggerPressed(binding);
+        return;
+      }
+      this.pressed.delete(parsed.keyId);
+      this.triggerReleased(binding);
+    }
+    triggerPressed(binding) {
+      const element = binding.selector ? document.querySelector(binding.selector) : null;
+      if (element) {
+        element.click();
+        return;
+      }
+      if (binding.hotkey) {
+        dispatchKey(binding.hotkey, "keydown");
+        dispatchKey(binding.hotkey, "keyup");
+        return;
+      }
+      this.hud.pushLog("info", `[KEYPAD] No selector/hotkey configured for K${binding.keyId}`);
+    }
+    triggerReleased(binding) {
+      if (binding.hotkey) {
+        dispatchKey(binding.hotkey, "keyup");
+      }
+    }
+  };
+
   // src/main.user.ts
-  var VERSION = "2026-01-10.1";
+  var VERSION = "2026-01-10.2-dev";
   (function start() {
     console.log(`[OTS Userscript] Version ${VERSION}`);
     let currentWsUrl = loadWsUrl();
@@ -3403,12 +4847,18 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
       }
     );
     let game = null;
+    const keypad = new KeypadManager(hud);
     ws = new WsClient(
       hud,
       () => currentWsUrl,
       (action, params) => {
         if (game) {
           game.handleCommand(action, params);
+        }
+      },
+      (type, data) => {
+        if (type === "KEYPAD_KEY_PRESSED" || type === "KEYPAD_KEY_RELEASED") {
+          keypad.handleKeyEvent(data);
         }
       }
     );
