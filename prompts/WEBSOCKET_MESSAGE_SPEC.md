@@ -526,6 +526,72 @@ Hardware status report from device or simulator.
 
 **Trigger:** Sent in response to `hardware-diagnostic` command.
 
+### Keypad Events
+
+#### `KEYPAD_KEY_PRESSED` / `KEYPAD_KEY_RELEASED`
+Physical keypad key events (raw key IDs only, no mapping).
+
+**Direction**: Main Controller → All Clients (broadcast)
+
+**Note**: Key mapping is handled entirely by the userscript (localStorage). Firmware and dashboard only know raw key IDs (1-15).
+
+```json
+{
+  "type": "event",
+  "payload": {
+    "type": "KEYPAD_KEY_PRESSED",  // or KEYPAD_KEY_RELEASED
+    "timestamp": 1234567890,
+    "message": "Key 5 pressed",
+    "data": {
+      "keyId": 5,                      // 1-15 (raw key ID)
+      "state": "pressed",              // "pressed" | "released"
+      "timestamp": 1234567890123       // Device timestamp (ms)
+    }
+  }
+}
+```
+
+**Hardware Behavior**:
+- Keypad Module: Sends key events via CAN bus to main controller
+- Main Controller: Forwards raw key events to all WebSocket clients
+- Userscript: Maps key ID to game action based on localStorage configuration
+- Dashboard: Visualizes key presses (animation/highlight) but does NOT configure bindings
+
+**Key Layout Reference** (for userscript mapping):
+- **Row 1** (K1-K7): Building keys (City, Factory, Port, Defense, Launcher, SAM, Warship)
+- **Row 2** (K8-K14): Control keys (Zoom, Attack, Direction)
+- **Row 3** (K15): View control (Spacebar)
+
+**Default Userscript Bindings** (customizable):
+- K1→'1', K2→'2', K3→'3', K4→'4', K5→'5', K6→'6', K7→'7'
+- K8→'E', K9→'Q', K10→'T', K11→'U', K12→'Y', K13→'B', K14→'G'
+- K15→' ' (Space)
+
+#### `KEYPAD_CONNECTED` / `KEYPAD_DISCONNECTED`
+Keypad module connection status (CAN bus discovery).
+
+```json
+{
+  "type": "event",
+  "payload": {
+    "type": "KEYPAD_CONNECTED",  // or KEYPAD_DISCONNECTED
+    "timestamp": 1234567890,
+    "message": "Keypad module connected",
+    "data": {
+      "firmwareVersion": "0.1.0-dev",  // Only in CONNECTED event
+      "moduleType": "keypad",
+      "timestamp": 1234567890123
+    }
+  }
+}
+```
+
+**Hardware Behavior**:
+- Sent when keypad module announces on CAN bus (MODULE_ANNOUNCE)
+- Sent when keypad stops responding (discovery timeout)
+- Dashboard shows connection indicator
+- No action required from userscript (key events stop automatically)
+
 ---
 
 ## Timing Constants

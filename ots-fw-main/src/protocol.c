@@ -20,6 +20,10 @@ const char* event_type_to_string(game_event_type_t type) {
         case GAME_EVENT_ALERT_NAVAL: return "ALERT_NAVAL";
         case GAME_EVENT_TROOP_UPDATE: return "TROOP_UPDATE";
         case GAME_EVENT_HARDWARE_TEST: return "HARDWARE_TEST";
+        case GAME_EVENT_KEYPAD_KEY_PRESSED: return "KEYPAD_KEY_PRESSED";
+        case GAME_EVENT_KEYPAD_KEY_RELEASED: return "KEYPAD_KEY_RELEASED";
+        case GAME_EVENT_KEYPAD_CONNECTED: return "KEYPAD_CONNECTED";
+        case GAME_EVENT_KEYPAD_DISCONNECTED: return "KEYPAD_DISCONNECTED";
         case INTERNAL_EVENT_NETWORK_CONNECTED: return "INTERNAL:NET_CONNECTED";
         case INTERNAL_EVENT_NETWORK_DISCONNECTED: return "INTERNAL:NET_DISCONNECTED";
         case INTERNAL_EVENT_WS_CONNECTED: return "INTERNAL:WS_CONNECTED";
@@ -50,6 +54,10 @@ game_event_type_t string_to_event_type(const char *str) {
     if (strcmp(str, "ALERT_NAVAL") == 0) return GAME_EVENT_ALERT_NAVAL;
     if (strcmp(str, "TROOP_UPDATE") == 0) return GAME_EVENT_TROOP_UPDATE;
     if (strcmp(str, "HARDWARE_TEST") == 0) return GAME_EVENT_HARDWARE_TEST;
+    if (strcmp(str, "KEYPAD_KEY_PRESSED") == 0) return GAME_EVENT_KEYPAD_KEY_PRESSED;
+    if (strcmp(str, "KEYPAD_KEY_RELEASED") == 0) return GAME_EVENT_KEYPAD_KEY_RELEASED;
+    if (strcmp(str, "KEYPAD_CONNECTED") == 0) return GAME_EVENT_KEYPAD_CONNECTED;
+    if (strcmp(str, "KEYPAD_DISCONNECTED") == 0) return GAME_EVENT_KEYPAD_DISCONNECTED;
     
     // Handle nuke type shortcuts (for send-nuke command) - all map to NUKE_LAUNCHED
     if (strcmp(str, "atom") == 0) return GAME_EVENT_NUKE_LAUNCHED;

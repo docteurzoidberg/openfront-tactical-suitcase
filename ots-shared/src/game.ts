@@ -43,6 +43,10 @@ export type GameEventType =
   | 'ALERT_NAVAL'
   | 'TROOP_UPDATE'
   | 'HARDWARE_TEST'
+  | 'KEYPAD_KEY_PRESSED'
+  | 'KEYPAD_KEY_RELEASED'
+  | 'KEYPAD_CONNECTED'
+  | 'KEYPAD_DISCONNECTED'
 
 // ============================================================================
 // Game State Types
@@ -103,6 +107,18 @@ export type HardwareDiagnosticData = {
     adc: HardwareComponentStatus
     soundModule: HardwareComponentStatus
   }
+}
+
+export type KeypadKeyEventData = {
+  keyId: number           // 1-15
+  state: 'pressed' | 'released'
+  timestamp: number       // Device timestamp (ms)
+}
+
+export type KeypadConnectionData = {
+  firmwareVersion?: string  // Only in CONNECTED event
+  moduleType: string
+  timestamp: number
 }
 
 // ============================================================================
