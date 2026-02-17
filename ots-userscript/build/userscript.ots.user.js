@@ -1086,34 +1086,62 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
 
   // src/storage/keypad.ts
   var KEYPAD_CONFIG_VERSION = 1;
+  var LEGACY_KEYPAD_ACTION_TO_GAME_ACTION = {
+    BUILD_CITY: "buildCity",
+    BUILD_FACTORY: "buildFactory",
+    BUILD_PORT: "buildPort",
+    BUILD_DEFENSE: "buildDefensePost",
+    BUILD_MISSILE: "buildMissileSilo",
+    BUILD_SAM: "buildSamLauncher",
+    BUILD_WARSHIP: "buildWarship",
+    ZOOM_IN: "zoomIn",
+    ZOOM_OUT: "zoomOut",
+    ATTACK_DECREASE: "attackRatioDown",
+    MISSILE_SWITCH: "swapDirection",
+    ATTACK_INCREASE: "attackRatioUp",
+    BOAT_ATTACK: "boatAttack",
+    LAND_ATTACK: "groundAttack",
+    TOGGLE_VIEW: "toggleView"
+  };
   var DEFAULT_BINDINGS = [
-    { keyId: 1, action: "BUILD_CITY", selector: '[data-hotkey="1"]', label: "City", enabled: true, hotkey: "1" },
-    { keyId: 2, action: "BUILD_FACTORY", selector: '[data-hotkey="2"]', label: "Factory", enabled: true, hotkey: "2" },
-    { keyId: 3, action: "BUILD_PORT", selector: '[data-hotkey="3"]', label: "Port", enabled: true, hotkey: "3" },
-    { keyId: 4, action: "BUILD_DEFENSE", selector: '[data-hotkey="4"]', label: "Defense", enabled: true, hotkey: "4" },
-    { keyId: 5, action: "BUILD_MISSILE", selector: '[data-hotkey="5"]', label: "Missile", enabled: true, hotkey: "5" },
-    { keyId: 6, action: "BUILD_SAM", selector: '[data-hotkey="6"]', label: "SAM", enabled: true, hotkey: "6" },
-    { keyId: 7, action: "BUILD_WARSHIP", selector: '[data-hotkey="7"]', label: "Warship", enabled: true, hotkey: "7" },
-    { keyId: 8, action: "ZOOM_IN", selector: '[data-hotkey="e"]', label: "Zoom+", enabled: true, hotkey: "e" },
-    { keyId: 9, action: "ZOOM_OUT", selector: '[data-hotkey="q"]', label: "Zoom-", enabled: true, hotkey: "q" },
-    { keyId: 10, action: "ATTACK_DECREASE", selector: '[data-hotkey="t"]', label: "Atk-", enabled: true, hotkey: "t" },
-    { keyId: 11, action: "MISSILE_SWITCH", selector: '[data-hotkey="u"]', label: "Switch", enabled: true, hotkey: "u" },
-    { keyId: 12, action: "ATTACK_INCREASE", selector: '[data-hotkey="y"]', label: "Atk+", enabled: true, hotkey: "y" },
-    { keyId: 13, action: "BOAT_ATTACK", selector: '[data-hotkey="b"]', label: "Naval", enabled: true, hotkey: "b" },
-    { keyId: 14, action: "LAND_ATTACK", selector: '[data-hotkey="g"]', label: "Land", enabled: true, hotkey: "g" },
-    { keyId: 15, action: "TOGGLE_VIEW", selector: '[data-hotkey=" "]', label: "View", enabled: true, hotkey: " " }
+    { keyId: 1, action: "buildCity", label: "City", enabled: true },
+    { keyId: 2, action: "buildFactory", label: "Factory", enabled: true },
+    { keyId: 3, action: "buildPort", label: "Port", enabled: true },
+    { keyId: 4, action: "buildDefensePost", label: "Defense", enabled: true },
+    { keyId: 5, action: "buildMissileSilo", label: "Missile", enabled: true },
+    { keyId: 6, action: "buildSamLauncher", label: "SAM", enabled: true },
+    { keyId: 7, action: "buildWarship", label: "Warship", enabled: true },
+    { keyId: 8, action: "zoomIn", label: "Zoom+", enabled: true },
+    { keyId: 9, action: "zoomOut", label: "Zoom-", enabled: true },
+    { keyId: 10, action: "attackRatioDown", label: "Atk-", enabled: true },
+    { keyId: 11, action: "swapDirection", label: "Switch", enabled: true },
+    { keyId: 12, action: "attackRatioUp", label: "Atk+", enabled: true },
+    { keyId: 13, action: "boatAttack", label: "Naval", enabled: true },
+    { keyId: 14, action: "groundAttack", label: "Land", enabled: true },
+    { keyId: 15, action: "toggleView", label: "View", enabled: true }
   ];
   function isRecord(value) {
     return typeof value === "object" && value !== null;
   }
   function isBinding(value) {
     if (!isRecord(value)) return false;
-    return typeof value.keyId === "number" && typeof value.action === "string" && typeof value.selector === "string" && typeof value.label === "string" && typeof value.enabled === "boolean" && typeof value.hotkey === "string";
+    return typeof value.keyId === "number" && typeof value.action === "string" && typeof value.label === "string" && typeof value.enabled === "boolean";
   }
   function isConfig(value) {
     if (!isRecord(value)) return false;
     if (typeof value.version !== "number" || !Array.isArray(value.bindings)) return false;
     return value.bindings.every(isBinding);
+  }
+  function normalizeBindingAction(binding) {
+    var _a;
+    const migratedAction = (_a = LEGACY_KEYPAD_ACTION_TO_GAME_ACTION[binding.action]) != null ? _a : binding.action;
+    if (migratedAction === binding.action) {
+      return binding;
+    }
+    return {
+      ...binding,
+      action: migratedAction
+    };
   }
   function getDefaultKeypadConfig() {
     return {
@@ -1124,6 +1152,16 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
   function loadKeypadConfig() {
     const saved = GM_getValue(STORAGE_KEYS.KEYPAD_BINDINGS, null);
     if (isConfig(saved) && saved.version === KEYPAD_CONFIG_VERSION) {
+      const normalizedBindings = saved.bindings.map(normalizeBindingAction);
+      const changed = normalizedBindings.some((binding, index) => binding.action !== saved.bindings[index].action);
+      if (changed) {
+        const migrated = {
+          ...saved,
+          bindings: normalizedBindings
+        };
+        GM_setValue(STORAGE_KEYS.KEYPAD_BINDINGS, migrated);
+        return migrated;
+      }
       return saved;
     }
     const defaults = getDefaultKeypadConfig();
@@ -1135,29 +1173,77 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
   }
 
   // src/hud/sidebar/tabs/keypad-tab.ts
-  var ACTION_OPTIONS = [
-    { value: "BUILD_CITY", label: "Build City" },
-    { value: "BUILD_FACTORY", label: "Build Factory" },
-    { value: "BUILD_PORT", label: "Build Port" },
-    { value: "BUILD_DEFENSE", label: "Build Defense" },
-    { value: "BUILD_MISSILE", label: "Build Missile Launcher" },
-    { value: "BUILD_SAM", label: "Build SAM" },
-    { value: "BUILD_WARSHIP", label: "Build Warship" },
-    { value: "ZOOM_IN", label: "Zoom In" },
-    { value: "ZOOM_OUT", label: "Zoom Out" },
-    { value: "ATTACK_DECREASE", label: "Decrease Attack Ratio" },
-    { value: "MISSILE_SWITCH", label: "Switch Missile Direction" },
-    { value: "ATTACK_INCREASE", label: "Increase Attack Ratio" },
-    { value: "BOAT_ATTACK", label: "Boat Attack" },
-    { value: "LAND_ATTACK", label: "Land Attack" },
-    { value: "TOGGLE_VIEW", label: "Toggle View" }
-  ];
+  var GAME_KEYBIND_LABELS = {
+    buildCity: "Build City",
+    buildFactory: "Build Factory",
+    buildPort: "Build Port",
+    buildDefensePost: "Build Defense Post",
+    buildMissileSilo: "Build Missile Launcher",
+    buildSamLauncher: "Build SAM Launcher",
+    buildWarship: "Build Warship",
+    zoomIn: "Zoom In",
+    zoomOut: "Zoom Out",
+    attackRatioDown: "Decrease Attack Ratio",
+    attackRatioUp: "Increase Attack Ratio",
+    swapDirection: "Switch Missile Direction",
+    boatAttack: "Boat Attack",
+    groundAttack: "Land Attack",
+    toggleView: "Toggle View",
+    centerCamera: "Center Camera",
+    moveUp: "Move Up",
+    moveDown: "Move Down",
+    moveLeft: "Move Left",
+    moveRight: "Move Right"
+  };
+  var DEFAULT_GAME_HOTKEYS = {
+    buildCity: "1",
+    buildFactory: "2",
+    buildPort: "3",
+    buildDefensePost: "4",
+    buildMissileSilo: "5",
+    buildSamLauncher: "6",
+    buildWarship: "7",
+    zoomIn: "e",
+    zoomOut: "q",
+    attackRatioDown: "t",
+    attackRatioUp: "y",
+    swapDirection: "u",
+    boatAttack: "b",
+    groundAttack: "g",
+    toggleView: " "
+  };
+  var DEFAULT_GAME_KEYBIND_CODES = {
+    toggleView: "Space",
+    centerCamera: "KeyC",
+    moveUp: "KeyW",
+    moveDown: "KeyS",
+    moveLeft: "KeyA",
+    moveRight: "KeyD",
+    zoomOut: "KeyQ",
+    zoomIn: "KeyE",
+    attackRatioDown: "KeyT",
+    attackRatioUp: "KeyY",
+    boatAttack: "KeyB",
+    groundAttack: "KeyG",
+    swapDirection: "KeyU",
+    buildCity: "Digit1",
+    buildFactory: "Digit2",
+    buildPort: "Digit3",
+    buildDefensePost: "Digit4",
+    buildMissileSilo: "Digit5",
+    buildSamLauncher: "Digit6",
+    buildWarship: "Digit7",
+    buildAtomBomb: "Digit8",
+    buildHydrogenBomb: "Digit9",
+    buildMIRV: "Digit0"
+  };
   var KeypadTab = class {
     constructor(root, logInfo) {
       this.root = root;
       this.logInfo = logInfo;
       this.bindings = [];
-      this.selectedKeyId = 1;
+      this.selectedKeyId = null;
+      this.livePressedKeys = /* @__PURE__ */ new Set();
       this.container = root.querySelector("#ots-keypad-content");
       if (!this.container) {
         throw new Error("Keypad tab container not found");
@@ -1172,20 +1258,19 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
     `;
     }
     render() {
-      var _a, _b;
       const config = loadKeypadConfig();
       this.bindings = [...config.bindings].sort((a, b) => a.keyId - b.keyId);
-      this.selectedKeyId = (_b = (_a = this.bindings.find((binding) => binding.enabled)) == null ? void 0 : _a.keyId) != null ? _b : 1;
+      this.selectedKeyId = null;
       this.container.innerHTML = `
       <div style="margin-bottom:12px;padding:10px;background:rgba(59,130,246,0.08);border-left:3px solid #3b82f6;border-radius:4px;">
         <div style="font-size:11px;font-weight:600;color:#93c5fd;margin-bottom:6px;">\u2328 Keypad Bindings</div>
         <div style="font-size:10px;color:#9ca3af;line-height:1.5;">Click a key in the layout to edit its mapping used for KEYPAD_KEY_PRESSED/RELEASED events.</div>
       </div>
-      <div style="display:grid;grid-template-columns:minmax(280px,1fr) minmax(220px,300px);gap:10px;align-items:start;">
+      <div style="display:flex;flex-direction:column;gap:10px;align-items:stretch;">
         <div style="padding:8px;background:rgba(15,23,42,0.5);border:1px solid rgba(148,163,184,0.25);border-radius:4px;">
           <div style="font-size:10px;color:#cbd5e1;font-weight:600;margin-bottom:6px;">Interactive keypad layout</div>
           <div style="font-size:9px;color:#94a3b8;margin-bottom:8px;line-height:1.4;">Select a key to edit. Blue outline = selected, green = enabled, gray = disabled.</div>
-          <div id="ots-keypad-layout" style="display:block;width:100%;max-width:480px;overflow:auto;">${`
+          <div id="ots-keypad-layout" style="display:block;width:100%;overflow:auto;">${`
   <svg width='408px'
        height='205.5px'
        viewBox='0 0 408 205.5'
@@ -2228,84 +2313,87 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
   </svg>
 ` ? "" : `<div style="margin-top:8px;font-size:9px;color:#fbbf24;">Layout SVG not available. Place keyboard-layout.svg in ots-userscript/images and rebuild userscript.</div>`}
         </div>
-        <div style="padding:8px;background:rgba(2,6,23,0.65);border:1px solid rgba(148,163,184,0.25);border-radius:4px;">
-          <div id="ots-keypad-selected-title" style="font-size:11px;font-weight:700;color:#e5e7eb;margin-bottom:8px;">K1</div>
+        <div id="ots-keypad-editor" style="display:none;padding:8px;background:rgba(2,6,23,0.65);border:1px solid rgba(148,163,184,0.25);border-radius:4px;">
+          <div id="ots-keypad-selected-title" style="font-size:11px;font-weight:700;color:#e5e7eb;margin-bottom:8px;">Select a key</div>
           <div style="display:flex;flex-direction:column;gap:6px;">
-            <select id="ots-keypad-action" style="font-size:10px;padding:5px 6px;border-radius:4px;border:1px solid rgba(148,163,184,0.35);background:rgba(15,23,42,0.8);color:#e5e7eb;outline:none;">
-              ${ACTION_OPTIONS.map((action) => `<option value="${action.value}">${action.label}</option>`).join("")}
-            </select>
-            <input id="ots-keypad-selector" type="text" placeholder="selector" style="font-size:10px;padding:5px 6px;border-radius:4px;border:1px solid rgba(148,163,184,0.35);background:rgba(15,23,42,0.8);color:#e5e7eb;outline:none;" />
-            <input id="ots-keypad-hotkey" type="text" placeholder="key" style="font-size:10px;padding:5px 6px;border-radius:4px;border:1px solid rgba(148,163,184,0.35);background:rgba(15,23,42,0.8);color:#e5e7eb;outline:none;" />
-            <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:#e5e7eb;cursor:pointer;">
-              <input id="ots-keypad-enabled" type="checkbox" />
-              <span>Enabled</span>
-            </label>
+            <div style="font-size:10px;color:#cbd5e1;">Assigned keyboard key: <span id="ots-keypad-current-hotkey" style="font-weight:700;color:#f8fafc;">-</span></div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <select id="ots-keypad-openfront-bind" style="font-size:12px;padding:8px 10px;border-radius:4px;border:1px solid rgba(148,163,184,0.35);background:rgba(15,23,42,0.8);color:#e5e7eb;outline:none;">
+                ${this.renderOpenFrontKeybindOptions()}
+              </select>
+              <button id="ots-keypad-apply-openfront-bind" style="all:unset;display:none;cursor:pointer;font-size:10px;padding:5px 8px;border-radius:4px;background:rgba(14,165,233,0.25);color:#bae6fd;font-weight:700;text-align:center;">Set action</button>
+            </div>
+            <button id="ots-keypad-disable" style="all:unset;cursor:pointer;font-size:10px;padding:5px 8px;border-radius:4px;background:rgba(245,158,11,0.22);color:#fde68a;font-weight:700;text-align:center;">Disable</button>
             <div id="ots-keypad-warning" style="display:none;font-size:9px;color:#fbbf24;"></div>
+            <button id="ots-keypad-reset-selected" style="all:unset;cursor:pointer;font-size:10px;padding:5px 8px;border-radius:4px;background:rgba(245,158,11,0.22);color:#fde68a;font-weight:700;text-align:center;">Reset selected key</button>
             <button id="ots-keypad-test" style="all:unset;cursor:pointer;font-size:10px;padding:5px 8px;border-radius:4px;background:rgba(59,130,246,0.28);color:#bfdbfe;font-weight:700;text-align:center;">Test selected key</button>
           </div>
         </div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:12px;">
-        <button id="ots-keypad-save" style="all:unset;cursor:pointer;font-size:11px;padding:6px 12px;border-radius:4px;background:#22c55e;color:#052e16;font-weight:700;">Save</button>
-        <button id="ots-keypad-reset" style="all:unset;cursor:pointer;font-size:11px;padding:6px 12px;border-radius:4px;background:#f59e0b;color:#451a03;font-weight:700;">Reset defaults</button>
+      <div style="display:flex;gap:8px;margin-top:12px;width:100%;">
+        <button id="ots-keypad-reset" style="all:unset;cursor:pointer;font-size:11px;padding:6px 12px;border-radius:4px;background:#f59e0b;color:#451a03;font-weight:700;text-align:center;width:100%;">Reset defaults</button>
       </div>
     `;
       this.attachListeners();
       this.setupInteractiveLayout();
-      this.selectKey(this.selectedKeyId);
+      this.setEditorVisible(false);
+      this.setEditorEnabled(false);
+      this.updateLayoutVisuals();
     }
     attachListeners() {
-      const saveBtn = this.container.querySelector("#ots-keypad-save");
       const resetBtn = this.container.querySelector("#ots-keypad-reset");
-      const actionInput = this.container.querySelector("#ots-keypad-action");
-      const selectorInput = this.container.querySelector("#ots-keypad-selector");
-      const hotkeyInput = this.container.querySelector("#ots-keypad-hotkey");
-      const enabledInput = this.container.querySelector("#ots-keypad-enabled");
+      const openFrontBindInput = this.container.querySelector("#ots-keypad-openfront-bind");
+      const applyOpenFrontBindBtn = this.container.querySelector("#ots-keypad-apply-openfront-bind");
+      const disableBtn = this.container.querySelector("#ots-keypad-disable");
+      const resetSelectedBtn = this.container.querySelector("#ots-keypad-reset-selected");
       const testBtn = this.container.querySelector("#ots-keypad-test");
-      actionInput == null ? void 0 : actionInput.addEventListener("change", () => {
+      openFrontBindInput == null ? void 0 : openFrontBindInput.addEventListener("change", () => {
+        this.updateActionApplyState();
+      });
+      applyOpenFrontBindBtn == null ? void 0 : applyOpenFrontBindBtn.addEventListener("click", () => {
         var _a;
         const binding = this.getSelectedBinding();
         if (!binding) return;
-        binding.action = actionInput.value;
-        const selectedAction = ACTION_OPTIONS.find((option) => option.value === binding.action);
-        binding.label = (_a = selectedAction == null ? void 0 : selectedAction.label) != null ? _a : binding.action;
+        const selected = (_a = openFrontBindInput == null ? void 0 : openFrontBindInput.value) != null ? _a : "";
+        if (!selected) return;
+        if (selected === "__DISABLED__") {
+          binding.enabled = false;
+          this.updateSelectionUI(binding);
+          this.updateLayoutVisuals();
+          this.updateValidation();
+          this.updateActionApplyState();
+          this.persistCurrentBindings();
+          this.logInfo(`K${binding.keyId} disabled`);
+          return;
+        }
+        this.assignActionToSelected(selected);
+        this.persistCurrentBindings();
+        this.logInfo(`K${binding.keyId} assigned to ${binding.label}`);
+        this.updateActionApplyState();
       });
-      selectorInput == null ? void 0 : selectorInput.addEventListener("input", () => {
+      disableBtn == null ? void 0 : disableBtn.addEventListener("click", () => {
         const binding = this.getSelectedBinding();
         if (!binding) return;
-        binding.selector = selectorInput.value.trim();
-        this.updateValidation();
-      });
-      hotkeyInput == null ? void 0 : hotkeyInput.addEventListener("input", () => {
-        const binding = this.getSelectedBinding();
-        if (!binding) return;
-        const hotkeyRaw = hotkeyInput.value.trim();
-        binding.hotkey = hotkeyRaw.toLowerCase() === "space" ? " " : hotkeyRaw;
+        binding.enabled = false;
+        this.updateSelectionUI(binding);
         this.updateLayoutVisuals();
         this.updateValidation();
+        this.updateActionApplyState();
+        this.logInfo(`K${binding.keyId} disabled`);
       });
-      enabledInput == null ? void 0 : enabledInput.addEventListener("change", () => {
-        const binding = this.getSelectedBinding();
-        if (!binding) return;
-        binding.enabled = enabledInput.checked;
-        this.updateLayoutVisuals();
-        this.updateValidation();
+      resetSelectedBtn == null ? void 0 : resetSelectedBtn.addEventListener("click", () => {
+        this.resetSelectedKeyToDefault();
       });
       testBtn == null ? void 0 : testBtn.addEventListener("click", () => {
         const binding = this.getSelectedBinding();
         if (!binding) return;
         this.triggerBinding(binding);
       });
-      saveBtn == null ? void 0 : saveBtn.addEventListener("click", () => {
-        const updated = [...this.bindings].sort((a, b) => a.keyId - b.keyId);
-        if (updated.length !== 15) {
-          this.logInfo("Keypad config save failed: invalid row count");
+      resetBtn == null ? void 0 : resetBtn.addEventListener("click", () => {
+        const confirmed = window.confirm("Reset all key bindings to defaults?");
+        if (!confirmed) {
           return;
         }
-        saveKeypadConfig({ version: 1, bindings: updated });
-        this.logInfo("Keypad bindings saved");
-      });
-      resetBtn == null ? void 0 : resetBtn.addEventListener("click", () => {
         const defaults = getDefaultKeypadConfig();
         saveKeypadConfig(defaults);
         this.render();
@@ -2320,7 +2408,19 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
       svg.style.width = "100%";
       svg.style.height = "auto";
       const groups = Array.from(svg.querySelectorAll("g.keycap"));
-      groups.slice(0, 15).forEach((group, index) => {
+      const ordered = groups.slice(0, 15).map((group) => {
+        var _a, _b;
+        const rect = group.querySelector("rect");
+        const x = Number((_a = rect == null ? void 0 : rect.getAttribute("x")) != null ? _a : 0);
+        const y = Number((_b = rect == null ? void 0 : rect.getAttribute("y")) != null ? _b : 0);
+        const row = Math.round(y / 50);
+        return { group, x, row };
+      }).sort((a, b) => {
+        if (a.row !== b.row) return a.row - b.row;
+        return a.x - b.x;
+      });
+      ordered.forEach((entry, index) => {
+        const group = entry.group;
         const keyId = index + 1;
         group.setAttribute("data-key-id", String(keyId));
         group.style.cursor = "pointer";
@@ -2374,11 +2474,20 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
         const borderRect = rects[0];
         const innerFillRect = rects[3];
         const hotkeyLabel = group.querySelector('[data-role="ots-hotkey-label"]');
-        borderRect.setAttribute("stroke", keyId === this.selectedKeyId ? "#3b82f6" : "#000000");
-        borderRect.setAttribute("stroke-width", keyId === this.selectedKeyId ? "3" : "2");
-        innerFillRect.setAttribute("fill", binding.enabled ? "#bbf7d0" : "#e5e7eb");
+        const runtimeHotkey = this.getRuntimeHotkeyForBinding(binding);
+        const isPressed = this.livePressedKeys.has(keyId);
+        const isSelected = this.selectedKeyId !== null && keyId === this.selectedKeyId;
+        borderRect.setAttribute("stroke", isSelected ? "#3b82f6" : "#000000");
+        borderRect.setAttribute("stroke-width", isSelected ? "3" : "2");
+        const fillColor = isPressed ? "#93c5fd" : !binding.enabled ? "#e5e7eb" : "#bbf7d0";
+        innerFillRect.setAttribute("fill", fillColor);
+        innerFillRect.style.transition = "fill 90ms ease-out, transform 90ms ease-out";
+        innerFillRect.style.transform = isPressed ? "translateY(1px)" : "translateY(0px)";
+        group.style.transition = "filter 90ms ease-out";
+        group.style.filter = isPressed ? "drop-shadow(0 0 6px rgba(147,197,253,0.95))" : "none";
         if (hotkeyLabel) {
-          hotkeyLabel.textContent = binding.hotkey === " " ? "Space" : binding.hotkey || "";
+          hotkeyLabel.textContent = runtimeHotkey === " " ? "Space" : runtimeHotkey || "";
+          hotkeyLabel.setAttribute("fill", isPressed ? "#0f172a" : "#334155");
         }
         group.setAttribute("title", `K${keyId} \xB7 ${(_a = binding.label) != null ? _a : binding.action}${binding.enabled ? "" : " (disabled)"}`);
       });
@@ -2388,23 +2497,73 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
       this.selectedKeyId = keyId;
       const binding = this.getSelectedBinding();
       if (!binding) return;
+      this.setEditorVisible(true);
+      this.setEditorEnabled(true);
       const title = this.container.querySelector("#ots-keypad-selected-title");
-      const actionInput = this.container.querySelector("#ots-keypad-action");
-      const selectorInput = this.container.querySelector("#ots-keypad-selector");
-      const hotkeyInput = this.container.querySelector("#ots-keypad-hotkey");
-      const enabledInput = this.container.querySelector("#ots-keypad-enabled");
       if (title) {
         title.textContent = `K${binding.keyId} \xB7 ${(_a = binding.label) != null ? _a : binding.action}`;
       }
-      if (actionInput) actionInput.value = binding.action;
-      if (selectorInput) selectorInput.value = binding.selector;
-      if (hotkeyInput) hotkeyInput.value = binding.hotkey === " " ? "Space" : binding.hotkey;
-      if (enabledInput) enabledInput.checked = binding.enabled;
+      this.updateSelectionUI(binding);
       this.updateLayoutVisuals();
       this.updateValidation();
+      this.updateActionApplyState();
+    }
+    updateSelectionUI(binding) {
+      const currentHotkey = this.container.querySelector("#ots-keypad-current-hotkey");
+      const openFrontBindInput = this.container.querySelector("#ots-keypad-openfront-bind");
+      if (currentHotkey) currentHotkey.textContent = this.formatHotkey(this.getRuntimeHotkeyForBinding(binding));
+      if (openFrontBindInput) {
+        if (!binding.enabled) {
+          openFrontBindInput.value = "__DISABLED__";
+        } else {
+          openFrontBindInput.value = binding.action;
+        }
+      }
     }
     getSelectedBinding() {
+      if (this.selectedKeyId === null) {
+        return void 0;
+      }
       return this.bindings.find((binding) => binding.keyId === this.selectedKeyId);
+    }
+    setEditorVisible(visible) {
+      const editor = this.container.querySelector("#ots-keypad-editor");
+      if (editor) {
+        editor.style.display = visible ? "block" : "none";
+      }
+    }
+    setEditorEnabled(enabled) {
+      const openFrontBindInput = this.container.querySelector("#ots-keypad-openfront-bind");
+      const applyOpenFrontBindBtn = this.container.querySelector("#ots-keypad-apply-openfront-bind");
+      const disableBtn = this.container.querySelector("#ots-keypad-disable");
+      const currentHotkey = this.container.querySelector("#ots-keypad-current-hotkey");
+      const resetSelectedBtn = this.container.querySelector("#ots-keypad-reset-selected");
+      const testBtn = this.container.querySelector("#ots-keypad-test");
+      if (openFrontBindInput) openFrontBindInput.disabled = !enabled;
+      if (applyOpenFrontBindBtn) applyOpenFrontBindBtn.disabled = !enabled;
+      if (disableBtn) disableBtn.disabled = !enabled;
+      if (currentHotkey && !enabled) currentHotkey.textContent = "-";
+      if (applyOpenFrontBindBtn) {
+        if (!enabled) {
+          applyOpenFrontBindBtn.style.display = "none";
+        }
+        applyOpenFrontBindBtn.style.opacity = enabled ? "1" : "0.5";
+        applyOpenFrontBindBtn.style.cursor = enabled ? "pointer" : "default";
+      }
+      if (disableBtn) {
+        disableBtn.style.opacity = enabled ? "1" : "0.5";
+        disableBtn.style.cursor = enabled ? "pointer" : "default";
+      }
+      if (resetSelectedBtn) {
+        resetSelectedBtn.disabled = !enabled;
+        resetSelectedBtn.style.opacity = enabled ? "1" : "0.5";
+        resetSelectedBtn.style.cursor = enabled ? "pointer" : "default";
+      }
+      if (testBtn) {
+        testBtn.disabled = !enabled;
+        testBtn.style.opacity = enabled ? "1" : "0.5";
+        testBtn.style.cursor = enabled ? "pointer" : "default";
+      }
     }
     updateValidation() {
       const binding = this.getSelectedBinding();
@@ -2418,35 +2577,166 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
         warning.style.display = "none";
         return;
       }
-      if (!binding.selector && !binding.hotkey) {
-        warning.textContent = "Enabled but no selector/hotkey configured";
-        warning.style.display = "block";
+      warning.style.display = "none";
+    }
+    persistCurrentBindings() {
+      const updated = [...this.bindings].sort((a, b) => a.keyId - b.keyId);
+      if (updated.length !== 15) {
+        this.logInfo("Keypad config save failed: invalid row count");
         return;
       }
-      warning.style.display = "none";
+      saveKeypadConfig({ version: 1, bindings: updated });
+    }
+    updateActionApplyState() {
+      const binding = this.getSelectedBinding();
+      const openFrontBindInput = this.container.querySelector("#ots-keypad-openfront-bind");
+      const applyOpenFrontBindBtn = this.container.querySelector("#ots-keypad-apply-openfront-bind");
+      if (!binding || !openFrontBindInput || !applyOpenFrontBindBtn) {
+        return;
+      }
+      const selected = openFrontBindInput.value;
+      const current = binding.enabled ? binding.action : "__DISABLED__";
+      const hasChanged = selected !== current;
+      applyOpenFrontBindBtn.style.display = hasChanged ? "block" : "none";
+    }
+    assignActionToSelected(action) {
+      var _a;
+      const binding = this.getSelectedBinding();
+      if (!binding) return;
+      binding.action = action;
+      binding.label = this.getActionLabel(action);
+      binding.enabled = true;
+      const runtimeHotkey = this.getRuntimeHotkeyForBinding(binding);
+      const currentHotkey = this.container.querySelector("#ots-keypad-current-hotkey");
+      if (currentHotkey) {
+        currentHotkey.textContent = this.formatHotkey(runtimeHotkey);
+      }
+      const title = this.container.querySelector("#ots-keypad-selected-title");
+      if (title) {
+        title.textContent = `K${binding.keyId} \xB7 ${(_a = binding.label) != null ? _a : binding.action}`;
+      }
+      this.updateLayoutVisuals();
+      this.updateValidation();
+    }
+    formatHotkey(hotkey) {
+      if (!hotkey) return "-";
+      if (hotkey === " ") return "Space";
+      return hotkey ? hotkey.toUpperCase() : "-";
+    }
+    getBridgeHotkeysOrDefault() {
+      var _a, _b;
+      const bridgeHotkeys = (_b = (_a = window.otsGameBridge) == null ? void 0 : _a.getCurrentKeybindHotkeys) == null ? void 0 : _b.call(_a);
+      if (bridgeHotkeys && Object.keys(bridgeHotkeys).length > 0) {
+        return bridgeHotkeys;
+      }
+      return DEFAULT_GAME_HOTKEYS;
+    }
+    getBridgeKeybindCodesOrDefault() {
+      var _a, _b;
+      const bridgeCodes = (_b = (_a = window.otsGameBridge) == null ? void 0 : _a.getCurrentKeybinds) == null ? void 0 : _b.call(_a);
+      if (bridgeCodes && Object.keys(bridgeCodes).length > 0) {
+        return bridgeCodes;
+      }
+      return DEFAULT_GAME_KEYBIND_CODES;
+    }
+    renderOpenFrontKeybindOptions() {
+      const keybindCodes = this.getBridgeKeybindCodesOrDefault();
+      const keybindHotkeys = this.getBridgeHotkeysOrDefault();
+      const actions = Object.keys(keybindCodes).sort((a, b) => {
+        var _a, _b;
+        const labelA = (_a = GAME_KEYBIND_LABELS[a]) != null ? _a : this.humanizeAction(a);
+        const labelB = (_b = GAME_KEYBIND_LABELS[b]) != null ? _b : this.humanizeAction(b);
+        return labelA.localeCompare(labelB);
+      });
+      const options = [
+        '<option value="__DISABLED__">Disabled</option>',
+        ...actions.map((action) => {
+          var _a, _b;
+          const code = keybindCodes[action];
+          const hotkey = (_a = keybindHotkeys[action]) != null ? _a : this.keyCodeToHotkey(code);
+          const label = (_b = GAME_KEYBIND_LABELS[action]) != null ? _b : this.humanizeAction(action);
+          const renderedHotkey = hotkey ? this.formatHotkey(hotkey) : "Unbound";
+          return `<option value="${action}">${label} (${renderedHotkey})</option>`;
+        })
+      ];
+      if (options.length === 0) {
+        return '<option value="">No game keybinds detected</option>';
+      }
+      return options.join("");
+    }
+    resetSelectedKeyToDefault() {
+      if (this.selectedKeyId === null) return;
+      const defaults = getDefaultKeypadConfig().bindings;
+      const defaultBinding = defaults.find((binding) => binding.keyId === this.selectedKeyId);
+      if (!defaultBinding) return;
+      const index = this.bindings.findIndex((binding) => binding.keyId === this.selectedKeyId);
+      if (index === -1) return;
+      this.bindings[index] = { ...defaultBinding };
+      this.selectKey(this.selectedKeyId);
+      this.logInfo(`K${this.selectedKeyId} reset to default`);
     }
     triggerBinding(binding) {
       if (!binding.enabled) {
         this.logInfo(`K${binding.keyId} is disabled`);
         return;
       }
-      const element = binding.selector ? document.querySelector(binding.selector) : null;
-      if (element) {
-        element.click();
-        this.logInfo(`Test K${binding.keyId}: clicked selector`);
+      const key = this.getRuntimeHotkeyForBinding(binding);
+      if (!key) {
+        this.logInfo(`Test K${binding.keyId}: action has no current game hotkey`);
         return;
       }
-      if (binding.hotkey) {
-        const key = binding.hotkey;
-        const code = key === " " ? "Space" : key.length === 1 && key >= "a" && key <= "z" ? `Key${key.toUpperCase()}` : key.length === 1 && key >= "0" && key <= "9" ? `Digit${key}` : key;
-        const down = new KeyboardEvent("keydown", { key, code, bubbles: true, cancelable: true });
-        const up = new KeyboardEvent("keyup", { key, code, bubbles: true, cancelable: true });
-        document.dispatchEvent(down);
-        document.dispatchEvent(up);
-        this.logInfo(`Test K${binding.keyId}: sent hotkey ${key === " " ? "Space" : key}`);
+      const code = key === " " ? "Space" : key.length === 1 && key >= "a" && key <= "z" ? `Key${key.toUpperCase()}` : key.length === 1 && key >= "0" && key <= "9" ? `Digit${key}` : key;
+      const down = new KeyboardEvent("keydown", { key, code, bubbles: true, cancelable: true });
+      const up = new KeyboardEvent("keyup", { key, code, bubbles: true, cancelable: true });
+      window.dispatchEvent(down);
+      window.dispatchEvent(up);
+      this.logInfo(`Test K${binding.keyId}: sent hotkey ${key === " " ? "Space" : key}`);
+    }
+    getActionLabel(action) {
+      var _a;
+      return (_a = GAME_KEYBIND_LABELS[action]) != null ? _a : this.humanizeAction(action);
+    }
+    getRuntimeHotkeyForAction(action) {
+      var _a;
+      const bridge = window.otsGameBridge;
+      const runtime = (_a = bridge == null ? void 0 : bridge.resolveHotkeyForKeypadAction) == null ? void 0 : _a.call(bridge, action);
+      if (runtime) {
+        return runtime;
+      }
+      const fallback = this.getBridgeHotkeysOrDefault()[action];
+      return fallback != null ? fallback : null;
+    }
+    getRuntimeHotkeyForBinding(binding) {
+      return this.getRuntimeHotkeyForAction(binding.action);
+    }
+    handleLiveKeyEvent(data) {
+      if (!this.isKeypadKeyEventData(data)) {
         return;
       }
-      this.logInfo(`Test K${binding.keyId}: no selector/hotkey configured`);
+      if (data.state === "pressed") {
+        this.livePressedKeys.add(data.keyId);
+      } else {
+        this.livePressedKeys.delete(data.keyId);
+      }
+      this.updateLayoutVisuals();
+    }
+    isKeypadKeyEventData(value) {
+      if (!value || typeof value !== "object") return false;
+      const data = value;
+      return typeof data.keyId === "number" && (data.state === "pressed" || data.state === "released");
+    }
+    keyCodeToHotkey(code) {
+      if (!code || code === "Null") return null;
+      if (code === "Space" || code === "Spacebar") return " ";
+      const digitMatch = /^Digit([0-9])$/.exec(code);
+      if (digitMatch) return digitMatch[1];
+      const keyMatch = /^Key([A-Z])$/.exec(code);
+      if (keyMatch) return keyMatch[1].toLowerCase();
+      if (code.length === 1) return code.toLowerCase();
+      return null;
+    }
+    humanizeAction(action) {
+      return action.replace(/([A-Z])/g, " $1").replace(/_/g, " ").replace(/^./, (char) => char.toUpperCase()).trim();
     }
   };
 
@@ -3176,6 +3466,10 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
         }
       }
       (_c = this.logsTab) == null ? void 0 : _c.pushLog(direction, text, eventType, jsonData);
+    }
+    handleKeypadLiveEvent(data) {
+      var _a;
+      (_a = this.keypadTab) == null ? void 0 : _a.handleLiveKeyEvent(data);
     }
   };
 
@@ -4316,6 +4610,73 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
   function isSendNukeParams(params) {
     return isRecord5(params) && (params.nukeType === "atom" || params.nukeType === "hydro" || params.nukeType === "mirv");
   }
+  function normalizeKeybindStorageValue(value) {
+    if (typeof value === "string") {
+      return value;
+    }
+    if (isRecord5(value) && typeof value.value === "string") {
+      return value.value;
+    }
+    return null;
+  }
+  function keyCodeToHotkey(code) {
+    if (!code) return null;
+    if (code === "Space" || code === "Spacebar") return " ";
+    const digitMatch = /^Digit([0-9])$/.exec(code);
+    if (digitMatch) {
+      return digitMatch[1];
+    }
+    const keyMatch = /^Key([A-Z])$/.exec(code);
+    if (keyMatch) {
+      return keyMatch[1].toLowerCase();
+    }
+    if (code.length === 1) {
+      return code.toLowerCase();
+    }
+    return null;
+  }
+  var LEGACY_KEYPAD_ACTION_TO_GAME_KEYBIND = {
+    BUILD_CITY: "buildCity",
+    BUILD_FACTORY: "buildFactory",
+    BUILD_PORT: "buildPort",
+    BUILD_DEFENSE: "buildDefensePost",
+    BUILD_MISSILE: "buildMissileSilo",
+    BUILD_SAM: "buildSamLauncher",
+    BUILD_WARSHIP: "buildWarship",
+    ZOOM_IN: "zoomIn",
+    ZOOM_OUT: "zoomOut",
+    ATTACK_DECREASE: "attackRatioDown",
+    MISSILE_SWITCH: "swapDirection",
+    ATTACK_INCREASE: "attackRatioUp",
+    BOAT_ATTACK: "boatAttack",
+    LAND_ATTACK: "groundAttack",
+    TOGGLE_VIEW: "toggleView"
+  };
+  var DEFAULT_GAME_KEYBIND_CODES2 = {
+    toggleView: "Space",
+    centerCamera: "KeyC",
+    moveUp: "KeyW",
+    moveDown: "KeyS",
+    moveLeft: "KeyA",
+    moveRight: "KeyD",
+    zoomOut: "KeyQ",
+    zoomIn: "KeyE",
+    attackRatioDown: "KeyT",
+    attackRatioUp: "KeyY",
+    boatAttack: "KeyB",
+    groundAttack: "KeyG",
+    swapDirection: "KeyU",
+    buildCity: "Digit1",
+    buildFactory: "Digit2",
+    buildPort: "Digit3",
+    buildDefensePost: "Digit4",
+    buildMissileSilo: "Digit5",
+    buildSamLauncher: "Digit6",
+    buildWarship: "Digit7",
+    buildAtomBomb: "Digit8",
+    buildHydrogenBomb: "Digit9",
+    buildMIRV: "Digit0"
+  };
   var GameBridge = class {
     constructor(ws, hud) {
       this.ws = ws;
@@ -4733,6 +5094,57 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
       this.gameConnected = false;
       this.hud.setGameStatus(false);
     }
+    getCurrentKeybinds() {
+      const raw = localStorage.getItem("settings.keybinds");
+      if (!raw) {
+        return { ...DEFAULT_GAME_KEYBIND_CODES2 };
+      }
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (e) {
+        return { ...DEFAULT_GAME_KEYBIND_CODES2 };
+      }
+      if (!isRecord5(parsed)) {
+        return { ...DEFAULT_GAME_KEYBIND_CODES2 };
+      }
+      const result = { ...DEFAULT_GAME_KEYBIND_CODES2 };
+      Object.entries(parsed).forEach(([action, value]) => {
+        const normalized = normalizeKeybindStorageValue(value);
+        if (normalized === "Null") {
+          result[action] = "";
+        } else if (normalized) {
+          result[action] = normalized;
+        }
+      });
+      return result;
+    }
+    getCurrentKeybindHotkeys() {
+      const keybindCodes = this.getCurrentKeybinds();
+      const hotkeys = {};
+      Object.entries(keybindCodes).forEach(([action, code]) => {
+        const hotkey = keyCodeToHotkey(code);
+        if (hotkey) {
+          hotkeys[action] = hotkey;
+        }
+      });
+      return hotkeys;
+    }
+    resolveHotkeyForKeypadAction(action) {
+      var _a, _b;
+      const gameAction = (_a = LEGACY_KEYPAD_ACTION_TO_GAME_KEYBIND[action]) != null ? _a : action;
+      const hotkeys = this.getCurrentKeybindHotkeys();
+      return (_b = hotkeys[gameAction]) != null ? _b : null;
+    }
+    resolveKeypadActionForHotkey(hotkey) {
+      const hotkeys = this.getCurrentKeybindHotkeys();
+      for (const [action, value] of Object.entries(hotkeys)) {
+        if (value === hotkey) {
+          return action;
+        }
+      }
+      return null;
+    }
   };
 
   // src/game/victory-handler.ts
@@ -4773,7 +5185,7 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
       bubbles: true,
       cancelable: true
     });
-    document.dispatchEvent(event);
+    window.dispatchEvent(event);
   }
   var KeypadManager = class {
     constructor(hud) {
@@ -4796,22 +5208,24 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
       this.triggerReleased(binding);
     }
     triggerPressed(binding) {
-      const element = binding.selector ? document.querySelector(binding.selector) : null;
-      if (element) {
-        element.click();
+      const runtimeHotkey = this.getRuntimeHotkey(binding);
+      if (runtimeHotkey) {
+        dispatchKey(runtimeHotkey, "keydown");
         return;
       }
-      if (binding.hotkey) {
-        dispatchKey(binding.hotkey, "keydown");
-        dispatchKey(binding.hotkey, "keyup");
-        return;
-      }
-      this.hud.pushLog("info", `[KEYPAD] No selector/hotkey configured for K${binding.keyId}`);
+      this.hud.pushLog("info", `[KEYPAD] No runtime hotkey configured for K${binding.keyId}`);
     }
     triggerReleased(binding) {
-      if (binding.hotkey) {
-        dispatchKey(binding.hotkey, "keyup");
+      const runtimeHotkey = this.getRuntimeHotkey(binding);
+      if (runtimeHotkey) {
+        dispatchKey(runtimeHotkey, "keyup");
       }
+    }
+    getRuntimeHotkey(binding) {
+      var _a;
+      const bridge = window.otsGameBridge;
+      const bridgeHotkey = (_a = bridge == null ? void 0 : bridge.resolveHotkeyForKeypadAction) == null ? void 0 : _a.call(bridge, binding.action);
+      return bridgeHotkey != null ? bridgeHotkey : null;
     }
   };
 
@@ -4858,6 +5272,10 @@ ${indentStr}</span><span style="color:#cbd5e1;">}</span>`;
       },
       (type, data) => {
         if (type === "KEYPAD_KEY_PRESSED" || type === "KEYPAD_KEY_RELEASED") {
+          hud.handleKeypadLiveEvent({
+            ...typeof data === "object" && data !== null ? data : {},
+            state: type === "KEYPAD_KEY_PRESSED" ? "pressed" : "released"
+          });
           keypad.handleKeyEvent(data);
         }
       }
