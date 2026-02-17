@@ -197,8 +197,9 @@ typedef struct {
 5. ⏳ Pending: Test on physical hardware (keypad press → WebSocket client)
 
 ### Phase 3: Userscript Integration
-1. ⏳ Pending in this stage plan (see `07-userscript-integration.md`)
-2. ⏳ Userscript key mapping and UI verification tracked separately
+1. ✅ Userscript key mapping implemented (see `07-userscript-integration.md`)
+2. ✅ Userscript keypad configuration UI implemented in existing sidebar tab system
+3. ⏳ Pending: End-to-end hardware validation with physical keypad
 
 ---
 

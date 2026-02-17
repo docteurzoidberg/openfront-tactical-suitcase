@@ -2,6 +2,14 @@
 
 This document outlines how the userscript handles keypad key mapping, configuration storage, and game action triggering.
 
+## Current Status
+
+- ✅ Keypad event handling integrated in userscript runtime
+- ✅ Key mapping manager implemented with persistent storage
+- ✅ Keypad configuration UI integrated into existing sidebar tab architecture
+- ✅ Userscript build succeeds with keypad integration changes
+- ⏳ Pending: End-to-end validation with physical keypad hardware
+
 ## Overview
 
 The **userscript** is responsible for ALL key mapping logic:

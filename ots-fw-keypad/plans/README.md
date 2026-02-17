@@ -72,10 +72,10 @@ This directory contains all planning documents for integrating the keypad module
 - [x] Implement WebSocket event forwarding (Plan #4)
 - [ ] Test: Physical key → CAN → WebSocket → Dashboard
 
-**Stage 4: UI & Userscript** (Week 4)
-- Implement dashboard visualization (Plan #5)
-- Implement userscript key mapping (Plan #7)
-- Create configuration UI in userscript (Plan #7)
+**🔨 Stage 4: UI & Userscript** (Week 4) - **IN PROGRESS**
+- [ ] Implement dashboard visualization (Plan #5)
+- [x] Implement userscript key mapping (Plan #7)
+- [x] Create configuration UI in userscript (Plan #7)
 
 **Stage 5: Documentation & Testing** (Week 5)
 - Write user guides (Plan #6)
@@ -147,7 +147,7 @@ The userscript provides these default bindings (customizable via config UI):
    - [x] WebSocket event forwarding
   - [ ] End-to-end testing (key → CAN → WebSocket → Dashboard)
 - [ ] Dashboard UI implemented (Stage 4)
-- [ ] Userscript integration (Stage 4)
+- [x] Userscript integration (Stage 4)
 - [ ] Documentation written (Stage 5)
 - [ ] End-to-end testing (Stage 5)
 - [ ] Release ready
