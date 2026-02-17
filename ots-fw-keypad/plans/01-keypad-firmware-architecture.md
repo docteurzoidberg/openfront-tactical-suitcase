@@ -170,7 +170,7 @@ static void rgb_to_rmt_items(led_rgb_t color, bool on, rmt_symbol_word_t *items)
 **File**: `src/can_handler.c` + `include/can_handler.h`
 
 **Responsibility**:
-- Initialize CAN bus using shared `can_driver` component
+- Initialize CAN bus using shared `can_bus_manager` component
 - Send key events to main controller
 - Receive LED commands from main controller
 - Handle module discovery protocol
@@ -188,19 +188,14 @@ esp_err_t can_handler_send_key_event(uint8_t key_id, key_state_t state);
 ```c
 // Private data structures
 typedef struct {
-    TaskHandle_t rx_task;           // CAN RX task
-    QueueHandle_t tx_queue;         // Outgoing message queue
-    can_driver_handle_t can_handle; // CAN driver handle
     bool running;                   // Handler active
+    bool module_present;            // Main controller detected
 } can_handler_ctx_t;
 
-// Private functions
-static void can_rx_task(void *arg);
-static void can_tx_task(void *arg);
-static void handle_led_set_message(const twai_message_t *msg);
-static void handle_led_bulk_message(const twai_message_t *msg);
-static void handle_module_query(const twai_message_t *msg);
-static void send_module_announce(void);
+// Private functions (CAN RX handlers registered with can_bus_manager)
+static void on_led_set_message(const can_frame_t *frame, void *ctx);
+static void on_led_bulk_message(const can_frame_t *frame, void *ctx);
+static void on_module_query(const can_frame_t *frame, void *ctx);
 ```
 
 **CAN Message Formats** (from shared component `can_protocol_keypad`):
@@ -236,24 +231,26 @@ typedef struct {
 ```
 
 **Module Discovery**:
-- Uses `can_protocol_discovery` component
+- Uses `can_protocol_discovery` component (via can_bus_manager)
 - Responds to `MODULE_QUERY` (CAN ID 0x7FE)
 - Sends `MODULE_ANNOUNCE` (CAN ID 0x7FD) with:
-  - Module type: `0x05` (keypad)
+  - Module type: `MODULE_TYPE_KEYPAD` (0x02)
   - Capabilities: 15 keys, 15 RGB LEDs
   - Firmware version from `config.h`
 
-**Task Structure**:
-- **RX Task**: Priority `tskIDLE_PRIORITY + 3`, Stack 3072 bytes
-  - Blocks on CAN driver receive queue
-  - Processes LED commands → calls `led_controller_set_*()`
-  - Handles discovery messages
-- **TX Task**: Optional (for queued sending, or send directly from callback)
+**CAN Bus Manager Integration**:
+- RX handlers registered for:
+  - `CAN_ID_LED_SET` (0x430) → `on_led_set_message()`
+  - `CAN_ID_LED_BULK` (0x440) → `on_led_bulk_message()`
+  - `CAN_ID_MODULE_QUERY` (0x7FE) → `on_module_query()`
+- TX via `can_bus_manager_send()` (non-blocking queue)
+- Discovery handled automatically by can_bus_manager
 
 **Key Event Flow**:
 ```
 matrix_scanner callback → can_handler_send_key_event() 
-  → Build CAN message → Send via can_driver
+  → Build CAN message with can_keypad_build_key_event()
+  → Send via can_bus_manager_send()
 ```
 
 ---
@@ -282,12 +279,12 @@ void app_main(void) {
     
     // 3. Initialize modules (don't start yet)
     led_controller_init();          // Init RMT, set all LEDs off
-    can_handler_init();             // Init CAN driver
+    can_handler_init();             // Init CAN bus manager, register handlers
     matrix_scanner_init(on_key_event); // Init GPIO, register callback
     
     // 4. Start modules (bottom-up: LED → CAN → Matrix)
     led_controller_update();        // Push initial LED state
-    can_handler_start();            // Start CAN RX/TX tasks
+    can_handler_start();            // Send MODULE_ANNOUNCE
     matrix_scanner_start();         // Start matrix scanning task
     
     // 5. Send module announce
@@ -344,7 +341,7 @@ can_handler.c: can_handler_send_key_event(5, PRESSED)
     ↓
 can_handler.c: Build CAN message (ID=0x435, data=[5, 1, timestamp_lo, timestamp_hi])
     ↓
-can_driver: Send to CAN bus
+can_bus_manager: Queue for transmission → Send to CAN bus
     ↓
 [Main controller receives message]
 ```
@@ -356,9 +353,9 @@ can_driver: Send to CAN bus
     ↓
 Main controller: Send CAN message (ID=0x430, data=[5, 1, 0, 255, 0])
     ↓
-can_driver: Receive message in RX task
+can_bus_manager: Receive message, dispatch to registered handler
     ↓
-can_handler.c: Decode message → LED Set Single (key=5, on=true, rgb={0,255,0})
+can_handler.c: on_led_set_message() → Parse with can_keypad_parse_led_set()
     ↓
 can_handler.c: Call led_controller_set_key(5, true, {0,255,0})
     ↓
@@ -380,14 +377,16 @@ led_controller.c: Write all 15 LED states to RMT → SK6812 LEDs
 | Task | Priority | Stack | Purpose |
 |------|----------|-------|---------|
 | `matrix_scan_task` | 2 | 2048 | Matrix scanning at 200Hz |
-| `can_rx_task` | 3 | 3072 | CAN message reception |
-| `can_tx_task` | 2 | 2048 | CAN message transmission (optional) |
+| `can_mgr_rx_task` | 3 | 3072 | CAN RX (in can_bus_manager) |
+| `can_mgr_tx_task` | 2 | 2048 | CAN TX (in can_bus_manager) |
 | IDLE task | 0 | - | ESP-IDF default |
 
 **Priority Rationale**:
 - CAN RX highest: Must respond to LED commands quickly
 - Matrix scanner moderate: 5ms latency acceptable
 - CAN TX moderate: Key events not ultra-critical (human reaction time ~100ms)
+
+**Note**: CAN tasks are managed by `can_bus_manager` component, not directly by keypad firmware.
 
 ### Memory Budget
 
@@ -559,15 +558,16 @@ I (336) KEYPAD: Keypad module ready
 - [ ] Test: Measure LED update latency
 
 ### Phase 3: CAN Handler (Week 2)
-- [ ] Create `can_protocol_keypad` shared component first
+- [x] Create `can_protocol_keypad` shared component (COMPLETED)
 - [ ] Implement `can_handler.c` skeleton
-- [ ] Initialize `can_driver` component
-- [ ] Implement key event sending
+- [ ] Initialize `can_bus_manager` component
+- [ ] Register RX handlers for LED_SET, LED_BULK, MODULE_QUERY
+- [ ] Implement key event sending (using can_keypad_build_key_event)
 - [ ] Test: Press key, verify CAN message on bus
-- [ ] Implement LED command receiving
+- [ ] Implement LED command handlers (using can_keypad_parse_*)
 - [ ] Test: Send CAN message, verify LED updates
-- [ ] Implement module discovery
-- [ ] Test: Main controller detects keypad module
+- [ ] Send MODULE_ANNOUNCE on startup
+- [ ] Test: Main controller detects keypad in discovery registry
 
 ### Phase 4: Integration (Week 2)
 - [ ] Connect all modules in `main.c`
@@ -582,9 +582,10 @@ I (336) KEYPAD: Keypad module ready
 ## Dependencies
 
 ### Shared Components (ots-fw-shared)
-- `can_driver` - Generic CAN bus driver (existing)
-- `can_protocol_discovery` - Module discovery (existing)
-- `can_protocol_keypad` - Keypad CAN messages (TO CREATE)
+- `can_driver` - Low-level TWAI/CAN driver (used by can_bus_manager)
+- `can_bus_manager` - CAN bus manager with TX queue, RX dispatch, discovery (REQUIRED)
+- `can_protocol_discovery` - Module discovery constants/helpers (used by can_bus_manager)
+- `can_protocol_keypad` - Keypad CAN message parsing/building (COMPLETED)
 
 ### ESP-IDF Components
 - `driver/gpio` - GPIO control
@@ -598,11 +599,11 @@ I (336) KEYPAD: Keypad module ready
 
 ## Next Steps
 
-1. **Create shared component**: `can_protocol_keypad` in `ots-fw-shared/`
+1. ✅ **Create shared component**: `can_protocol_keypad` completed (909 lines, 5 files)
 2. **Implement Phase 1**: Matrix scanner with GPIO and debouncing
 3. **Test matrix scanner**: Verify key detection before moving to LEDs
 4. **Implement Phase 2**: LED controller with RMT
-5. **Implement Phase 3**: CAN handler integration
+5. **Implement Phase 3**: CAN handler with can_bus_manager integration
 6. **Test end-to-end**: Full keypad + main controller integration
 
 ---

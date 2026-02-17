@@ -54,7 +54,27 @@ CAN: KEY_EVENT (K5, PRESSED)
 
 ### CAN Message Handling:
 
-Uses `can_protocol_keypad` shared component.
+Uses `can_protocol_keypad` shared component and `can_bus_manager` for RX dispatch.
+
+**Pattern** (same as sound module):
+```c
+// In keypad_can_handler_init():
+// Register handlers for keypad CAN IDs
+for (uint8_t key_id = 1; key_id <= 15; key_id++) {
+    uint32_t can_id = CAN_ID_KEY_EVENT_BASE + key_id;
+    can_bus_manager_register_handler(can_id, 0x7FF, on_key_event, NULL);
+}
+
+// RX handler callback
+static void on_key_event(const can_frame_t *frame, void *ctx) {
+    uint8_t key_id, state;
+    uint16_t timestamp;
+    
+    if (can_keypad_parse_key_event(frame, &key_id, &state, &timestamp)) {
+        keypad_broadcast_event(key_id, state == 1, timestamp);
+    }
+}
+```
 
 ---
 
@@ -116,6 +136,10 @@ Subscribe to relevant events:
 
 ### New Shared Component:
 - `ots-fw-shared/components/can_protocol_keypad/` (CAN message definitions)
+
+### Existing Shared Components Used:
+- `can_bus_manager` - CAN bus manager with RX dispatch (already initialized)
+- `can_protocol_discovery` - Module discovery (already used for audio module)
 
 ---
 
