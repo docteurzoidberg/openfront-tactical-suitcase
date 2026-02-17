@@ -47,21 +47,29 @@ This directory contains all planning documents for integrating the keypad module
 
 ## Implementation Order
 
-**Phase 1: Hardware Foundation** (Week 1-2)
-- Implement keypad firmware (Plan #1)
-- ✅ Create CAN protocol shared component (Plan #3) - COMPLETED
+**✅ Stage 1: Protocol Foundation (COMPLETE)**
+- ✅ CAN protocol specification (CANBUS_MESSAGE_SPEC.md v1.2)
+- ✅ CAN protocol shared component (can_protocol_keypad, 909 lines)
+- ✅ WebSocket protocol specification (WEBSOCKET_MESSAGE_SPEC.md)
+- ✅ TypeScript types (ots-shared/src/game.ts)
+- ✅ Firmware protocol types (protocol.h/c)
 
-**Phase 2: Controller Integration** (Week 3)
+**Stage 2: Firmware Implementation** (Week 1-2)
+- Implement keypad firmware (Plan #1)
+- Matrix scanner, LED controller, CAN handler
+- Uses can_bus_manager and can_protocol_keypad
+
+**Stage 3: Controller Integration** (Week 3)
 - Implement main controller CAN handlers (Plan #2)
 - Implement WebSocket event forwarding (Plan #4)
-- Update CAN protocol documentation (Plan #3)
+- Test: Physical key → CAN → WebSocket → Dashboard
 
-**Phase 3: UI & Userscript** (Week 4)
+**Stage 4: UI & Userscript** (Week 4)
 - Implement dashboard visualization (Plan #5)
 - Implement userscript key mapping (Plan #7)
 - Create configuration UI in userscript (Plan #7)
 
-**Phase 4: Documentation & Testing** (Week 5)
+**Stage 5: Documentation & Testing** (Week 5)
 - Write user guides (Plan #6)
 - Update developer documentation (Plan #6)
 - End-to-end testing
@@ -112,11 +120,16 @@ The userscript provides these default bindings (customizable via config UI):
 ## Status Tracking
 
 - [x] Planning complete
-- [x] CAN protocol component created (can_protocol_keypad in ots-fw-shared)
-- [ ] Keypad firmware implementation
-- [ ] Main controller integration
-- [ ] WebSocket protocol defined
-- [ ] Dashboard UI implemented
-- [ ] Documentation written
-- [ ] End-to-end testing
+- [x] **Stage 1 (Protocol Foundation) complete**
+  - [x] CAN protocol component created (can_protocol_keypad in ots-fw-shared)
+  - [x] CANBUS_MESSAGE_SPEC.md updated with keypad protocol v1.2
+  - [x] WEBSOCKET_MESSAGE_SPEC.md updated with keypad events
+  - [x] TypeScript types updated (ots-shared)
+  - [x] Firmware protocol updated (protocol.h/c)
+- [ ] Keypad firmware implementation (Stage 2)
+- [ ] Main controller integration (Stage 3)
+- [ ] Dashboard UI implemented (Stage 4)
+- [ ] Userscript integration (Stage 4)
+- [ ] Documentation written (Stage 5)
+- [ ] End-to-end testing (Stage 5)
 - [ ] Release ready
