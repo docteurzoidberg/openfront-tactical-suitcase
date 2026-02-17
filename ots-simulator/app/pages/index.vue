@@ -27,6 +27,9 @@
             :game-phase="gamePhase"
             @set-troops-percent="sendSetTroopsPercent"
           />
+
+          <!-- Hardware Module: Keypad Module -->
+          <HardwareKeypadModule />
         </div>
 
         <!-- Column 2: Sound + Alert + Nuke -->
